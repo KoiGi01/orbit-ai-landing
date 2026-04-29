@@ -1,0 +1,27 @@
+{
+  "name": "ai-automation-landing",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.js",
+    "dev:web": "vite --host 127.0.0.1",
+    "dev:server": "node server/index.js",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "@fontsource-variable/dm-sans": "^5.2.8",
+    "@fontsource-variable/instrument-sans": "^5.2.8",
+    "@fontsource-variable/space-grotesk": "^5.2.10",
+    "@fontsource-variable/syne": "^5.2.7",
+    "@google/genai": "^1.50.1",
+    "@vitejs/plugin-react": "^5.0.4",
+    "lucide-react": "^0.544.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.7"
+  }
+}
