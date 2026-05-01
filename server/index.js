@@ -9,6 +9,8 @@ const HOST = process.env.HOST || '127.0.0.1';
 const ROOT = resolve(process.cwd());
 const DIST_DIR = join(ROOT, 'dist');
 const LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || 'gemini-2.5-flash-native-audio-preview-12-2025';
+const SPEECH_PREFIX_PADDING_MS = 160;
+const SPEECH_SILENCE_DURATION_MS = 1250;
 
 loadLocalEnv();
 
@@ -77,8 +79,8 @@ async function handleToken(req, res) {
                 disabled: false,
                 startOfSpeechSensitivity: 'START_SENSITIVITY_LOW',
                 endOfSpeechSensitivity: 'END_SENSITIVITY_LOW',
-                prefixPaddingMs: 80,
-                silenceDurationMs: 650,
+                prefixPaddingMs: SPEECH_PREFIX_PADDING_MS,
+                silenceDurationMs: SPEECH_SILENCE_DURATION_MS,
               },
             },
           },

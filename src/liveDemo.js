@@ -3,30 +3,58 @@ export const DEMO_LIMIT_MS = 90_000;
 const LIVE_RATE = 16_000;
 const PLAYBACK_RATE = 24_000;
 const PLAYBACK_LEAD_SECONDS = 0.12;
+const SPEECH_PREFIX_PADDING_MS = 160;
+const SPEECH_SILENCE_DURATION_MS = 1250;
+const DEMO_CLOSE_GRACE_MS = 18_000;
 
-const SYSTEM_PROMPT = `
-Eres Orbit AI en una demo breve de onboarding por voz.
+const DEFAULT_SCENARIO = {
+  label: 'Recepcion comercial',
+  businessRole: 'recepcionista de un negocio de servicios',
+  customerContext: 'El usuario llama como cliente o prospecto.',
+  firstLine: 'Perfecto. Vamos a simular una llamada de recepcion comercial. Yo sere el agente de IA; dime en que te puedo ayudar.',
+  leadSource: 'voice_demo',
+};
+
+const INTRO_SCRIPT = ' Eres Orbit AI, estas haciendo una demo para posibles leads en un landing page, esto es lo que debes decir: Hola, soy Orbit AI. Esta es una demo de voz que podrias integrar en tu negocio para contestar llamadas, entender la necesidad del cliente y preparar el seguimiento. En un momento vas a ver algunas opciones de servicio. Elige la que mas se parezca a tu tipo de negocio o al caso que quieres probar. Despues entraremos a una llamada simulada, donde tu seras el cliente y yo atendere como lo haria tu recepcionista de IA.';
+
+const INTRO_PROMPT = `
+Eres Orbit AI, estas haciendo un demo para posibles leads en un landing page.
+Habla en espanol mexicano natural, calido y profesional.
+Di una sola intervencion, sin hacer preguntas abiertas.
+Lee exactamente el texto que recibas del usuario. No lo resumas, no lo cambies y no agregues nada.
+`;
+
+function buildSystemPrompt(scenario = DEFAULT_SCENARIO) {
+  const demo = { ...DEFAULT_SCENARIO, ...scenario };
+
+  return `
+Eres Orbit AI en una demo breve por voz.
 Hablas espanol natural, calido y profesional.
-Tu objetivo es demostrar un flujo que podriamos implementar en el negocio del usuario.
-No des informacion general sobre Orbit AI, precios, tecnologia, implementacion, funciones, planes ni detalles comerciales.
+En esta llamada debes actuar como ${demo.businessRole}.
+Contexto del usuario: ${demo.customerContext}
+No expliques funciones, tecnologia, planes ni precios de Orbit AI.
 Manten respuestas muy cortas: maximo 1 frase por turno.
 
 Sigue este flujo en orden:
-1. Saluda con esta idea: "Hola, soy Orbit AI. Esta es una demo de lo que podemos implementar en tu negocio. Me puedes dar tu nombre, por favor?"
-2. Cuando el usuario diga su nombre, pregunta solo por su WhatsApp.
-3. Cuando el usuario diga su WhatsApp, llama la herramienta capture_lead con nombre y WhatsApp.
-4. Despues de capturar el lead, pregunta: "Te gustaria que te hagamos llegar mas informacion por WhatsApp?"
-5. Si responde que si, llama prepare_whatsapp_message y luego di: "Claro, la informacion te va a llegar por WhatsApp en unos minutos. Gracias por tu tiempo."
-6. Si responde que no, di: "Entendido, muchas gracias por tu tiempo."
-7. Despues del cierre, no sigas preguntando.
+1. Abre exactamente con esta idea: "${demo.firstLine}"
+2. Atiende la solicitud del usuario como lo haria el negocio del escenario "${demo.label}".
+3. Haz una o dos preguntas utiles para entender necesidad, urgencia o contexto.
+4. Si el caso requiere cita o seguimiento, ofrecelo de forma breve sin inventar horarios reales.
+5. Antes de cerrar, pide nombre y WhatsApp para que el equipo le de seguimiento.
+6. Cuando tengas nombre y WhatsApp, llama la herramienta capture_lead.
+7. Despues de capturar el lead, pregunta: "Quieres que dejemos listo el seguimiento por WhatsApp?"
+8. Si responde que si, llama prepare_whatsapp_message y luego di: "Perfecto, dejo listo el mensaje para seguimiento por WhatsApp. Gracias por tu tiempo."
+9. Si responde que no, di: "Entendido, muchas gracias por tu tiempo."
+10. Despues del cierre, no sigas preguntando.
 
 Reglas importantes:
-- No inventes datos del negocio del usuario.
-- No pidas tipo de negocio en esta version.
-- No ofrezcas agendar.
-- No repitas la introduccion.
+- No inventes datos especificos como precios, disponibilidad, diagnosticos, resultados legales o promesas comerciales.
+- En clinica medica, no des diagnosticos ni recomendaciones medicas; ofrece agendar o escalar con el equipo.
+- En despacho de abogados, no des asesoria legal definitiva; recopila contexto y ofrece seguimiento.
+- No digas que un WhatsApp fue enviado. Solo puedes decir que queda listo o preparado.
 - Si el usuario pregunta otra cosa, responde breve y vuelve al dato que falta del flujo.
 `;
+}
 
 const DEMO_TOOLS = [
   {
@@ -103,6 +131,89 @@ function downsampleToPcm(input, inputRate) {
   return pcm;
 }
 
+function buildPcmLevels(pcm, sampleRate = PLAYBACK_RATE) {
+  const frameRate = 30;
+  const frameSize = Math.max(1, Math.floor((sampleRate || PLAYBACK_RATE) / frameRate));
+  const levels = [];
+
+  for (let start = 0; start < pcm.length; start += frameSize) {
+    const end = Math.min(pcm.length, start + frameSize);
+    let sum = 0;
+    for (let i = start; i < end; i += 1) {
+      const sample = pcm[i] / 0x8000;
+      sum += sample * sample;
+    }
+    const rms = Math.sqrt(sum / Math.max(1, end - start));
+    levels.push(Math.min(1, rms * 7.5));
+  }
+
+  return { frameRate, levels };
+}
+
+function createOutputLevelMeter({ getContext, onLevel, isClosed }) {
+  const clips = new Set();
+  let timer = 0;
+  let smooth = 0;
+
+  const tick = () => {
+    const context = getContext?.();
+    if (isClosed?.() || !context) {
+      stop();
+      return;
+    }
+
+    const now = context.currentTime;
+    let level = 0;
+    for (const clip of Array.from(clips)) {
+      if (now > clip.endAt + 0.08) {
+        clips.delete(clip);
+        continue;
+      }
+      const index = Math.floor((now - clip.startAt) * clip.frameRate);
+      if (index >= 0 && index < clip.levels.length) {
+        level = Math.max(level, clip.levels[index]);
+      }
+    }
+
+    smooth += (level - smooth) * (level > smooth ? 0.42 : 0.16);
+    onLevel?.(smooth < 0.015 ? 0 : smooth);
+
+    if (clips.size === 0 && smooth < 0.015) stop();
+  };
+
+  const ensure = () => {
+    if (!timer && onLevel) timer = window.setInterval(tick, 33);
+  };
+
+  function stop() {
+    window.clearInterval(timer);
+    timer = 0;
+    clips.clear();
+    smooth = 0;
+    onLevel?.(0);
+  }
+
+  return {
+    add(startAt, pcm, sampleRate) {
+      if (!onLevel) return null;
+      const { frameRate, levels } = buildPcmLevels(pcm, sampleRate);
+      const clip = {
+        startAt,
+        endAt: startAt + pcm.length / (sampleRate || PLAYBACK_RATE),
+        frameRate,
+        levels,
+      };
+      clips.add(clip);
+      ensure();
+      return clip;
+    },
+    remove(clip) {
+      if (clip) clips.delete(clip);
+    },
+    stop,
+  };
+}
+
 function normalizeTranscript(text) {
   return String(text || '').trim().replace(/\s+/g, ' ');
 }
@@ -131,20 +242,160 @@ function actionForTool(name, args, extra = {}) {
   return null;
 }
 
-async function postLead(args, transcript) {
+async function postLead(args, transcript, source = DEFAULT_SCENARIO.leadSource) {
   await fetch('/api/demo/lead', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       ...args,
-      source: 'voice_demo',
+      source,
       transcript,
     }),
   });
 }
 
-export async function createLiveDemoSession({
+export async function createDemoIntroSession({
   onState,
+  onOutputLevel,
+  onEnded,
+  onError,
+}) {
+  let closed = false;
+  let session;
+  let outputContext;
+  let playTime = 0;
+  let timeoutId;
+  let turnComplete = false;
+  const playbackNodes = new Set();
+  const outputLevelMeter = createOutputLevelMeter({
+    getContext: () => outputContext,
+    onLevel: onOutputLevel,
+    isClosed: () => closed,
+  });
+
+  const cleanup = async (reason = 'ended') => {
+    if (closed) return;
+    closed = true;
+    window.clearTimeout(timeoutId);
+    outputLevelMeter.stop();
+    for (const node of playbackNodes) {
+      try { node.onended = null; node.stop(); } catch {}
+      try { node.disconnect(); } catch {}
+    }
+    playbackNodes.clear();
+    try { session?.close?.(); } catch {}
+    try { await outputContext?.close(); } catch {}
+    onEnded?.(reason);
+  };
+
+  const maybeFinish = () => {
+    if (!closed && turnComplete && playbackNodes.size === 0) {
+      cleanup('ended');
+    }
+  };
+
+  const playAudio = (base64, sampleRate = PLAYBACK_RATE) => {
+    if (!base64 || closed || !outputContext) return;
+    const pcm = base64ToInt16(base64);
+    if (!pcm.length) return;
+
+    const buffer = outputContext.createBuffer(1, pcm.length, sampleRate || PLAYBACK_RATE);
+    const channel = buffer.getChannelData(0);
+    for (let i = 0; i < pcm.length; i += 1) channel[i] = pcm[i] / 0x8000;
+
+    const node = outputContext.createBufferSource();
+    node.buffer = buffer;
+    node.connect(outputContext.destination);
+
+    const startAt = Math.max(outputContext.currentTime + PLAYBACK_LEAD_SECONDS, playTime);
+    playTime = startAt + buffer.duration;
+    const levelClip = outputLevelMeter.add(startAt, pcm, sampleRate || PLAYBACK_RATE);
+    playbackNodes.add(node);
+    node.start(startAt);
+    onState?.('speaking');
+    node.onended = () => {
+      playbackNodes.delete(node);
+      outputLevelMeter.remove(levelClip);
+      try { node.disconnect(); } catch {}
+      maybeFinish();
+    };
+  };
+
+  onState?.('connecting');
+
+  try {
+    const tokenResponse = await fetch('/api/demo/token', { method: 'POST' });
+    if (!tokenResponse.ok) throw new Error('token_failed');
+    const { token, model } = await tokenResponse.json();
+    const { GoogleGenAI, Modality } = await import('@google/genai');
+    const ai = new GoogleGenAI({
+      apiKey: token,
+      httpOptions: { apiVersion: 'v1alpha' },
+    });
+
+    outputContext = new AudioContext({ sampleRate: PLAYBACK_RATE });
+    await outputContext.resume();
+
+    session = await ai.live.connect({
+      model,
+      callbacks: {
+        onopen: () => {
+          onState?.('speaking');
+        },
+        onmessage: (message) => {
+          const parts = message.serverContent?.modelTurn?.parts || [];
+          let playedInlineAudio = false;
+          for (const part of parts) {
+            const inlineData = part.inlineData?.data ? part.inlineData : part.inlineData?.inlineData;
+            if (inlineData?.data) {
+              playedInlineAudio = true;
+              playAudio(inlineData.data, audioRateFromMime(inlineData.mimeType));
+            }
+          }
+
+          if (!playedInlineAudio && message.data) playAudio(message.data);
+
+          if (message.serverContent?.turnComplete) {
+            turnComplete = true;
+            maybeFinish();
+          }
+        },
+        onerror: (event) => {
+          onError?.(event?.message || 'La presentacion de voz tuvo un problema.');
+          cleanup('error');
+        },
+        onclose: () => {
+          if (!closed) cleanup('ended');
+        },
+      },
+      config: {
+        responseModalities: [Modality.AUDIO],
+        systemInstruction: INTRO_PROMPT,
+      },
+    });
+
+    session.sendClientContent({
+      turns: INTRO_SCRIPT,
+      turnComplete: true,
+    });
+
+    timeoutId = window.setTimeout(() => cleanup('ended'), 32_000);
+  } catch (error) {
+    console.error('Demo intro failed:', error?.message || error);
+    onError?.('No pude reproducir la presentacion de voz.');
+    await cleanup('error');
+    return null;
+  }
+
+  return {
+    end: () => cleanup('ended'),
+  };
+}
+
+export async function createLiveDemoSession({
+  scenario = DEFAULT_SCENARIO,
+  onState,
+  onOutputLevel,
   onTranscript,
   onAction,
   onError,
@@ -163,7 +414,22 @@ export async function createLiveDemoSession({
   let zeroGain;
   let stream;
   let timeoutId;
+  let forceCloseTimeoutId;
+  let closingForLimit = false;
+  let limitCloseTurnComplete = false;
   const playbackNodes = new Set();
+  const leadSource = scenario?.leadSource || DEFAULT_SCENARIO.leadSource;
+  const outputLevelMeter = createOutputLevelMeter({
+    getContext: () => outputContext,
+    onLevel: onOutputLevel,
+    isClosed: () => closed,
+  });
+
+  const maybeFinishLimitClose = () => {
+    if (!closed && closingForLimit && limitCloseTurnComplete && playbackNodes.size === 0) {
+      cleanup('ended');
+    }
+  };
 
   const emitState = (nextState) => {
     if (closed && nextState !== 'ended' && nextState !== 'error') return;
@@ -192,6 +458,7 @@ export async function createLiveDemoSession({
       try { node.disconnect(); } catch {}
     }
     playbackNodes.clear();
+    outputLevelMeter.stop();
     playTime = outputContext?.currentTime || 0;
   };
 
@@ -199,9 +466,11 @@ export async function createLiveDemoSession({
     if (closed) return;
     closed = true;
     window.clearTimeout(timeoutId);
+    window.clearTimeout(forceCloseTimeoutId);
 
     flushMic();
     clearPlayback();
+    outputLevelMeter.stop();
     try { session?.close?.(); } catch {}
     try { processor?.disconnect(); } catch {}
     try { source?.disconnect(); } catch {}
@@ -231,16 +500,38 @@ export async function createLiveDemoSession({
     const nextSafeStart = outputContext.currentTime + PLAYBACK_LEAD_SECONDS;
     const startAt = playTime < nextSafeStart ? nextSafeStart : playTime;
     playTime = startAt + buffer.duration;
+    const levelClip = outputLevelMeter.add(startAt, pcm, sampleRate || PLAYBACK_RATE);
     playbackNodes.add(node);
     node.start(startAt);
     emitState('speaking');
     node.onended = () => {
       playbackNodes.delete(node);
+      outputLevelMeter.remove(levelClip);
       try { node.disconnect(); } catch {}
+      maybeFinishLimitClose();
       if (!closed && playbackNodes.size === 0 && outputContext.currentTime >= playTime - 0.05) {
+        if (closingForLimit) return;
         emitState(muted ? 'muted' : 'listening');
       }
     };
+  };
+
+  const closeWithLimitMessage = () => {
+    if (closed || closingForLimit || !session) return;
+    closingForLimit = true;
+    limitCloseTurnComplete = false;
+    muted = true;
+    pauseMic();
+    stream?.getAudioTracks().forEach((track) => {
+      track.enabled = false;
+    });
+    clearPlayback();
+    emitState('speaking');
+    session.sendClientContent({
+      turns: 'Interrumpe la conversacion de forma amable y di exactamente: "Hasta aqui llega la demo por ahora. Para mantenerla breve, voy a cerrar la llamada. Gracias por probar Orbit AI."',
+      turnComplete: true,
+    });
+    forceCloseTimeoutId = window.setTimeout(() => cleanup('ended'), DEMO_CLOSE_GRACE_MS);
   };
 
   const handleToolCall = async (message) => {
@@ -252,7 +543,7 @@ export async function createLiveDemoSession({
       let response = { result: 'ok' };
 
       if (call.name === 'capture_lead') {
-        await postLead(args, getTranscript?.() || []);
+        await postLead(args, getTranscript?.() || [], leadSource);
         const action = actionForTool(call.name, args);
         if (action) onAction(action);
         response = { result: 'lead_captured' };
@@ -261,12 +552,12 @@ export async function createLiveDemoSession({
       if (call.name === 'prepare_whatsapp_message') {
         const digits = String(args.whatsapp || '').replace(/\D/g, '');
         const messageText = args.name
-          ? `Hola ${args.name}, te compartimos mas informacion sobre la demo de Orbit AI.`
-          : 'Hola, te compartimos mas informacion sobre la demo de Orbit AI.';
+          ? `Hola ${args.name}, dejamos listo el seguimiento de tu llamada con Orbit AI.`
+          : 'Hola, dejamos listo el seguimiento de tu llamada con Orbit AI.';
         const url = digits
           ? `https://wa.me/${digits}?text=${encodeURIComponent(messageText)}`
           : `https://wa.me/?text=${encodeURIComponent(messageText)}`;
-        await postLead({ ...args, whatsappConsent: true }, getTranscript?.() || []);
+        await postLead({ ...args, whatsappConsent: true }, getTranscript?.() || [], leadSource);
         const action = actionForTool(call.name, args, { url });
         if (action) onAction(action);
         response = { result: 'whatsapp_message_prepared', url };
@@ -340,8 +631,6 @@ export async function createLiveDemoSession({
           if (message.serverContent?.inputTranscription?.text) {
             const text = normalizeTranscript(message.serverContent.inputTranscription.text);
             if (text) onTranscript({ role: 'user', text });
-            pauseMic();
-            emitState('thinking');
           }
 
           if (message.serverContent?.outputTranscription?.text) {
@@ -351,10 +640,16 @@ export async function createLiveDemoSession({
 
           if (message.serverContent?.interrupted) {
             clearPlayback();
+            if (closingForLimit) return;
             emitState('listening');
           }
 
           if (message.serverContent?.turnComplete) {
+            if (closingForLimit) {
+              limitCloseTurnComplete = true;
+              maybeFinishLimitClose();
+              return;
+            }
             if (playbackNodes.size === 0) emitState(muted ? 'muted' : 'listening');
           }
 
@@ -378,17 +673,17 @@ export async function createLiveDemoSession({
             disabled: false,
             startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
             endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_LOW,
-            prefixPaddingMs: 80,
-            silenceDurationMs: 650,
+            prefixPaddingMs: SPEECH_PREFIX_PADDING_MS,
+            silenceDurationMs: SPEECH_SILENCE_DURATION_MS,
           },
         },
-        systemInstruction: SYSTEM_PROMPT,
+        systemInstruction: buildSystemPrompt(scenario),
         tools: [{ functionDeclarations: DEMO_TOOLS }],
       },
     });
 
     session.sendClientContent({
-      turns: 'Inicia el flujo de onboarding con el saludo indicado y pregunta solo por mi nombre.',
+      turns: `Inicia ahora la demo del escenario "${scenario?.label || DEFAULT_SCENARIO.label}" con la apertura indicada.`,
       turnComplete: true,
     });
 
@@ -415,13 +710,7 @@ export async function createLiveDemoSession({
     processor.connect(zeroGain);
     zeroGain.connect(inputContext.destination);
 
-    timeoutId = window.setTimeout(() => {
-      onTranscript({
-        role: 'assistant',
-        text: 'Gracias por probar Orbit AI. Para mantener la demo breve, aqui cerramos la llamada.',
-      });
-      cleanup('ended');
-    }, DEMO_LIMIT_MS);
+    timeoutId = window.setTimeout(closeWithLimitMessage, DEMO_LIMIT_MS);
   } catch (error) {
     console.error('Live demo failed:', error?.message || error);
     onError('No pude iniciar la demo de voz. Revisa la API key o intenta de nuevo.');
