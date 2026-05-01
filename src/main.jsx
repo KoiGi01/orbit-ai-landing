@@ -289,7 +289,7 @@ function AuraScene({ mode, audioLevelRef }) {
     }
 
     function modeSettings(currentMode) {
-      if (currentMode === 'speaking') return { radius: 1.05, spring: 0.026, friction: 0.87, drift: 0.3, alpha: 1.16, speed: 1.35, burst: 1.2 };
+      if (currentMode === 'speaking') return { radius: 1.02, spring: 0.026, friction: 0.87, drift: 0.28, alpha: 1.16, speed: 1.35, burst: 0.72 };
       if (currentMode === 'idle' || currentMode === 'intro_idle') return { radius: 1.03, spring: 0.022, friction: 0.88, drift: 0.24, alpha: 1.08, speed: 1.05, burst: 0.18 };
       if (currentMode === 'listening') return { radius: 1.02, spring: 0.02, friction: 0.9, drift: 0.2, alpha: 1.02, speed: 0.9, burst: 0.18 };
       if (currentMode === 'thinking') return { radius: 0.95, spring: 0.019, friction: 0.9, drift: 0.24, alpha: 0.96, speed: 0.72, burst: 0.1 };
@@ -309,7 +309,7 @@ function AuraScene({ mode, audioLevelRef }) {
       const voiceBurst = modeRef.current === 'speaking'
         ? voiceLevel * settings.burst * particle.react
         : Math.max(0, Math.sin(t * 0.72 + particle.seed * 1.4)) * settings.burst * 0.22 * particle.react;
-      const radius = min * 0.38 * (settings.radius + breath + wanderPulse + voiceBurst * 0.44) * particle.shell;
+      const radius = min * 0.31 * (settings.radius + breath + wanderPulse + voiceBurst * 0.28) * particle.shell;
       const x = cx + Math.cos(theta) * particle.phiRadius * radius * perspective;
       const y = cy + Math.sin(theta) * particle.phiRadius * radius * perspective + depth * min * 0.055;
       const curlX = Math.sin(t * (0.9 + particle.react * 0.12) + particle.seed + index * 0.01) * settings.drift;
@@ -350,7 +350,7 @@ function AuraScene({ mode, audioLevelRef }) {
         initialized = true;
       }
 
-      const maxDistance = min * 0.54;
+      const maxDistance = min * 0.44;
       const drawList = [];
       particles.forEach((particle, index) => {
         const target = targetFor(particle, index, t, min, cx, cy, settings);
@@ -400,16 +400,6 @@ function AuraScene({ mode, audioLevelRef }) {
         ctx.arc(particle.x, particle.y, size, 0, Math.PI * 2);
         ctx.fill();
       });
-
-      if (modeRef.current === 'speaking' && voiceLevel > 0.08) {
-        ctx.globalCompositeOperation = 'lighter';
-        const ringAlpha = Math.min(0.16, voiceLevel * 0.16);
-        ctx.strokeStyle = `rgba(255, 255, 255, ${ringAlpha})`;
-        ctx.lineWidth = Math.max(0.6, min * 0.002);
-        ctx.beginPath();
-        ctx.arc(cx, cy, min * (0.34 + voiceLevel * 0.1), 0, Math.PI * 2);
-        ctx.stroke();
-      }
 
       animationFrame = requestAnimationFrame(render);
     }

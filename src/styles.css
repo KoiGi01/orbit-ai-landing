@@ -2414,8 +2414,9 @@ h1 {
 .demo-orb {
   position: relative;
   isolation: isolate;
-  width: min(64vw, 560px);
-  height: min(64vw, 560px);
+  width: min(62vw, 560px);
+  height: min(62vw, 560px);
+  aspect-ratio: 1;
   min-width: 320px;
   min-height: 320px;
   opacity: 1;
@@ -3038,10 +3039,10 @@ h1 {
     min-height: 280px;
   }
   .demo-state-selecting_scenario .demo-orb {
-    width: min(62vw, 260px);
-    height: min(62vw, 260px);
-    min-width: 210px;
-    min-height: 210px;
+    width: min(90vw, 420px);
+    height: min(90vw, 420px);
+    min-width: 280px;
+    min-height: 280px;
   }
   .demo-panel { bottom: 12px; }
   .scenario-demo-panel { bottom: 12px; }
@@ -4135,7 +4136,8 @@ h2 .gradient-mark,
 
 .hero-v2 .neural-mesh-sculpture {
   width: min(31vw, 390px);
-  height: clamp(250px, 32vh, 340px);
+  height: min(31vw, 390px);
+  aspect-ratio: 1;
   min-height: 250px;
 }
 
@@ -4168,6 +4170,7 @@ h2 .gradient-mark,
 
   .hero-v2 .neural-mesh-sculpture {
     width: min(68vw, 430px);
+    height: min(68vw, 430px);
   }
 }
 
@@ -4200,6 +4203,6 @@ h2 .gradient-mark,
 
   .hero-v2 .neural-mesh-sculpture {
     width: min(80vw, 340px);
-    height: 250px;
+    height: min(80vw, 340px);
   }
 }
