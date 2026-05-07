@@ -121,19 +121,7 @@ function Nav({ onDemo }) {
   return (
     <nav className="nav">
       <a className="brand" href="#">
-        <span className="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 40 40" fill="none">
-            <defs>
-              <linearGradient id="brandGrad" x1="0" y1="0" x2="40" y2="40">
-                <stop offset="0%" stopColor="#B735FF" />
-                <stop offset="50%" stopColor="#7432FF" />
-                <stop offset="100%" stopColor="#08D8FF" />
-              </linearGradient>
-            </defs>
-            <path d="M20 4 L36 34 L28 34 L24 26 L16 26 L12 34 L4 34 Z M18 20 L22 20 L20 14 Z" fill="url(#brandGrad)" />
-          </svg>
-        </span>
-        <span className="brand-word">AutiveX <em>AI</em></span>
+        <img src="/brand-logo.png" alt="Autivex AI" className="brand-logo-img" />
       </a>
       <div className="nav-links">
         <a href="#nicho">Nichos</a>
@@ -469,12 +457,8 @@ function Footer() {
   return (
     <footer className="footer">
       <div className="footer-brand">
-        <span className="brand-mark sm" aria-hidden="true">
-          <svg viewBox="0 0 40 40" fill="none">
-            <path d="M20 4 L36 34 L28 34 L24 26 L16 26 L12 34 L4 34 Z M18 20 L22 20 L20 14 Z" fill="url(#brandGrad)" />
-          </svg>
-        </span>
-        <span>AutiveX AI · Voz IA para negocios en español</span>
+        <img src="/brand-logo.png" alt="Autivex AI" className="brand-logo-img brand-logo-img-sm" />
+        <span>Voz IA para negocios en español</span>
       </div>
       <div className="footer-meta">
         <span>México · 2026</span>
