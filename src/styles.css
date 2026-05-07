@@ -83,7 +83,6 @@ p { margin: 0; }
   z-index: 1;
 }
 
-.hero,
 .service-story,
 .quality-section,
 .industries-section,
@@ -520,7 +519,10 @@ h1 {
 
 .hero-v2 {
   position: relative;
+  width: 100%;
   max-width: none;
+  margin-left: 0;
+  margin-right: 0;
   grid-template-columns: minmax(320px, 0.72fr) minmax(520px, 1.28fr);
   gap: clamp(18px, 3vw, 56px);
   min-height: calc(100svh - 82px);

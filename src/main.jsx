@@ -1033,7 +1033,7 @@ function App() {
             <em className="gradient-mark">alguien más cerró.</em>
           </p>
           <p className="problem-body">
-            Orbit AI responde cuando tu equipo está ocupado, filtra la intención real
+            Autivex AI responde cuando tu equipo está ocupado, filtra la intención real
             y convierte cada conversación en una cita o seguimiento concreto.
           </p>
         </div>
@@ -1182,7 +1182,7 @@ function App() {
                 )}
                 {transcript.slice(-5).map((line, i) => (
                   <p className={line.role === 'user' ? 'from-user' : 'from-assistant'} key={`${line.text}-${i}`}>
-                    <span>{line.role === 'user' ? 'Tu' : 'Orbit AI'}</span>
+                    <span>{line.role === 'user' ? 'Tu' : 'Autivex AI'}</span>
                     {line.text}
                   </p>
                 ))}

@@ -100,6 +100,71 @@ async function handleToken(req, res) {
   }
 }
 
+async function handleRetellToken(req, res) {
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { error: 'method_not_allowed' });
+    return;
+  }
+
+  const apiKey = process.env.RETELL_API_KEY;
+  if (!apiKey) {
+    sendJson(res, 500, { error: 'missing_retell_api_key' });
+    return;
+  }
+
+  try {
+    const body = await readJson(req);
+    const isIntro = body.type === 'intro';
+    const agentId = isIntro
+      ? process.env.RETELL_AGENT_ID
+      : process.env.RETELL_AGENT_ID_2;
+
+    if (!agentId) {
+      sendJson(res, 500, { error: 'missing_agent_id' });
+      return;
+    }
+
+    const payload = { agent_id: agentId };
+
+    if (isIntro) {
+      payload.override_agent_config = {
+        begin_message: 'Hola, soy la recepcionista virtual de Autivex AI. Esta es una demo de voz que puede integrar en su negocio para contestar llamadas, entender la necesidad del cliente y preparar el seguimiento. En un momento va a ver algunas opciones en pantalla. Elija la que más se parezca a su tipo de negocio o al caso que quiere probar. Después entraremos a una llamada simulada donde usted será el cliente y yo atenderé como lo haría su recepcionista de IA.',
+      };
+    }
+
+    if (!isIntro && body.scenario) {
+      payload.retell_llm_dynamic_variables = {
+        business_role: String(body.scenario.business_role || ''),
+        customer_context: String(body.scenario.customer_context || ''),
+        first_line: String(body.scenario.first_line || ''),
+        scenario_label: String(body.scenario.label || ''),
+      };
+    }
+
+    const response = await fetch('https://api.retellai.com/v2/create-web-call', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      console.error('Retell API error:', response.status, errBody);
+      sendJson(res, 502, { error: 'retell_api_error' });
+      return;
+    }
+
+    const data = await response.json();
+    sendJson(res, 200, { accessToken: data.access_token, callId: data.call_id });
+  } catch (error) {
+    console.error('Retell token failed:', error?.message || error);
+    sendJson(res, 502, { error: 'retell_token_failed' });
+  }
+}
+
 async function handleLead(req, res) {
   if (req.method !== 'POST') {
     sendJson(res, 405, { error: 'method_not_allowed' });
@@ -116,7 +181,7 @@ async function handleLead(req, res) {
       source: String(body.source || 'voice_demo').slice(0, 80),
       transcript: Array.isArray(body.transcript) ? body.transcript.slice(-12) : [],
     };
-    console.info('Orbit AI demo lead:', lead);
+    console.info('Autivex AI demo lead:', lead);
     sendJson(res, 200, { ok: true });
   } catch (error) {
     console.error('Failed to capture lead:', error?.message || error);
@@ -171,6 +236,11 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  if (pathname === '/api/retell/token') {
+    await handleRetellToken(req, res);
+    return;
+  }
+
   if (existsSync(DIST_DIR)) {
     await serveStatic(req, res);
     return;
@@ -180,5 +250,5 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.info(`Orbit AI API server listening on http://${HOST}:${PORT}`);
+  console.info(`Autivex AI API server listening on http://${HOST}:${PORT}`);
 });

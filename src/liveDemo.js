@@ -15,25 +15,44 @@ const DEFAULT_SCENARIO = {
   leadSource: 'voice_demo',
 };
 
-const INTRO_SCRIPT = ' Eres Orbit AI, estas haciendo una demo para posibles leads en un landing page, esto es lo que debes decir: Hola, soy Orbit AI. Esta es una demo de voz que podrias integrar en tu negocio para contestar llamadas, entender la necesidad del cliente y preparar el seguimiento. En un momento vas a ver algunas opciones de servicio. Elige la que mas se parezca a tu tipo de negocio o al caso que quieres probar. Despues entraremos a una llamada simulada, donde tu seras el cliente y yo atendere como lo haria tu recepcionista de IA.';
+const INTRO_SCRIPT = ' Eres Autivex AI, estas haciendo una demo para posibles leads en un landing page, esto es lo que debes decir: Hola, soy Autivex AI. Esta es una demo de voz que podrias integrar en tu negocio para contestar llamadas, entender la necesidad del cliente y preparar el seguimiento. En un momento vas a ver algunas opciones de servicio. Elige la que mas se parezca a tu tipo de negocio o al caso que quieres probar. Despues entraremos a una llamada simulada, donde tu seras el cliente y yo atendere como lo haria tu recepcionista de IA.';
 
 const INTRO_PROMPT = `
-Eres Orbit AI, estas haciendo un demo para posibles leads en un landing page.
-Habla en espanol mexicano natural, calido y profesional.
-Di una sola intervencion, sin hacer preguntas abiertas.
-Lee exactamente el texto que recibas del usuario. No lo resumas, no lo cambies y no agregues nada.
+Eres la recepcionista virtual de Autivex AI presentando una demo.
+
+IDIOMA: Espanol mexicano. Trato formal con "usted".
+
+TONO Y VOZ:
+- Profesional, serena y confiable
+- Calida pero sin entusiasmo exagerado
+- Ritmo pausado y natural; deja espacio entre ideas
+- Articula con claridad, sin apresurarte
+- Nunca uses rellenos como "um", "eh", "este", "o sea"
+
+INSTRUCCION: Di una sola intervencion sin hacer preguntas. Lee exactamente el texto que recibes, sin resumirlo, cambiarlo ni agregar nada.
 `;
 
 function buildSystemPrompt(scenario = DEFAULT_SCENARIO) {
   const demo = { ...DEFAULT_SCENARIO, ...scenario };
 
   return `
-Eres Orbit AI en una demo breve por voz.
-Hablas espanol natural, calido y profesional.
-En esta llamada debes actuar como ${demo.businessRole}.
-Contexto del usuario: ${demo.customerContext}
-No expliques funciones, tecnologia, planes ni precios de Orbit AI.
-Manten respuestas muy cortas: maximo 1 frase por turno.
+Eres la recepcionista virtual de Autivex AI en una llamada de demostracion.
+
+IDIOMA: Espanol mexicano. Trato formal con "usted".
+
+TONO Y VOZ:
+- Profesional, serena y confiable — como la mejor recepcionista de un consultorio o empresa de servicios
+- Calida pero medida; nunca suenes emocionada ni ansiosa
+- Ritmo pausado y natural; deja una pausa breve entre ideas
+- No repitas lo que el usuario acaba de decir
+- Nunca uses rellenos como "um", "eh", "claro que si", "por supuesto"
+- Si no sabes algo, dilo con calma y ofrece escalar
+
+ROL: En esta llamada actuas como ${demo.businessRole}.
+Contexto: ${demo.customerContext}
+
+RESPUESTAS: Muy cortas. Maximo una frase por turno. No des informacion que no te pidieron.
+No expliques funciones, tecnologia ni precios de Autivex AI.
 
 Sigue este flujo en orden:
 1. Abre exactamente con esta idea: "${demo.firstLine}"
@@ -59,7 +78,7 @@ Reglas importantes:
 const DEMO_TOOLS = [
   {
     name: 'capture_lead',
-    description: 'Captura datos de un prospecto interesado en una demo de Orbit AI.',
+    description: 'Captura datos de un prospecto interesado en una demo de Autivex AI.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -370,6 +389,10 @@ export async function createDemoIntroSession({
       },
       config: {
         responseModalities: [Modality.AUDIO],
+        enableAffectiveDialog: true,
+        speechConfig: {
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Leda' } },
+        },
         systemInstruction: INTRO_PROMPT,
       },
     });
@@ -528,7 +551,7 @@ export async function createLiveDemoSession({
     clearPlayback();
     emitState('speaking');
     session.sendClientContent({
-      turns: 'Interrumpe la conversacion de forma amable y di exactamente: "Hasta aqui llega la demo por ahora. Para mantenerla breve, voy a cerrar la llamada. Gracias por probar Orbit AI."',
+      turns: 'Interrumpe la conversacion de forma amable y di exactamente: "Hasta aqui llega la demo por ahora. Para mantenerla breve, voy a cerrar la llamada. Gracias por probar Autivex AI."',
       turnComplete: true,
     });
     forceCloseTimeoutId = window.setTimeout(() => cleanup('ended'), DEMO_CLOSE_GRACE_MS);
@@ -552,8 +575,8 @@ export async function createLiveDemoSession({
       if (call.name === 'prepare_whatsapp_message') {
         const digits = String(args.whatsapp || '').replace(/\D/g, '');
         const messageText = args.name
-          ? `Hola ${args.name}, dejamos listo el seguimiento de tu llamada con Orbit AI.`
-          : 'Hola, dejamos listo el seguimiento de tu llamada con Orbit AI.';
+          ? `Hola ${args.name}, dejamos listo el seguimiento de tu llamada con Autivex AI.`
+          : 'Hola, dejamos listo el seguimiento de tu llamada con Autivex AI.';
         const url = digits
           ? `https://wa.me/${digits}?text=${encodeURIComponent(messageText)}`
           : `https://wa.me/?text=${encodeURIComponent(messageText)}`;
@@ -666,6 +689,10 @@ export async function createLiveDemoSession({
       },
       config: {
         responseModalities: [Modality.AUDIO],
+        enableAffectiveDialog: true,
+        speechConfig: {
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Leda' } },
+        },
         inputAudioTranscription: {},
         outputAudioTranscription: {},
         realtimeInputConfig: {
