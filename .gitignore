@@ -1,7 +1,10 @@
 node_modules/
 dist/
+dist-dashboard/
 .env
 .env.*
+!.env.example
+!dashboard/.env.example
 *.local
 api-keys*
 output/

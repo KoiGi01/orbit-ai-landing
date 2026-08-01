@@ -46,6 +46,44 @@ async function readJson(req) {
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
+function cleanText(value, maxLength) {
+  return String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maxLength);
+}
+
+async function sendLeadEmail(lead) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error('missing_resend_api_key');
+
+  const from = process.env.RESEND_FROM || 'AutiveX Website <onboarding@resend.dev>';
+  const to = process.env.RESEND_TO || 'contact@autivexai.com';
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      from,
+      to: [to],
+      subject: `Nueva evaluación de cobertura · ${lead.clinic}`,
+      text: [
+        'Nueva solicitud desde la landing de AutiveX',
+        '',
+        `Nombre: ${lead.name}`,
+        `Clínica: ${lead.clinic}`,
+        `WhatsApp: +${lead.whatsapp}`,
+        `Cobertura inicial: ${lead.note}`,
+        `Origen: ${lead.source}`,
+        `Recibida: ${lead.receivedAt}`,
+        '',
+        'La persona autorizó contacto por WhatsApp para esta evaluación.',
+      ].join('\n'),
+    }),
+  });
+
+  if (!response.ok) throw new Error(`resend_${response.status}`);
+}
+
 async function handleToken(req, res) {
   if (req.method !== 'POST') {
     sendJson(res, 405, { error: 'method_not_allowed' });
@@ -175,17 +213,25 @@ async function handleLead(req, res) {
     const body = await readJson(req);
     const lead = {
       receivedAt: new Date().toISOString(),
-      name: String(body.name || '').slice(0, 120),
-      whatsapp: String(body.whatsapp || '').replace(/\D/g, '').slice(0, 16),
+      name: cleanText(body.name, 120),
+      clinic: cleanText(body.clinic, 160),
+      whatsapp: String(body.whatsapp || '').replace(/\D/g, '').slice(0, 15),
       whatsappConsent: Boolean(body.whatsappConsent),
-      source: String(body.source || 'voice_demo').slice(0, 80),
-      transcript: Array.isArray(body.transcript) ? body.transcript.slice(-12) : [],
+      source: cleanText(body.source || 'landing', 80),
+      note: cleanText(body.note || 'Sin especificar', 160),
     };
-    console.info('Autivex AI demo lead:', lead);
+
+    if (lead.name.length < 2 || lead.clinic.length < 2 || lead.whatsapp.length < 10 || !lead.whatsappConsent) {
+      sendJson(res, 400, { error: 'invalid_lead_payload' });
+      return;
+    }
+
+    await sendLeadEmail(lead);
+    console.info('AutiveX landing lead delivered', { source: lead.source, receivedAt: lead.receivedAt });
     sendJson(res, 200, { ok: true });
   } catch (error) {
     console.error('Failed to capture lead:', error?.message || error);
-    sendJson(res, 400, { error: 'invalid_lead_payload' });
+    sendJson(res, 502, { error: 'lead_delivery_failed' });
   }
 }
 
@@ -194,6 +240,9 @@ const MIME_TYPES = new Map([
   ['.js', 'text/javascript; charset=utf-8'],
   ['.css', 'text/css; charset=utf-8'],
   ['.svg', 'image/svg+xml'],
+  ['.png', 'image/png'],
+  ['.webp', 'image/webp'],
+  ['.ico', 'image/x-icon'],
   ['.woff2', 'font/woff2'],
 ]);
 

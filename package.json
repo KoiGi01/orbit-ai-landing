@@ -7,11 +7,14 @@
     "dev": "node scripts/dev.js",
     "dev:web": "vite --host 127.0.0.1",
     "dev:server": "node server/index.js",
+    "dev:dashboard": "vite --config dashboard/vite.config.js",
     "build": "vite build",
+    "build:dashboard": "vite build --config dashboard/vite.config.js",
     "preview": "vite preview --host 127.0.0.1",
     "start": "node server/index.js"
   },
   "dependencies": {
+    "@clerk/react": "^6.12.10",
     "@fontsource-variable/dm-sans": "^5.2.8",
     "@fontsource-variable/instrument-sans": "^5.2.8",
     "@fontsource-variable/space-grotesk": "^5.2.10",
@@ -21,6 +24,7 @@
     "lucide-react": "^0.544.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-router-dom": "7.18.2",
     "typescript": "^5.9.2",
     "vite": "^7.1.7"
   }
