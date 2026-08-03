@@ -32,7 +32,7 @@ Responde en español salvo que el fundador pida otro idioma. Prioriza claridad, 
 2. `01_HIPOTESIS_PRODUCTO_CLIENTE_ONBOARDING.md`
 3. `02_DECISIONES_EVIDENCIA_Y_FUENTES.md`
 
-Evita subir como contexto principal los documentos históricos del repositorio que todavía describen Orbit AI, Gemini o versiones anteriores de la landing. Si se necesita discutir implementación, se pueden adjuntar archivos técnicos concretos a la conversación correspondiente.
+Evita subir como contexto principal los documentos históricos del repositorio que todavía describen implementaciones o versiones anteriores de la landing. Si se necesita discutir implementación, se pueden adjuntar archivos técnicos concretos a la conversación correspondiente.
 
 ## Mensaje recomendado para iniciar el primer chat
 

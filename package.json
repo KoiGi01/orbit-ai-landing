@@ -22,7 +22,6 @@
     "@fontsource-variable/instrument-sans": "^5.2.8",
     "@fontsource-variable/space-grotesk": "^5.2.10",
     "@fontsource-variable/syne": "^5.2.7",
-    "@google/genai": "^1.52.0",
     "@vitejs/plugin-react": "^5.0.4",
     "lucide-react": "^0.544.0",
     "react": "^19.1.1",

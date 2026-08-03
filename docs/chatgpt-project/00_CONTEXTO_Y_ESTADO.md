@@ -82,4 +82,4 @@ No hay en estos documentos evidencia suficiente para afirmar o negar que existan
 - **Estado técnico:** manda una prueba reciente del sistema ejecutado o desplegado, después el código activo y luego la documentación.
 - **Mercado:** manda la evidencia actual y fechada; una opinión o claim comercial debe identificarse como tal.
 
-Algunos documentos antiguos del repositorio todavía describen Orbit AI, Gemini o una landing anterior. No deben utilizarse como contexto principal sin verificar el entrypoint y estado actuales.
+Algunos documentos antiguos del repositorio todavía describen implementaciones o versiones anteriores de la landing. No deben utilizarse como contexto principal sin verificar el entrypoint y estado actuales.

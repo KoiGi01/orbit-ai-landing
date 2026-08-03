@@ -2,7 +2,6 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
-import { GoogleGenAI } from '@google/genai';
 import {
   confirmManualPayment,
   createPaidClinic,
@@ -30,9 +29,6 @@ loadLocalEnv();
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
 const DIST_DIR = join(ROOT, 'dist');
-const LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || 'gemini-2.5-flash-native-audio-preview-12-2025';
-const SPEECH_PREFIX_PADDING_MS = 160;
-const SPEECH_SILENCE_DURATION_MS = 1250;
 
 function loadLocalEnv() {
   const envPath = join(ROOT, '.env');
@@ -65,76 +61,6 @@ async function readJson(req) {
   for await (const chunk of req) chunks.push(chunk);
   if (!chunks.length) return {};
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
-}
-
-async function handleToken(req, res) {
-  if (req.method !== 'POST') {
-    sendJson(res, 405, { error: 'method_not_allowed' });
-    return;
-  }
-
-  if (!requestOriginAllowed(req)) {
-    sendJson(res, 403, { error: 'origin_not_allowed' });
-    return;
-  }
-
-  const rate = consumeRateLimit(
-    req,
-    'public-gemini',
-    numericEnv('GEMINI_DEMO_RATE_LIMIT_PER_15_MIN', 6, { max: 100 }),
-    15 * 60 * 1000,
-  );
-  if (!rate.allowed) {
-    sendJson(res, 429, { error: 'rate_limited' }, { 'retry-after': String(rate.retryAfter) });
-    return;
-  }
-
-  if (!process.env.GEMINI_API_KEY) {
-    sendJson(res, 500, { error: 'missing_gemini_api_key' });
-    return;
-  }
-
-  try {
-    const client = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
-      httpOptions: { apiVersion: 'v1alpha' },
-    });
-    const expireTime = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    const token = await client.authTokens.create({
-      config: {
-        uses: 1,
-        expireTime,
-        newSessionExpireTime: new Date(Date.now() + 60 * 1000).toISOString(),
-        liveConnectConstraints: {
-          model: LIVE_MODEL,
-          config: {
-            responseModalities: ['AUDIO'],
-            inputAudioTranscription: {},
-            outputAudioTranscription: {},
-            realtimeInputConfig: {
-              automaticActivityDetection: {
-                disabled: false,
-                startOfSpeechSensitivity: 'START_SENSITIVITY_LOW',
-                endOfSpeechSensitivity: 'END_SENSITIVITY_LOW',
-                prefixPaddingMs: SPEECH_PREFIX_PADDING_MS,
-                silenceDurationMs: SPEECH_SILENCE_DURATION_MS,
-              },
-            },
-          },
-        },
-        httpOptions: { apiVersion: 'v1alpha' },
-      },
-    });
-
-    sendJson(res, 200, {
-      token: token.name,
-      model: LIVE_MODEL,
-      expireTime,
-    });
-  } catch (error) {
-    console.error('Failed to create Gemini Live token:', error?.message || error);
-    sendJson(res, 502, { error: 'token_creation_failed' });
-  }
 }
 
 async function handleRetellToken(req, res) {
@@ -360,11 +286,6 @@ async function serveStatic(req, res) {
 const server = createServer(async (req, res) => {
   const pathname = new URL(req.url, `http://${req.headers.host}`).pathname;
 
-  if (pathname === '/api/demo/token') {
-    await handleToken(req, res);
-    return;
-  }
-
   if (pathname === '/api/demo/lead') {
     await handleLead(req, res);
     return;
@@ -382,6 +303,11 @@ const server = createServer(async (req, res) => {
 
   if (pathname === '/api/internal/clinics') {
     await handleInternalClinics(req, res);
+    return;
+  }
+
+  if (pathname.startsWith('/api/')) {
+    sendJson(res, 404, { error: 'not_found' });
     return;
   }
 
