@@ -1,17 +1,39 @@
 import { GoogleGenAI } from '@google/genai';
+import {
+  consumeRateLimit,
+  numericEnv,
+  requestOriginAllowed,
+} from '../../lib/server/public-guard.js';
 
 const LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || 'gemini-2.5-flash-native-audio-preview-12-2025';
 const SPEECH_PREFIX_PADDING_MS = 160;
 const SPEECH_SILENCE_DURATION_MS = 1250;
 
-function sendJson(res, status, body) {
+function sendJson(res, status, body, headers = {}) {
   res.status(status).setHeader('cache-control', 'no-store');
+  for (const [name, value] of Object.entries(headers)) res.setHeader(name, value);
   res.json(body);
 }
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     sendJson(res, 405, { error: 'method_not_allowed' });
+    return;
+  }
+
+  if (!requestOriginAllowed(req)) {
+    sendJson(res, 403, { error: 'origin_not_allowed' });
+    return;
+  }
+
+  const rate = consumeRateLimit(
+    req,
+    'public-gemini',
+    numericEnv('GEMINI_DEMO_RATE_LIMIT_PER_15_MIN', 6, { max: 100 }),
+    15 * 60 * 1000,
+  );
+  if (!rate.allowed) {
+    sendJson(res, 429, { error: 'rate_limited' }, { 'retry-after': String(rate.retryAfter) });
     return;
   }
 

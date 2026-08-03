@@ -473,6 +473,17 @@ select:focus-visible,
   box-shadow: 0 0 0 4px rgba(98, 166, 111, 0.12);
 }
 
+.status-dot.demo {
+  background: #d66a4c;
+  box-shadow: 0 0 0 4px rgba(214, 106, 76, 0.13);
+}
+
+.status-button.demo {
+  color: #8e3f2d;
+  background: #fff7f1;
+  border-color: #e9c8bb;
+}
+
 .search-button {
   width: 174px;
   padding: 0 10px;
@@ -589,6 +600,73 @@ select:focus-visible,
   font-size: 11px;
   font-weight: 590;
   cursor: pointer;
+}
+
+.demo-status-popover > p {
+  margin: 14px 0 0;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.data-integrity-notice {
+  width: calc(100% - 80px);
+  max-width: 1500px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  margin: 18px auto 0;
+  padding: 14px 16px;
+  color: #4c2d25;
+  background: linear-gradient(105deg, #fff6ee 0%, #f8eee7 100%);
+  border: 1px solid #e4c6b9;
+  border-left: 4px solid var(--coral);
+  border-radius: 13px;
+  box-shadow: 0 8px 24px rgba(100, 58, 42, 0.06);
+}
+
+.data-integrity-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: #b64d37;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(182, 77, 55, 0.18);
+  border-radius: 10px;
+}
+
+.data-integrity-notice > div {
+  min-width: 0;
+}
+
+.data-integrity-notice strong {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 12px;
+  font-weight: 690;
+  letter-spacing: -0.01em;
+}
+
+.data-integrity-notice p {
+  margin: 0;
+  color: #765347;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.data-integrity-label {
+  padding: 6px 9px;
+  color: #8e3f2d;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid #e3c2b5;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .dashboard,
@@ -3327,6 +3405,19 @@ select:focus-visible,
     padding: 30px 16px 112px;
   }
 
+  .data-integrity-notice {
+    width: calc(100% - 32px);
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    margin-top: 12px;
+    padding: 13px;
+  }
+
+  .data-integrity-label {
+    grid-column: 2;
+    justify-self: start;
+  }
+
   .page-heading,
   .module-heading {
     display: block;
@@ -3837,4 +3928,16 @@ select:focus-visible,
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+.profile-preview-avatar {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  color: #071631;
+  background: #47e6de;
+  font-size: 10px;
+  font-weight: 800;
 }

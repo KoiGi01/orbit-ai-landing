@@ -329,13 +329,29 @@ function getAccountIdentity(account) {
   const initials = fullName.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
   const clinicInitials = clinicName.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
   const isAdmin = account?.membership?.role === 'org:admin';
+  const isPreview = user?.preview === true;
   const role = isAdmin ? 'Administración' : 'Equipo de la clínica';
 
-  return { fullName, firstName, clinicName, clinicType, initials, clinicInitials, role, isAdmin };
+  return { fullName, firstName, clinicName, clinicType, initials, clinicInitials, role, isAdmin, isPreview };
 }
 
-function App({ account }) {
+function getDashboardDataMode(workspace) {
+  const serviceIsLive = workspace?.view === 'live'
+    || workspace?.state?.serviceStatus === 'live';
+
+  // This dashboard still renders the local showcase dataset below. A live
+  // service state is intentionally not treated as proof that analytics are
+  // connected; that requires a separate, explicit data-source contract.
+  return {
+    isDemo: true,
+    serviceIsLive,
+    serviceStatus: workspace?.state?.serviceStatus || 'unknown',
+  };
+}
+
+function App({ account, workspace }) {
   const identity = getAccountIdentity(account);
+  const dataMode = useMemo(() => getDashboardDataMode(workspace), [workspace]);
   const [active, setActive] = useState('Hoy');
   const [period, setPeriod] = useState('Hoy');
   const [tasks, setTasks] = useState(followups);
@@ -348,7 +364,7 @@ function App({ account }) {
   const [notice, setNotice] = useState(null);
 
   const toast = (message, action = null) => {
-    setNotice({ message, action });
+    setNotice({ message: dataMode.isDemo ? `Simulación: ${message}` : message, action });
     window.clearTimeout(window.__autivexToast);
     window.__autivexToast = window.setTimeout(() => setNotice(null), action ? 12000 : 3200);
   };
@@ -448,16 +464,18 @@ function App({ account }) {
   return (
     <div className="app-shell">
       <div className="app-content" inert={blockingOverlayOpen ? true : undefined} aria-hidden={blockingOverlayOpen ? true : undefined}>
-        <Sidebar active={active} taskCount={tasks.length} identity={identity} onNavigate={navigate} />
+        <Sidebar active={active} taskCount={tasks.length} identity={identity} dataMode={dataMode} onNavigate={navigate} />
         <div className="workspace">
           <Topbar
             active={active}
             clinicName={identity.clinicName}
+            dataMode={dataMode}
             statusOpen={statusOpen}
             onToggleStatus={() => setStatusOpen((value) => !value)}
             onSearch={openCommand}
             onAction={toast}
           />
+          <DataIntegrityNotice dataMode={dataMode} clinicName={identity.clinicName} />
           {active === 'Hoy' ? (
             <Dashboard
               period={period}
@@ -470,17 +488,18 @@ function App({ account }) {
               onAction={toast}
               firstName={identity.firstName}
               isAdmin={identity.isAdmin}
+              dataMode={dataMode}
             />
           ) : (
-            <ModulePage title={active} tasks={tasks} clinicName={identity.clinicName} onSelectTask={selectTask} onAction={toast} />
+            <ModulePage title={active} tasks={tasks} clinicName={identity.clinicName} dataMode={dataMode} onSelectTask={selectTask} onAction={toast} />
           )}
         </div>
 
         <MobileNav active={active} onNavigate={navigate} onMore={() => { setAssistantOpen(false); setStatusOpen(false); setMoreOpen(true); }} />
         <AvaButton open={assistantOpen} onToggle={() => setAssistantOpen((value) => !value)} />
-        {assistantOpen && <AvaPanel tasks={tasks} onClose={() => setAssistantOpen(false)} onNavigate={navigate} onAction={toast} />}
+        {assistantOpen && <AvaPanel tasks={tasks} dataMode={dataMode} onClose={() => setAssistantOpen(false)} onNavigate={navigate} onAction={toast} />}
       </div>
-      {selectedTask && <TaskDrawer task={selectedTask} onClose={() => setSelectedTask(null)} onResolve={resolveTask} onStart={startTask} onAssign={assignTask} />}
+      {selectedTask && <TaskDrawer task={selectedTask} dataMode={dataMode} onClose={() => setSelectedTask(null)} onResolve={resolveTask} onStart={startTask} onAssign={assignTask} />}
       {commandOpen && <CommandPalette tasks={tasks} isAdmin={identity.isAdmin} onClose={() => setCommandOpen(false)} onNavigate={navigate} onSelectTask={selectTask} />}
       {moreOpen && <MobileMoreSheet active={active} isAdmin={identity.isAdmin} onClose={() => setMoreOpen(false)} onNavigate={navigate} />}
       <div className="toast-region" aria-live="polite" aria-atomic="true">
@@ -490,7 +509,7 @@ function App({ account }) {
   );
 }
 
-function Sidebar({ active, taskCount, identity, onNavigate }) {
+function Sidebar({ active, taskCount, identity, dataMode, onNavigate }) {
   return (
     <aside className="sidebar">
       <div className="brand-lockup">
@@ -506,16 +525,18 @@ function Sidebar({ active, taskCount, identity, onNavigate }) {
           <span className="clinic-live-dot" />
           <ChevronDown size={15} />
         </div>
-        <OrganizationSwitcher
-          hidePersonal
-          afterSelectOrganizationUrl="/app"
-          appearance={{
-            elements: {
-              rootBox: 'clinic-switcher-clerk-root',
-              organizationSwitcherTrigger: 'clinic-switcher-clerk-trigger',
-            },
-          }}
-        />
+        {!identity.isPreview && (
+          <OrganizationSwitcher
+            hidePersonal
+            afterSelectOrganizationUrl="/app"
+            appearance={{
+              elements: {
+                rootBox: 'clinic-switcher-clerk-root',
+                organizationSwitcherTrigger: 'clinic-switcher-clerk-trigger',
+              },
+            }}
+          />
+        )}
       </div>
 
       <nav className="side-nav" aria-label="Navegación principal">
@@ -553,11 +574,17 @@ function Sidebar({ active, taskCount, identity, onNavigate }) {
       <div className="sidebar-footer">
         <div className="receptionist-card">
           <div className="receptionist-orb"><span /></div>
-          <div><small>Recepcionista</small><strong>Lucía está atendiendo</strong><span>2 de 3 líneas libres</span></div>
+          <div>
+            <small>{dataMode.isDemo ? 'Vista de ejemplo' : 'Recepcionista'}</small>
+            <strong>{dataMode.isDemo ? 'Lucía aún no está conectada' : 'Lucía está atendiendo'}</strong>
+            <span>{dataMode.isDemo ? 'Sin telefonía vinculada' : '2 de 3 líneas libres'}</span>
+          </div>
           <Activity size={15} aria-hidden="true" />
         </div>
         <div className="profile-button">
-          <UserButton appearance={{ elements: { avatarBox: 'clerk-profile-avatar' } }} />
+          {identity.isPreview
+            ? <span className="profile-preview-avatar" aria-hidden="true">{identity.initials}</span>
+            : <UserButton appearance={{ elements: { avatarBox: 'clerk-profile-avatar' } }} />}
           <span><strong>{identity.fullName}</strong><small>{identity.role}</small></span>
         </div>
       </div>
@@ -565,7 +592,7 @@ function Sidebar({ active, taskCount, identity, onNavigate }) {
   );
 }
 
-function Topbar({ active, clinicName, statusOpen, onToggleStatus, onSearch, onAction }) {
+function Topbar({ active, clinicName, dataMode, statusOpen, onToggleStatus, onSearch, onAction }) {
   return (
     <header className="topbar">
       <div className="mobile-wordmark" aria-label="AutiveX Control">
@@ -575,12 +602,12 @@ function Topbar({ active, clinicName, statusOpen, onToggleStatus, onSearch, onAc
       <div className="breadcrumb"><span>{clinicName}</span><ChevronRight size={14} /><strong>{active}</strong></div>
       <div className="top-actions">
         <div className="status-wrap">
-          <button className="status-button" type="button" onClick={onToggleStatus} aria-expanded={statusOpen} aria-label="Estado: operando con normalidad">
-            <span className="status-dot" />
-            <span>Operando con normalidad</span>
+          <button className={`status-button ${dataMode.isDemo ? 'demo' : ''}`} type="button" onClick={onToggleStatus} aria-expanded={statusOpen} aria-label={dataMode.isDemo ? 'Estado: datos no conectados' : 'Estado: operando con normalidad'}>
+            <span className={`status-dot ${dataMode.isDemo ? 'demo' : ''}`} />
+            <span>{dataMode.isDemo ? 'Datos no conectados' : 'Operando con normalidad'}</span>
             <ChevronDown size={14} aria-hidden="true" />
           </button>
-          {statusOpen && <StatusPopover />}
+          {statusOpen && <StatusPopover dataMode={dataMode} />}
         </div>
         <button className="search-button" type="button" onClick={onSearch} aria-label="Buscar en AutiveX">
           <Search size={17} aria-hidden="true" /><span>Buscar</span><kbd><Command size={11} /> K</kbd>
@@ -596,7 +623,21 @@ function Topbar({ active, clinicName, statusOpen, onToggleStatus, onSearch, onAc
   );
 }
 
-function StatusPopover() {
+function StatusPopover({ dataMode }) {
+  if (dataMode.isDemo) {
+    return (
+      <div className="status-popover demo-status-popover">
+        <div className="popover-title"><span className="status-dot demo" /><div><strong>Vista demostrativa</strong><small>Sin actividad operativa conectada</small></div></div>
+        <dl>
+          <div><dt>Telefonía</dt><dd>No conectada</dd></div>
+          <div><dt>Calendario</dt><dd>No conectado</dd></div>
+          <div><dt>Cifras visibles</dt><dd>Datos de ejemplo</dd></div>
+        </dl>
+        <p>Esta vista sirve para conocer el producto; no confirma que Lucía esté recibiendo llamadas.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="status-popover">
       <div className="popover-title"><span className="status-dot" /><div><strong>Lucía está en línea</strong><small>Última revisión hace 18 s</small></div></div>
@@ -610,7 +651,27 @@ function StatusPopover() {
   );
 }
 
-function Dashboard({ period, onPeriod, tasks, taskFilter, onTaskFilter, onSelectTask, onNavigate, onAction, firstName, isAdmin }) {
+function DataIntegrityNotice({ dataMode, clinicName }) {
+  if (!dataMode.isDemo) return null;
+
+  return (
+    <section className="data-integrity-notice" role="status" aria-label="Aviso sobre los datos del dashboard">
+      <span className="data-integrity-icon" aria-hidden="true"><ShieldCheck size={18} /></span>
+      <div>
+        <strong>Vista demostrativa · datos no conectados</strong>
+        <p>
+          {dataMode.serviceIsLive
+            ? `La cuenta de ${clinicName} está activa, pero este tablero todavía usa información ilustrativa.`
+            : `Telefonía, calendario y métricas de ${clinicName} todavía no están conectados.`}
+          {' '}Las cifras, nombres y conversaciones visibles no representan actividad real.
+        </p>
+      </div>
+      <span className="data-integrity-label">Datos de ejemplo</span>
+    </section>
+  );
+}
+
+function Dashboard({ period, onPeriod, tasks, taskFilter, onTaskFilter, onSelectTask, onNavigate, onAction, firstName, isAdmin, dataMode }) {
   const [analysisOpen, setAnalysisOpen] = useState(false);
   const data = analyticsByPeriod[period];
   const firstTask = tasks[0];
@@ -619,9 +680,9 @@ function Dashboard({ period, onPeriod, tasks, taskFilter, onTaskFilter, onSelect
     <main className="dashboard">
       <section className="page-heading">
         <div>
-          <p className="eyebrow">Viernes, 31 de julio</p>
-          <h1>{tasks.length ? `Hay ${tasks.length} ${tasks.length === 1 ? 'decisión' : 'decisiones'} para hoy, ${firstName}.` : `La cola está resuelta, ${firstName}.`}</h1>
-          <p className="heading-copy">Lucía atendió {data.calls.toLocaleString('es-MX')} llamadas {periodContext} y mantiene la operación estable. {firstTask ? <strong>Empieza por {firstTask.name}.</strong> : <strong>No quedan acciones pendientes.</strong>}</p>
+          <p className="eyebrow">{dataMode.isDemo ? 'Ejemplo de operación' : 'Viernes, 31 de julio'}</p>
+          <h1>{dataMode.isDemo ? `Así se verá tu operación, ${firstName}.` : (tasks.length ? `Hay ${tasks.length} ${tasks.length === 1 ? 'decisión' : 'decisiones'} para hoy, ${firstName}.` : `La cola está resuelta, ${firstName}.`)}</h1>
+          <p className="heading-copy">{dataMode.isDemo ? <>Explora una simulación con datos ficticios para conocer el dashboard. <strong>Ninguna cifra corresponde a llamadas reales.</strong></> : <>Lucía atendió {data.calls.toLocaleString('es-MX')} llamadas {periodContext} y mantiene la operación estable. {firstTask ? <strong>Empieza por {firstTask.name}.</strong> : <strong>No quedan acciones pendientes.</strong>}</>}</p>
         </div>
         <div className="period-control" aria-label="Periodo de actividad">
           {['Hoy', '7 días', '30 días'].map((item) => (
@@ -631,41 +692,41 @@ function Dashboard({ period, onPeriod, tasks, taskFilter, onTaskFilter, onSelect
       </section>
 
       <section className="hero-grid">
-        <AttentionPanel tasks={tasks} filter={taskFilter} onFilter={onTaskFilter} onSelect={onSelectTask} onNavigate={onNavigate} />
-        <PulsePanel data={data} onNavigate={onNavigate} />
+        <AttentionPanel tasks={tasks} isDemoData={dataMode.isDemo} filter={taskFilter} onFilter={onTaskFilter} onSelect={onSelectTask} onNavigate={onNavigate} />
+        <PulsePanel data={data} isDemoData={dataMode.isDemo} onNavigate={onNavigate} />
       </section>
 
-      <section className="signal-strip" aria-label="Indicadores clave">
+      <section className="signal-strip" aria-label={dataMode.isDemo ? 'Indicadores de ejemplo' : 'Indicadores clave'}>
         <SignalMetric value={data.noWait} label="atendidas sin espera" meta={`${data.noWaitCount.toLocaleString('es-MX')} de ${data.inbound.toLocaleString('es-MX')} entrantes`} trend={data.noWaitTrend} />
         <SignalMetric value={data.booked.toLocaleString('es-MX')} label="citas creadas" meta={`de ${data.intent.toLocaleString('es-MX')} con intención`} trend={data.bookedTrend} />
         <SignalMetric value={data.duration} label="duración promedio" meta="minutos por conversación" trend={data.durationTrend} />
-        <div className="signal-note"><ShieldCheck size={18} /><span><strong>Sin llamadas perdidas</strong><small>{period === 'Hoy' ? 'en las últimas 3 h 20 min' : `en los últimos ${period}`}</small></span></div>
+        <div className="signal-note"><ShieldCheck size={18} /><span><strong>{dataMode.isDemo ? 'Ejemplo de cobertura' : 'Sin llamadas perdidas'}</strong><small>{dataMode.isDemo ? 'resultado ilustrativo' : (period === 'Hoy' ? 'en las últimas 3 h 20 min' : `en los últimos ${period}`)}</small></span></div>
       </section>
 
       <section className="analysis-disclosure">
         <div><p className="eyebrow">Más contexto</p><h2>Agenda, resultados y capacidad</h2><span>Lo esencial ya está arriba. Abre el detalle cuando necesites investigar el rendimiento.</span></div>
-        <div className="analysis-facts"><span><small>Agenda hoy</small><strong>{appointments.length} citas · {appointments.filter((item) => item.state !== 'Confirmada').length} por atender</strong></span><span><small>Capacidad</small><strong>823 / 1,000 min</strong></span></div>
+        <div className="analysis-facts"><span><small>{dataMode.isDemo ? 'Agenda de ejemplo' : 'Agenda hoy'}</small><strong>{appointments.length} citas · {appointments.filter((item) => item.state !== 'Confirmada').length} por atender</strong></span><span><small>{dataMode.isDemo ? 'Capacidad simulada' : 'Capacidad'}</small><strong>823 / 1,000 min</strong></span></div>
         <button type="button" aria-expanded={analysisOpen} aria-controls="dashboard-analysis" onClick={() => setAnalysisOpen((value) => !value)}>{analysisOpen ? 'Ocultar análisis' : 'Ver análisis'}<ChevronDown size={16} className={analysisOpen ? 'rotated' : ''} /></button>
       </section>
       {analysisOpen && <div className="analysis-details" id="dashboard-analysis">
         <section className="insight-grid">
-          <OutcomePanel reasonsData={reasonsByPeriod[period]} onNavigate={onNavigate} />
-          <AgendaPanel onAction={onAction} />
+          <OutcomePanel reasonsData={reasonsByPeriod[period]} isDemoData={dataMode.isDemo} onNavigate={onNavigate} />
+          <AgendaPanel isDemoData={dataMode.isDemo} onAction={onAction} />
         </section>
-        <CapacityPanel isAdmin={isAdmin} onNavigate={onNavigate} />
+        <CapacityPanel isAdmin={isAdmin} isDemoData={dataMode.isDemo} onNavigate={onNavigate} />
       </div>}
     </main>
   );
 }
 
-function PulsePanel({ data, onNavigate }) {
+function PulsePanel({ data, isDemoData, onNavigate }) {
   const peak = data.chart.points.reduce((highest, point) => point.value > highest.value ? point : highest);
   const intentRate = Math.round((data.intent / data.calls) * 100);
   return (
     <article className="pulse-panel">
       <header className="pulse-header">
         <div className="pulse-kpi">
-          <span>Llamadas atendidas</span>
+          <span>{isDemoData ? 'Llamadas de ejemplo' : 'Llamadas atendidas'}</span>
           <div className="pulse-value-row"><strong>{data.calls.toLocaleString('es-MX')}</strong><small>{data.rangeLabel}</small></div>
           <p>{data.inbound.toLocaleString('es-MX')} entrantes <i /> {data.noWait} sin espera</p>
         </div>
@@ -741,7 +802,7 @@ function VolumeChart({ points, total, title, peakValue }) {
   );
 }
 
-function AttentionPanel({ tasks, filter, onFilter, onSelect, onNavigate }) {
+function AttentionPanel({ tasks, isDemoData, filter, onFilter, onSelect, onNavigate }) {
   const filtered = useMemo(() => {
     if (filter === 'Urgentes') return tasks.filter((item) => item.priorityTone === 'urgent' || item.priorityTone === 'warning');
     if (filter === 'Hoy') return tasks.filter((item) => item.priorityTone !== 'normal');
@@ -751,7 +812,7 @@ function AttentionPanel({ tasks, filter, onFilter, onSelect, onNavigate }) {
   return (
     <aside className="attention-panel">
       <header>
-          <div><p className="eyebrow">Decisiones</p><h2>Necesitan atención <span>{filtered.length}</span></h2></div>
+          <div><p className="eyebrow">{isDemoData ? 'Decisiones simuladas' : 'Decisiones'}</p><h2>{isDemoData ? 'Ejemplos por atender' : 'Necesitan atención'} <span>{filtered.length}</span></h2></div>
       </header>
       <div className="task-tabs" role="group" aria-label="Filtrar pendientes">
         {['Todas', 'Hoy', 'Urgentes'].map((item) => (
@@ -782,11 +843,11 @@ function SignalMetric({ value, label, meta, trend }) {
   );
 }
 
-function OutcomePanel({ reasonsData, onNavigate }) {
+function OutcomePanel({ reasonsData, isDemoData, onNavigate }) {
   return (
     <article className="outcome-panel surface-panel">
       <header className="section-head">
-        <div><p className="eyebrow">Resultados por motivo</p><h2>Qué buscaban al llamar</h2></div>
+        <div><p className="eyebrow">{isDemoData ? 'Resultados de ejemplo' : 'Resultados por motivo'}</p><h2>{isDemoData ? 'Cómo se agruparán las llamadas' : 'Qué buscaban al llamar'}</h2></div>
         <button type="button" onClick={() => onNavigate('Conversaciones')}>Explorar llamadas <ArrowUpRight size={15} /></button>
       </header>
       <div className="reason-table" role="table" aria-label="Resultados de llamadas por motivo">
@@ -814,11 +875,11 @@ function OutcomePanel({ reasonsData, onNavigate }) {
   );
 }
 
-function AgendaPanel({ onAction }) {
+function AgendaPanel({ isDemoData, onAction }) {
   return (
     <article className="agenda-panel surface-panel">
       <header className="section-head">
-        <div><p className="eyebrow">Agenda de hoy</p><h2>5 citas programadas</h2></div>
+        <div><p className="eyebrow">{isDemoData ? 'Agenda de ejemplo' : 'Agenda de hoy'}</p><h2>{isDemoData ? '5 citas ilustrativas' : '5 citas programadas'}</h2></div>
         <button type="button" className="calendar-button" aria-label="Abrir calendario" onClick={() => onAction('Calendario abierto')}><CalendarCheck2 size={18} /></button>
       </header>
       <div className="agenda-list">
@@ -831,43 +892,50 @@ function AgendaPanel({ onAction }) {
           </button>
         ))}
       </div>
-      <div className="agenda-foot"><Clock3 size={15} /><span>Próximo espacio libre</span><strong>Lun 3 · 09:00</strong></div>
+      <div className="agenda-foot"><Clock3 size={15} /><span>{isDemoData ? 'Espacio ilustrativo' : 'Próximo espacio libre'}</span><strong>Lun 3 · 09:00</strong></div>
     </article>
   );
 }
 
-function CapacityPanel({ isAdmin, onNavigate }) {
+function CapacityPanel({ isAdmin, isDemoData, onNavigate }) {
   return (
     <section className="capacity-panel">
-      <div className="capacity-copy"><p className="eyebrow">Reserva mensual</p><div><strong>823</strong><span>de 1,000 minutos incluidos</span></div></div>
+      <div className="capacity-copy"><p className="eyebrow">{isDemoData ? 'Reserva de ejemplo' : 'Reserva mensual'}</p><div><strong>823</strong><span>de 1,000 minutos {isDemoData ? 'simulados' : 'incluidos'}</span></div></div>
       <div className="capacity-visual">
         <div className="capacity-labels"><span>Incluido</span><span>Proyección · 1,140</span><span>Límite · 1,500</span></div>
         <div className="capacity-track"><i className="used" /><i className="projection" /><i className="limit" /></div>
-        <span>Quedan 8 días. Tu servicio tiene margen suficiente para la proyección actual.</span>
+        <span>{isDemoData ? 'Ejemplo visual de cómo se mostrará el uso cuando conectemos la telefonía.' : 'Quedan 8 días. Tu servicio tiene margen suficiente para la proyección actual.'}</span>
       </div>
       {isAdmin && <button type="button" onClick={() => onNavigate('Uso y plan')}>Uso y plan <ArrowUpRight size={15} /></button>}
     </section>
   );
 }
 
-function ModulePage({ title, tasks, clinicName, onSelectTask, onAction }) {
+function ModulePage({ title, tasks, clinicName, dataMode, onSelectTask, onAction }) {
   const copy = moduleCopy[title];
+  const demoDescriptions = {
+    Conversaciones: 'Los nombres, llamadas y resultados de esta bitácora son ejemplos; todavía no provienen de tu telefonía.',
+    Oportunidades: 'Este tablero simula cómo se organizarán los seguimientos cuando entren conversaciones reales.',
+    'Mi recepcionista': 'Esta configuración es ilustrativa y todavía no publica un número ni atiende llamadas.',
+    Conexiones: 'Aquí verás tus integraciones reales. Por ahora ninguna fuente está vinculada a este dashboard.',
+    'Uso y plan': 'La capacidad y proyección visibles son de muestra; aún no existe consumo telefónico conectado.',
+  };
   return (
     <main className="module-page">
       <section className="module-heading">
-        <div><p className="eyebrow">{copy.eyebrow}</p><h1>{copy.title}</h1><span>{copy.description}</span></div>
+        <div><p className="eyebrow">{dataMode.isDemo ? `${copy.eyebrow} · ejemplo` : copy.eyebrow}</p><h1>{copy.title}</h1><span>{dataMode.isDemo ? demoDescriptions[title] : copy.description}</span></div>
         <button type="button" className="primary-action" onClick={() => onAction(`Nueva acción en ${title}`)}>Nueva acción <ArrowUpRight size={16} /></button>
       </section>
-      {title === 'Conversaciones' && <ConversationsModule tasks={tasks} onSelectTask={onSelectTask} />}
+      {title === 'Conversaciones' && <ConversationsModule tasks={tasks} isDemoData={dataMode.isDemo} onSelectTask={onSelectTask} />}
       {title === 'Oportunidades' && <OpportunitiesModule tasks={tasks} onSelectTask={onSelectTask} />}
-      {title === 'Mi recepcionista' && <ReceptionistModule clinicName={clinicName} onAction={onAction} />}
-      {title === 'Conexiones' && <ConnectionsModule onAction={onAction} />}
-      {title === 'Uso y plan' && <UsageModule />}
+      {title === 'Mi recepcionista' && <ReceptionistModule clinicName={clinicName} isDemoData={dataMode.isDemo} onAction={onAction} />}
+      {title === 'Conexiones' && <ConnectionsModule isDemoData={dataMode.isDemo} onAction={onAction} />}
+      {title === 'Uso y plan' && <UsageModule isDemoData={dataMode.isDemo} />}
     </main>
   );
 }
 
-function ConversationsModule({ tasks, onSelectTask }) {
+function ConversationsModule({ tasks, isDemoData, onSelectTask }) {
   const [query, setQuery] = useState('');
   const [resultFilter, setResultFilter] = useState('Todas');
   const [sortOrder, setSortOrder] = useState('Recientes');
@@ -902,7 +970,7 @@ function ConversationsModule({ tasks, onSelectTask }) {
           {filteredCalls.length === 0 && <div className="records-empty"><Search size={20} /><strong>Sin resultados</strong><span>Prueba otro nombre, motivo o resultado.</span></div>}
         </div>
       </article>
-      <aside className="module-aside dark-module-card"><p className="dark-eyebrow">Hoy</p><strong>136</strong><span>llamadas entrantes</span><dl><div><dt>Atendidas</dt><dd>128</dd></div><div><dt>Sin respuesta</dt><dd>0</dd></div><div><dt>Fuera de horario</dt><dd>8</dd></div></dl></aside>
+      <aside className="module-aside dark-module-card"><p className="dark-eyebrow">{isDemoData ? 'Datos de muestra' : 'Hoy'}</p><strong>136</strong><span>{isDemoData ? 'llamadas ilustrativas' : 'llamadas entrantes'}</span><dl><div><dt>Atendidas</dt><dd>128</dd></div><div><dt>Sin respuesta</dt><dd>0</dd></div><div><dt>Fuera de horario</dt><dd>8</dd></div></dl></aside>
     </section>
   );
 }
@@ -926,46 +994,54 @@ function OpportunitiesModule({ tasks, onSelectTask }) {
   );
 }
 
-function ReceptionistModule({ clinicName, onAction }) {
+function ReceptionistModule({ clinicName, isDemoData, onAction }) {
   return (
     <section className="reception-layout">
-      <article className="reception-identity dark-module-card"><div className="large-orb"><span /></div><p className="dark-eyebrow">En línea ahora</p><h2>Lucía</h2><span>Recepcionista de {clinicName}</span><div className="reception-number">+52 55 4160 0198</div><button type="button" onClick={() => onAction('Llamada de prueba iniciada')}><PhoneOutgoing size={16} /> Hacer llamada de prueba</button></article>
+      <article className="reception-identity dark-module-card"><div className="large-orb"><span /></div><p className="dark-eyebrow">{isDemoData ? 'Configuración de ejemplo' : 'En línea ahora'}</p><h2>Lucía</h2><span>{isDemoData ? `Vista previa para ${clinicName}` : `Recepcionista de ${clinicName}`}</span><div className="reception-number">{isDemoData ? 'Número aún no conectado' : '+52 55 4160 0198'}</div><button type="button" onClick={() => onAction(isDemoData ? 'Experiencia de prueba iniciada' : 'Llamada de prueba iniciada')}><PhoneOutgoing size={16} /> {isDemoData ? 'Probar experiencia' : 'Hacer llamada de prueba'}</button></article>
       <article className="settings-list surface-panel">
-        {[
+        {(isDemoData ? [
+          ['Disponibilidad', 'Horario ilustrativo · por configurar', Clock3],
+          ['Servicios que conoce', 'Contenido ilustrativo · por configurar', FileText],
+          ['Transferencias', 'Sin personas ni reglas conectadas', PhoneCall],
+          ['Mensaje inicial', 'Vista previa · no publicado', MessageSquareText],
+        ] : [
           ['Disponibilidad', 'Lunes a viernes · 07:00–19:00', Clock3],
           ['Servicios que conoce', '12 tratamientos y 38 respuestas', FileText],
           ['Transferencias', '3 personas y una regla fuera de horario', PhoneCall],
           ['Mensaje inicial', 'Actualizado el 27 de julio', MessageSquareText],
-        ].map(([label, value, Icon]) => <button type="button" key={label} onClick={() => onAction(`${label} abierto`)}><span className="setting-icon"><Icon size={18} /></span><span><strong>{label}</strong><small>{value}</small></span><ChevronRight size={17} /></button>)}
+        ]).map(([label, value, Icon]) => <button type="button" key={label} onClick={() => onAction(`${label} abierto`)}><span className="setting-icon"><Icon size={18} /></span><span><strong>{label}</strong><small>{value}</small></span><ChevronRight size={17} /></button>)}
       </article>
     </section>
   );
 }
 
-function ConnectionsModule({ onAction }) {
+function ConnectionsModule({ isDemoData, onAction }) {
   const connections = [
     ['Google Calendar', 'Consulta disponibilidad y crea citas.', 'Conectado', CalendarCheck2],
     ['Telefonía AutiveX', 'Recibe y distribuye las llamadas del negocio.', 'Conectado', PhoneCall],
     ['WhatsApp Business', 'Prepara seguimientos después de cada llamada.', 'Revisar', MessageSquareText],
   ];
-  return <section className="connection-list surface-panel">{connections.map(([name, detail, state, Icon]) => <button type="button" key={name} onClick={() => onAction(`${name} abierto`)}><span className="connection-icon"><Icon size={21} /></span><span><strong>{name}</strong><small>{detail}</small></span><i className={state === 'Conectado' ? 'connected' : 'review'}>{state}</i><ChevronRight size={17} /></button>)}</section>;
+  return <section className="connection-list surface-panel">{connections.map(([name, detail, state, Icon]) => {
+    const visibleState = isDemoData ? 'No conectado' : state;
+    return <button type="button" key={name} onClick={() => onAction(`${name} abierto`)}><span className="connection-icon"><Icon size={21} /></span><span><strong>{name}</strong><small>{isDemoData ? 'Disponible para conectar durante la configuración.' : detail}</small></span><i className={visibleState === 'Conectado' ? 'connected' : 'review'}>{visibleState}</i><ChevronRight size={17} /></button>;
+  })}</section>;
 }
 
-function UsageModule() {
+function UsageModule({ isDemoData }) {
   return (
     <section className="usage-layout">
-      <article className="usage-reserve dark-module-card"><p className="dark-eyebrow">Julio 2026</p><strong>823</strong><span>minutos usados de 1,000</span><div className="usage-ring" style={{ '--progress': '82.3%' }}><i /></div><footer><span>Proyección</span><b>1,140 min</b></footer></article>
-      <article className="usage-detail surface-panel"><h2>Tu capacidad este mes</h2><p>El excedente proyectado está cubierto por tu plan. El servicio no está en riesgo de interrupción.</p><dl><div><dt>Incluidos</dt><dd>1,000 min</dd></div><div><dt>Excedente proyectado</dt><dd>140 min</dd></div><div><dt>Límite de seguridad</dt><dd>1,500 min</dd></div><div><dt>Días restantes</dt><dd>8</dd></div></dl></article>
+      <article className="usage-reserve dark-module-card"><p className="dark-eyebrow">{isDemoData ? 'Consumo de ejemplo' : 'Julio 2026'}</p><strong>823</strong><span>minutos {isDemoData ? 'simulados' : 'usados'} de 1,000</span><div className="usage-ring" style={{ '--progress': '82.3%' }}><i /></div><footer><span>Proyección</span><b>1,140 min</b></footer></article>
+      <article className="usage-detail surface-panel"><h2>{isDemoData ? 'Así se mostrará tu capacidad' : 'Tu capacidad este mes'}</h2><p>{isDemoData ? 'Estos valores son ilustrativos. El consumo real aparecerá después de conectar y publicar la telefonía.' : 'El excedente proyectado está cubierto por tu plan. El servicio no está en riesgo de interrupción.'}</p><dl><div><dt>Incluidos</dt><dd>1,000 min</dd></div><div><dt>Excedente proyectado</dt><dd>140 min</dd></div><div><dt>Límite de seguridad</dt><dd>1,500 min</dd></div><div><dt>Días restantes</dt><dd>8</dd></div></dl></article>
     </section>
   );
 }
 
-function TaskDrawer({ task, onClose, onResolve, onStart, onAssign }) {
+function TaskDrawer({ task, dataMode, onClose, onResolve, onStart, onAssign }) {
   const dialogRef = useDialogFocus();
   return (
     <div className="drawer-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <aside ref={dialogRef} className="task-drawer" role="dialog" aria-modal="true" aria-labelledby="task-title">
-        <header><div><p className="eyebrow">{task.isCallRecord ? `Conversación · ${task.time}` : `Pendiente · ${task.inProgress ? `En curso · ${task.priority}` : task.priority}`}</p><h2 id="task-title">{task.name}</h2><span>{task.phone}</span></div><button type="button" onClick={onClose} aria-label="Cerrar detalle"><X size={20} /></button></header>
+        <header><div><p className="eyebrow">{dataMode.isDemo ? 'Registro de ejemplo' : (task.isCallRecord ? `Conversación · ${task.time}` : `Pendiente · ${task.inProgress ? `En curso · ${task.priority}` : task.priority}`)}</p><h2 id="task-title">{task.name}</h2><span>{dataMode.isDemo ? 'Persona y conversación ficticias' : task.phone}</span></div><button type="button" onClick={onClose} aria-label="Cerrar detalle"><X size={20} /></button></header>
         <div className="drawer-summary"><span className="mini-avatar">{task.initials}</span><div><strong>{task.detail}</strong><p>{task.summary}</p>{task.assigned && <small>Responsable · {task.assigned}</small>}</div></div>
         <section className="drawer-section"><div className="drawer-section-title"><FileText size={16} /><h3>Bitácora de la llamada</h3></div><div className="event-list">{task.events.map((event, index) => <div key={event}><i className={index === task.events.length - 1 ? 'last' : ''} /><span>{event}</span></div>)}</div></section>
         <section className="drawer-section"><div className="drawer-section-title"><Sparkles size={16} /><h3>Lectura de Lucía</h3></div><blockquote>“{task.note}”</blockquote></section>
@@ -1024,14 +1100,14 @@ function AvaButton({ open, onToggle }) {
   return <button type="button" className={`ava-button ${open ? 'open' : ''}`} onClick={onToggle} aria-label={open ? 'Cerrar Ava' : 'Abrir Ava'} aria-expanded={open}><span className="ava-orb"><i /></span><span className="ava-label">Pregúntale a Ava</span></button>;
 }
 
-function AvaPanel({ tasks, onClose, onNavigate, onAction }) {
+function AvaPanel({ tasks, dataMode, onClose, onNavigate, onAction }) {
   const urgent = tasks.find((task) => task.priorityTone === 'urgent');
   return (
     <aside className="ava-panel" aria-label="Asistente Ava">
       <header><div className="ava-title"><span className="ava-orb small"><i /></span><span><strong>Ava</strong><small>Asistente de AutiveX</small></span></div><button type="button" onClick={onClose} aria-label="Cerrar Ava"><X size={18} /></button></header>
-      <div className="ava-message"><p>{urgent ? `La operación está estable. Lo más urgente es ${urgent.action.toLowerCase()} a ${urgent.name} antes de que cierre la clínica.` : 'La operación está estable y no quedan pendientes urgentes.'}</p><span>Analicé el pulso operativo y la cola pendiente.</span></div>
+      <div className="ava-message"><p>{dataMode.isDemo ? 'Esta recomendación es una muestra de cómo Ava resumirá tu operación cuando existan datos conectados.' : (urgent ? `La operación está estable. Lo más urgente es ${urgent.action.toLowerCase()} a ${urgent.name} antes de que cierre la clínica.` : 'La operación está estable y no quedan pendientes urgentes.')}</p><span>{dataMode.isDemo ? 'Los pacientes, llamadas y prioridades visibles son ficticios.' : 'Analicé el pulso operativo y la cola pendiente.'}</span></div>
       <div className="ava-prompts"><button type="button" onClick={() => { onNavigate('Oportunidades'); onClose(); }}>Muéstrame los pendientes de hoy <ArrowRight size={14} /></button><button type="button" onClick={() => onAction('Resumen semanal preparado')}>Resume el desempeño de esta semana <ArrowRight size={14} /></button></div>
-      <footer><Sparkles size={14} /><span>Ava usa únicamente datos visibles de tu cuenta.</span></footer>
+      <footer><Sparkles size={14} /><span>{dataMode.isDemo ? 'Ava está en modo demostración y no consulta actividad real.' : 'Ava usa únicamente datos visibles de tu cuenta.'}</span></footer>
     </aside>
   );
 }

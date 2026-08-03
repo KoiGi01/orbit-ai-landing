@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ClerkProvider,
   SignIn,
@@ -27,6 +27,15 @@ import {
   PhoneCall,
   ShieldCheck,
 } from 'lucide-react';
+import { getWorkspace } from './control-api';
+import DevPreview from './dev-preview';
+import InternalAdmin from './internal-admin';
+import {
+  ProspectOnboarding,
+  ProspectPreview,
+  WorkspaceLoading,
+  WorkspaceMessage,
+} from './workspace';
 import './auth.css';
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -134,8 +143,8 @@ function AuthPage({ mode }) {
       <section className="auth-form-panel">
         <div className="auth-mobile-brand"><Brand compact /></div>
         <div className="auth-form-heading">
-          <span>{mode === 'sign-in' ? 'Bienvenido de vuelta' : 'Activa tu acceso'}</span>
-          <h2>{mode === 'sign-in' ? 'Entra a tu dashboard' : 'Crea tu cuenta de equipo'}</h2>
+          <span>{mode === 'sign-in' ? 'Bienvenido de vuelta' : 'Prueba AutiveX en tu clínica'}</span>
+          <h2>{mode === 'sign-in' ? 'Entra a tu espacio' : 'Crea tu recepcionista de prueba'}</h2>
         </div>
         {mode === 'sign-in' ? (
           <SignIn
@@ -150,11 +159,65 @@ function AuthPage({ mode }) {
             path="/sign-up"
             routing="path"
             signInUrl="/sign-in"
-            fallbackRedirectUrl="/onboarding"
+            fallbackRedirectUrl="/app"
             appearance={clerkAppearance}
           />
         )}
         <div className="auth-support">¿Problemas para entrar? <a href="mailto:hola@autivexai.com">Habla con AutiveX</a></div>
+      </section>
+    </main>
+  );
+}
+
+function InvitationPage() {
+  const { isLoaded, isSignedIn } = useAuth();
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const ticket = params.get('__clerk_ticket');
+  const status = params.get('__clerk_status');
+  const invitationUrl = `${location.pathname}${location.search}`;
+  const canProcessInvitation = Boolean(ticket) && ['sign_in', 'sign_up'].includes(status);
+
+  if (!isLoaded) return <LoadingScreen />;
+  if (status === 'complete' && isSignedIn) return <Navigate to="/onboarding" replace />;
+
+  return (
+    <main className="auth-layout">
+      <AuthShowcase />
+      <section className="auth-form-panel">
+        <div className="auth-mobile-brand"><Brand compact /></div>
+        <div className="auth-form-heading">
+          <span>Invitación privada</span>
+          <h2>{canProcessInvitation ? 'Activa el acceso a tu clínica' : 'Este enlace no se puede usar'}</h2>
+        </div>
+        {canProcessInvitation && status === 'sign_up' ? (
+          <SignUp
+            path="/accept-invitation"
+            routing="path"
+            signInUrl={invitationUrl}
+            forceRedirectUrl="/onboarding"
+            fallbackRedirectUrl="/onboarding"
+            appearance={clerkAppearance}
+          />
+        ) : canProcessInvitation ? (
+          <SignIn
+            path="/accept-invitation"
+            routing="path"
+            signUpUrl={invitationUrl}
+            forceRedirectUrl="/onboarding"
+            fallbackRedirectUrl="/onboarding"
+            appearance={clerkAppearance}
+          />
+        ) : (
+          <div className="clerk-setup-card">
+            <div className="setup-icon"><LockKeyhole size={26} /></div>
+            <p>La invitación está incompleta, ya fue utilizada o venció. Solicita un enlace nuevo a AutiveX.</p>
+            <a href={isSignedIn ? '/onboarding' : '/sign-in'}>
+              {isSignedIn ? 'Volver a mi onboarding' : 'Iniciar sesión'} <ArrowRight size={17} />
+            </a>
+          </div>
+        )}
+        <div className="auth-support">La invitación sólo funciona con el correo al que fue enviada.</div>
       </section>
     </main>
   );
@@ -182,23 +245,6 @@ function HomeRoute() {
   const { isLoaded, isSignedIn } = useAuth();
   if (!isLoaded) return <LoadingScreen />;
   return <Navigate to={isSignedIn ? '/app' : '/sign-in'} replace />;
-}
-
-function normalizeOnboardingStatus(organization) {
-  if (!organization) return 'needs_organization';
-
-  const organizationMetadata = organization?.publicMetadata || {};
-  if (organizationMetadata.onboardingComplete === true) return 'active';
-
-  const raw = organizationMetadata.onboardingStatus
-    || 'needs_onboarding';
-  const normalized = String(raw).trim().toLowerCase().replace(/[\s-]+/g, '_');
-
-  if (['complete', 'completed', 'ready', 'live', 'activo', 'activa'].includes(normalized)) return 'active';
-  if (['scheduled', 'agendado', 'agendada'].includes(normalized)) return 'scheduled';
-  if (['configuring', 'configuration', 'in_progress', 'en_configuracion'].includes(normalized)) return 'configuring';
-  if (['review', 'testing', 'test', 'pruebas'].includes(normalized)) return 'review';
-  return normalized;
 }
 
 function getOnboardingView(status) {
@@ -316,32 +362,68 @@ function OnboardingPage({ organization, user, status }) {
 
 function AccountGate({ DashboardComponent }) {
   const location = useLocation();
+  const { getToken } = useAuth();
   const { user, isLoaded: userLoaded } = useUser();
   const { organization, membership, isLoaded: organizationLoaded } = useOrganization();
+  const [workspace, setWorkspace] = useState(null);
+  const [workspaceError, setWorkspaceError] = useState('');
+  const [workspaceLoading, setWorkspaceLoading] = useState(true);
 
-  if (!userLoaded || !organizationLoaded) return <LoadingScreen />;
+  const loadWorkspace = useCallback(async () => {
+    setWorkspaceLoading(true);
+    setWorkspaceError('');
+    try {
+      const result = await getWorkspace(getToken);
+      setWorkspace(result.workspace);
+    } catch (error) {
+      setWorkspaceError(error.message);
+    } finally {
+      setWorkspaceLoading(false);
+    }
+  }, [getToken, organization?.id]);
 
-  const status = normalizeOnboardingStatus(organization);
-  const isActive = status === 'active' && Boolean(organization);
+  useEffect(() => {
+    if (userLoaded && organizationLoaded) loadWorkspace();
+  }, [userLoaded, organizationLoaded, loadWorkspace]);
 
-  if (isActive && location.pathname.startsWith('/onboarding')) {
-    return <Navigate to="/app" replace />;
+  if (!userLoaded || !organizationLoaded || workspaceLoading) return <WorkspaceLoading />;
+  if (workspaceError) return <WorkspaceMessage type="error" user={user} detail={workspaceError} />;
+  if (!workspace || workspace.view === 'organization_required') return <WorkspaceMessage type="organization_required" user={user} />;
+
+  if (workspace.view === 'prospect_intake') {
+    return <ProspectOnboarding workspace={workspace} user={user} getToken={getToken} onComplete={setWorkspace} />;
   }
 
-  if (!isActive) {
+  if (workspace.view === 'prospect_demo') {
+    return <ProspectPreview workspace={workspace} user={user} />;
+  }
+
+  if (['billing_recovery', 'suspended'].includes(workspace.view)) {
+    return <WorkspaceMessage type={workspace.view} user={user} />;
+  }
+
+  if (['onboarding', 'provisioning'].includes(workspace.view)) {
+    const status = workspace.state?.onboardingStatus || 'needs_onboarding';
     if (location.pathname.startsWith('/app')) return <Navigate to="/onboarding" replace />;
     return <OnboardingPage organization={organization} user={user} status={status} />;
   }
 
-  return <DashboardComponent key={organization.id} account={{ user, organization, membership }} />;
+  if (workspace.view === 'live' && location.pathname.startsWith('/onboarding')) {
+    return <Navigate to="/app" replace />;
+  }
+
+  return <DashboardComponent key={organization.id} account={{ user, organization, membership }} workspace={workspace} />;
 }
 
 function DashboardRoutes({ DashboardComponent }) {
   return (
     <Routes>
       <Route path="/" element={<HomeRoute />} />
+      <Route path="/accept-invitation/*" element={<InvitationPage />} />
       <Route path="/sign-in/*" element={<PublicOnly><AuthPage mode="sign-in" /></PublicOnly>} />
       <Route path="/sign-up/*" element={<PublicOnly><AuthPage mode="sign-up" /></PublicOnly>} />
+      <Route path="/admin/*" element={<RequireAuth><InternalAdmin /></RequireAuth>} />
+      <Route path="/internal/*" element={<Navigate to="/admin" replace />} />
       <Route path="/onboarding/*" element={<RequireAuth><AccountGate DashboardComponent={DashboardComponent} /></RequireAuth>} />
       <Route path="/app/*" element={<RequireAuth><AccountGate DashboardComponent={DashboardComponent} /></RequireAuth>} />
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -359,7 +441,7 @@ function ClerkRouter({ DashboardComponent }) {
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
       signInFallbackRedirectUrl="/app"
-      signUpFallbackRedirectUrl="/onboarding"
+      signUpFallbackRedirectUrl="/app"
     >
       <DashboardRoutes DashboardComponent={DashboardComponent} />
     </ClerkProvider>
@@ -367,6 +449,10 @@ function ClerkRouter({ DashboardComponent }) {
 }
 
 export default function DashboardAuth({ DashboardComponent }) {
+  const previewScreen = new URLSearchParams(window.location.search).get('preview');
+  if (import.meta.env.DEV && ['onboarding', 'preview', 'admin', 'dashboard'].includes(previewScreen)) {
+    return <DevPreview screen={previewScreen} DashboardComponent={DashboardComponent} />;
+  }
   if (!PUBLISHABLE_KEY) return <ClerkSetupScreen />;
   return (
     <BrowserRouter>

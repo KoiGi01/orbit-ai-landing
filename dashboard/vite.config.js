@@ -7,6 +7,11 @@ export default defineConfig({
   publicDir: resolve(import.meta.dirname, '../public'),
   base: '/',
   plugins: [react()],
-  server: { host: '127.0.0.1', port: 4174 },
+  server: {
+    host: '127.0.0.1',
+    port: 4184,
+    strictPort: true,
+    proxy: { '/api': 'http://127.0.0.1:8787' },
+  },
   build: { outDir: resolve(import.meta.dirname, '../dist-dashboard'), emptyOutDir: true },
 });

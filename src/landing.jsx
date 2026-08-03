@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@fontsource-variable/instrument-sans';
+import { RetellWebClient } from 'retell-client-js-sdk';
 import {
   Activity,
   ArrowRight,
@@ -25,23 +26,7 @@ import {
 } from 'lucide-react';
 import './landing.css';
 
-let retellSdkPromise;
-
-async function loadRetellClient() {
-  if (window.RetellWebClient) return window.RetellWebClient;
-  if (!retellSdkPromise) {
-    retellSdkPromise = import(/* @vite-ignore */ 'https://esm.sh/retell-client-js-sdk')
-      .then(({ RetellWebClient }) => {
-        window.RetellWebClient = RetellWebClient;
-        return RetellWebClient;
-      })
-      .catch((error) => {
-        retellSdkPromise = null;
-        throw error;
-      });
-  }
-  return retellSdkPromise;
-}
+const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_URL || 'http://127.0.0.1:4184';
 
 function track(event, properties = {}) {
   const payload = { event, ...properties, occurredAt: new Date().toISOString() };
@@ -188,9 +173,11 @@ function Navigation({ onDemo, onPilot }) {
           <a href="#producto" onClick={close}>Producto</a>
           <a href="#resultados" onClick={close}>Resultados</a>
           <a href="#piloto" onClick={close}>Cómo empezar</a>
+          <a className="mobile-login" href={`${DASHBOARD_URL}/sign-in`} onClick={close}>Iniciar sesión</a>
           <button type="button" className="mobile-nav-cta" onClick={() => { close(); onPilot(); }}>Solicitar demo</button>
         </nav>
         <div className="nav-actions">
+          <a className="nav-login" href={`${DASHBOARD_URL}/sign-in`}>Iniciar sesión</a>
           <button type="button" className="nav-demo" onClick={onDemo}>
             <Volume2 size={19} aria-hidden="true" /> Probar la voz
           </button>
@@ -502,6 +489,7 @@ function LeadForm() {
   const [form, setForm] = useState({ name: '', clinic: '', whatsapp: '', volume: 'Menos de 50', coverage: 'Desborde durante el día', consent: false });
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
+  const [website, setWebsite] = useState('');
 
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
@@ -523,6 +511,7 @@ function LeadForm() {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
+          website,
           name: form.name.trim(),
           clinic: form.clinic.trim(),
           whatsapp: digits,
@@ -556,6 +545,17 @@ function LeadForm() {
 
   return (
     <form className="lead-form" onSubmit={submit} noValidate>
+      <label className="lead-honeypot" aria-hidden="true">
+        Sitio web
+        <input
+          type="text"
+          name="website"
+          value={website}
+          onChange={(event) => setWebsite(event.target.value)}
+          tabIndex={-1}
+          autoComplete="off"
+        />
+      </label>
       <div className="form-row">
         <label>Tu nombre<input type="text" autoComplete="name" value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="Nombre y apellido" required /></label>
         <label>Clínica<input type="text" autoComplete="organization" value={form.clinic} onChange={(event) => update('clinic', event.target.value)} placeholder="Nombre de la clínica" required /></label>
@@ -696,7 +696,6 @@ function DemoDialog({ open, onClose, onPilot }) {
     setMuted(false);
     setError('');
     try {
-      const RetellWebClient = await loadRetellClient();
       const response = await fetch('/api/retell/token', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },

@@ -202,7 +202,8 @@ select:focus-visible {
   color: var(--white);
 }
 
-.mobile-nav-cta {
+.mobile-nav-cta,
+.mobile-login {
   display: none;
 }
 
@@ -211,6 +212,19 @@ select:focus-visible {
   align-items: center;
   gap: 12px;
 }
+
+.nav-login {
+  min-height: 44px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 15px;
+  font-weight: 700;
+  transition: color 180ms ease;
+}
+
+.nav-login:hover { color: var(--cyan); }
 
 .nav-demo {
   min-height: 48px;
@@ -2093,6 +2107,8 @@ select:focus-visible {
     display: none;
   }
 
+  .nav-login { display: none; }
+
   .hero-capability-line {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -2520,4 +2536,13 @@ select:focus-visible {
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
   }
+}
+.lead-honeypot {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
 }
