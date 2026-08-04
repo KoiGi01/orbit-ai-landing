@@ -70,3 +70,4 @@ npm run build:dashboard
 
 See `docs/runbooks/PRIMER_FLUJO_FUNCIONAL.md` for the end-to-end setup and operating procedure.
 See `docs/runbooks/DIA_2_CRM_E_INTEGRACIONES.md` for the database foundation and self-service integration architecture.
+See `docs/runbooks/ALTA_MANUAL_DE_CLIENTE_Y_N8N.md` for the manual customer onboarding, Retell, CRM, and n8n operating checklist.
