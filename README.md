@@ -44,7 +44,7 @@ npm run dev:control
 
 By default the landing is available at `http://127.0.0.1:5173`, the dashboard at `http://127.0.0.1:4184`, and the API at `http://127.0.0.1:8787`.
 
-Prepare the server-only CRM database after configuring either `DATABASE_URL` or the local Supabase fallback (`SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`, and `SUPABASE_DB_POOLER_HOST`):
+Prepare the server-only CRM database after configuring `DATABASE_URL`, Vercel's Supabase-provided `POSTGRES_URL`, or the local Supabase fallback (`SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`, and `SUPABASE_DB_POOLER_HOST`):
 
 ```bash
 npm run db:migrate
@@ -60,6 +60,8 @@ npm test
 npm run build
 npm run build:dashboard
 ```
+
+After deployment, `GET /api/health/database` verifies the server-to-database connection and migration readiness without returning connection details or credentials.
 
 ## Integrations
 

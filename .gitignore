@@ -10,3 +10,4 @@ api-keys*
 output/
 .vite/
 .playwright-cli/
+.vercel

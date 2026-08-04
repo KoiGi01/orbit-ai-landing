@@ -13,6 +13,8 @@ import {
   transitionClinic,
 } from '../lib/server/clerk-control.js';
 import { deliverLead, normalizeLead, validLead } from '../lib/server/lead-delivery.js';
+import { createDatabase } from '../lib/server/database.js';
+import { inspectDatabaseHealth } from '../lib/server/database-health.js';
 import {
   buildRetellDemoVariables,
   configuredAgentVersion,
@@ -248,6 +250,28 @@ async function handleInternalClinics(req, res) {
   }
 }
 
+async function handleDatabaseHealth(req, res) {
+  if (req.method !== 'GET') {
+    sendJson(res, 405, { error: 'method_not_allowed' });
+    return;
+  }
+
+  let database;
+  try {
+    database = createDatabase();
+    sendJson(res, 200, await inspectDatabaseHealth(database));
+  } catch (error) {
+    console.error('AutiveX database health check failed:', error?.message || error);
+    sendJson(res, 503, {
+      ok: false,
+      database: 'unavailable',
+      schema: 'unknown',
+    });
+  } finally {
+    await database?.close();
+  }
+}
+
 const MIME_TYPES = new Map([
   ['.html', 'text/html; charset=utf-8'],
   ['.js', 'text/javascript; charset=utf-8'],
@@ -305,6 +329,11 @@ const server = createServer(async (req, res) => {
 
   if (pathname === '/api/internal/clinics') {
     await handleInternalClinics(req, res);
+    return;
+  }
+
+  if (pathname === '/api/health/database') {
+    await handleDatabaseHealth(req, res);
     return;
   }
 

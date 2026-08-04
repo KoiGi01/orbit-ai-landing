@@ -9,6 +9,7 @@ import {
   provisionMvpFoundation,
 } from '../lib/server/crm-foundation.js';
 import { databaseConfig } from '../lib/server/database.js';
+import { inspectDatabaseHealth } from '../lib/server/database-health.js';
 
 const MIGRATION_PATH = resolve('db/migrations/0001_crm_and_integrations.sql');
 const MIGRATION = await readFile(MIGRATION_PATH, 'utf8');
@@ -292,6 +293,18 @@ test('fails database configuration safely when missing or exposed publicly', () 
 
   assert.deepEqual(
     databaseConfig({
+      POSTGRES_URL: 'postgresql://vercel-supabase-integration',
+      DATABASE_SSL: 'require',
+    }),
+    {
+      url: 'postgresql://vercel-supabase-integration',
+      sslMode: 'require',
+      max: 5,
+    },
+  );
+
+  assert.deepEqual(
+    databaseConfig({
       DATABASE_URL: 'postgresql://server-only',
       DATABASE_SSL: 'require',
       DATABASE_POOL_MAX: '3',
@@ -317,4 +330,21 @@ test('fails database configuration safely when missing or exposed publicly', () 
       max: 5,
     },
   );
+});
+
+test('reports database connectivity without exposing connection details', async () => {
+  const health = await inspectDatabaseHealth({
+    async query(text) {
+      assert.match(text, /current_database\(\)/);
+      assert.match(text, /app\.schema_migrations/);
+      return { rows: [{ database_name: 'postgres', schema_ready: true }] };
+    },
+  });
+
+  assert.deepEqual(health, {
+    ok: true,
+    database: 'connected',
+    schema: 'ready',
+  });
+  assert.equal(JSON.stringify(health).includes('postgres'), false);
 });
