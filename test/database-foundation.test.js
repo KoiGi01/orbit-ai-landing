@@ -280,6 +280,15 @@ test('fails database configuration safely when missing or exposed publicly', () 
     }),
     /public_database_configuration_forbidden:VITE_DATABASE_URL/,
   );
+  assert.throws(
+    () => databaseConfig({
+      SUPABASE_PROJECT_REF: 'a'.repeat(20),
+      SUPABASE_DB_PASSWORD: 'server-only',
+      SUPABASE_DB_POOLER_HOST: 'aws-0-us-east-2.pooler.supabase.com',
+      VITE_SUPABASE_DB_PASSWORD: 'public',
+    }),
+    /public_database_configuration_forbidden:VITE_SUPABASE_DB_PASSWORD/,
+  );
 
   assert.deepEqual(
     databaseConfig({
@@ -291,6 +300,21 @@ test('fails database configuration safely when missing or exposed publicly', () 
       url: 'postgresql://server-only',
       sslMode: 'require',
       max: 3,
+    },
+  );
+
+  assert.deepEqual(
+    databaseConfig({
+      SUPABASE_PROJECT_REF: 'a'.repeat(20),
+      SUPABASE_DB_PASSWORD: 'p@ss word',
+      SUPABASE_DB_POOLER_HOST: 'aws-0-us-east-2.pooler.supabase.com',
+      SUPABASE_DB_POOLER_PORT: '5432',
+      DATABASE_SSL: 'require',
+    }),
+    {
+      url: `postgresql://postgres.${'a'.repeat(20)}:p%40ss%20word@aws-0-us-east-2.pooler.supabase.com:5432/postgres`,
+      sslMode: 'require',
+      max: 5,
     },
   );
 });

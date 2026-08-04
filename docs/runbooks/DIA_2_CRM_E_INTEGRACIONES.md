@@ -1,6 +1,6 @@
 # Día 2: CRM persistente y conexiones por cliente
 
-Estado: la migración, el cliente Postgres, el bootstrap del MVP y las pruebas offline ya existen. Falta crear o seleccionar el proyecto Postgres administrado y ejecutar los comandos con credenciales reales.
+Estado: la migración ya fue aplicada y verificada en el proyecto Supabase de AutiveX. El bootstrap del primer workspace está pendiente únicamente de configurar una organización real de Clerk.
 
 ## Decisión de arquitectura
 
@@ -37,15 +37,27 @@ No se almacenan transcripciones, grabaciones, URLs temporales ni payloads comple
 Supabase se usará como Postgres administrado, no como segundo sistema de autenticación.
 
 1. Crear un proyecto de prueba en Supabase.
-2. Abrir la sección de conexión de base de datos y copiar la URL del pooler.
-3. Guardarla localmente en `.env` como `DATABASE_URL`; nunca enviarla por chat ni crear `VITE_DATABASE_URL`.
-4. Configurar:
+2. Abrir la sección de conexión de base de datos y elegir el Session Pooler para migraciones.
+3. Usar una URL completa en `DATABASE_URL`, o guardar la contraseña en `.env` y los datos no secretos del pooler en `.env.local`. Nunca crear `VITE_DATABASE_URL` ni `VITE_SUPABASE_DB_PASSWORD`.
+4. Configurar una de estas alternativas:
 
 ```dotenv
 DATABASE_URL=postgresql://...
 DATABASE_SSL=require
 DATABASE_POOL_MAX=5
 ```
+
+```dotenv
+# .env
+SUPABASE_DB_PASSWORD=...
+
+# .env.local
+SUPABASE_PROJECT_REF=...
+SUPABASE_DB_POOLER_HOST=aws-0-region.pooler.supabase.com
+SUPABASE_DB_POOLER_PORT=5432
+```
+
+El runtime también admite `DATABASE_MIGRATION_URL` cuando producción utiliza un pooler transaccional separado. Las migraciones de Supabase deben usar conexión directa o Session Pooler, no Transaction Pooler en el puerto 6543.
 
 5. Aplicar la migración:
 

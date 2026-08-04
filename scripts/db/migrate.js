@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { createDatabase } from '../../lib/server/database.js';
+import { createDatabase, databaseConfig } from '../../lib/server/database.js';
 import { loadLocalEnvironment } from './load-local-env.js';
 
 const ROOT = resolve(import.meta.dirname, '../..');
@@ -9,7 +9,17 @@ const MIGRATIONS_DIRECTORY = resolve(ROOT, 'db/migrations');
 
 loadLocalEnvironment(ROOT);
 
-const database = createDatabase();
+const migrationEnvironment = {
+  ...process.env,
+  DATABASE_URL: process.env.DATABASE_MIGRATION_URL || process.env.DATABASE_URL,
+  DATABASE_POOL_MAX: '1',
+};
+const migrationConfig = databaseConfig(migrationEnvironment);
+const migrationUrl = new URL(migrationConfig.url);
+if (migrationUrl.hostname.endsWith('.pooler.supabase.com') && migrationUrl.port === '6543') {
+  throw new Error('supabase_migrations_require_session_pooler');
+}
+const database = createDatabase({ env: migrationEnvironment });
 
 function checksum(contents) {
   return createHash('sha256').update(contents).digest('hex');

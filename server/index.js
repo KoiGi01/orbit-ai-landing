@@ -31,18 +31,20 @@ const HOST = process.env.HOST || '127.0.0.1';
 const DIST_DIR = join(ROOT, 'dist');
 
 function loadLocalEnv() {
-  const envPath = join(ROOT, '.env');
-  if (!existsSync(envPath)) return;
+  for (const name of ['.env', '.env.local']) {
+    const envPath = join(ROOT, name);
+    if (!existsSync(envPath)) continue;
 
-  const lines = readFileSync(envPath, 'utf8').split(/\r?\n/);
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const eq = trimmed.indexOf('=');
-    if (eq === -1) continue;
-    const key = trimmed.slice(0, eq).trim();
-    const value = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
-    if (key && process.env[key] === undefined) process.env[key] = value;
+    const lines = readFileSync(envPath, 'utf8').split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eq = trimmed.indexOf('=');
+      if (eq === -1) continue;
+      const key = trimmed.slice(0, eq).trim();
+      const value = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
+      if (key && process.env[key] === undefined) process.env[key] = value;
+    }
   }
 }
 
