@@ -11,6 +11,7 @@
     "dev:control": "node scripts/dev-dashboard.js",
     "build": "vite build",
     "build:dashboard": "vite build --config dashboard/vite.config.js",
+    "build:platform": "node scripts/build-platform.js",
     "db:migrate": "node scripts/db/migrate.js",
     "db:seed:mvp": "node scripts/db/seed-mvp.js",
     "test": "node --test",

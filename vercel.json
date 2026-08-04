@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build:platform",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/sign-in", "destination": "/dashboard.html" },
+    { "source": "/sign-in/:path*", "destination": "/dashboard.html" },
+    { "source": "/sign-up", "destination": "/dashboard.html" },
+    { "source": "/sign-up/:path*", "destination": "/dashboard.html" },
+    { "source": "/accept-invitation", "destination": "/dashboard.html" },
+    { "source": "/accept-invitation/:path*", "destination": "/dashboard.html" },
+    { "source": "/onboarding", "destination": "/dashboard.html" },
+    { "source": "/onboarding/:path*", "destination": "/dashboard.html" },
+    { "source": "/app", "destination": "/dashboard.html" },
+    { "source": "/app/:path*", "destination": "/dashboard.html" },
+    { "source": "/admin", "destination": "/dashboard.html" },
+    { "source": "/admin/:path*", "destination": "/dashboard.html" },
+    { "source": "/internal", "destination": "/dashboard.html" },
+    { "source": "/internal/:path*", "destination": "/dashboard.html" }
+  ]
+}

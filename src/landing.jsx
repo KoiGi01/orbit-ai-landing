@@ -26,7 +26,8 @@ import {
 } from 'lucide-react';
 import './landing.css';
 
-const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_URL || 'http://127.0.0.1:4184';
+const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_URL
+  || (import.meta.env.DEV ? 'http://127.0.0.1:4184' : window.location.origin);
 
 function track(event, properties = {}) {
   const payload = { event, ...properties, occurredAt: new Date().toISOString() };
