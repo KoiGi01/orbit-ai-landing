@@ -18,6 +18,7 @@ Voice calls are powered exclusively by Retell AI. The browser requests a short-l
 - Local API and production static server: `server/index.js`.
 - Serverless API handlers: `api/`.
 - Shared server logic: `lib/server/`.
+- Versioned Postgres schema: `db/migrations/`.
 
 ## Local development
 
@@ -43,6 +44,15 @@ npm run dev:control
 
 By default the landing is available at `http://127.0.0.1:5173`, the dashboard at `http://127.0.0.1:4184`, and the API at `http://127.0.0.1:8787`.
 
+Prepare the server-only CRM database after configuring `DATABASE_URL`:
+
+```bash
+npm run db:migrate
+npm run db:seed:mvp
+```
+
+Clerk remains the identity and organization system. Postgres stores operational CRM data and integration state; the browser never connects to Postgres directly.
+
 ## Verification
 
 ```bash
@@ -59,3 +69,4 @@ npm run build:dashboard
 - Manual billing: internal operators confirm payment and activate clinics in the admin console.
 
 See `docs/runbooks/PRIMER_FLUJO_FUNCIONAL.md` for the end-to-end setup and operating procedure.
+See `docs/runbooks/DIA_2_CRM_E_INTEGRACIONES.md` for the database foundation and self-service integration architecture.

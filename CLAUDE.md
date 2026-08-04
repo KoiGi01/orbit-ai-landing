@@ -15,6 +15,7 @@ Retell AI is the only voice provider in this repository. Do not add another voic
 - Retell AI web SDK for browser voice calls
 - Node's built-in HTTP server for local API and production static serving
 - Vercel-compatible functions under `api/`
+- Postgres accessed only by server modules through `lib/server/database.js`
 
 ## Entrypoints
 
@@ -56,6 +57,15 @@ Use `.env.example` as the source of truth for server configuration and `dashboar
 - `CLERK_*` and `AUTIVEX_ADMIN_*` for authentication and internal access
 - `LEAD_WEBHOOK_*` or `RESEND_*` for lead delivery
 - `AUTIVEX_PUBLIC_ORIGINS` and rate limits for public endpoint protection
+- `DATABASE_URL` for the server-only CRM database; never create a `VITE_` database variable
+
+## Persistent data
+
+The canonical schema lives in `db/migrations/`. Run `npm run db:migrate` to apply pending migrations and `npm run db:seed:mvp` to bind the first Clerk organization to its Retell agent.
+
+Clerk owns identity, memberships, and organization roles. Postgres owns CRM activity, voice-agent bindings, webhook idempotency, and integration connection state. Every operational query must resolve and filter by the active Clerk organization; never trust a workspace ID supplied by browser input.
+
+The `app` Postgres schema is private and has no browser role grants. OAuth credentials are represented only by `credential_ref`; access and refresh tokens must live in a vault or encrypted server-side store, never in Clerk metadata, public JSON, logs, or n8n credentials shared across tenants.
 
 ## API responsibilities
 

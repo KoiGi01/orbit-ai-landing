@@ -11,6 +11,8 @@
     "dev:control": "node scripts/dev-dashboard.js",
     "build": "vite build",
     "build:dashboard": "vite build --config dashboard/vite.config.js",
+    "db:migrate": "node scripts/db/migrate.js",
+    "db:seed:mvp": "node scripts/db/seed-mvp.js",
     "test": "node --test",
     "preview": "vite preview --host 127.0.0.1",
     "start": "node server/index.js"
@@ -24,11 +26,15 @@
     "@fontsource-variable/syne": "^5.2.7",
     "@vitejs/plugin-react": "^5.0.4",
     "lucide-react": "^0.544.0",
+    "postgres": "3.4.9",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "7.18.2",
     "retell-client-js-sdk": "2.0.8",
     "typescript": "^5.9.2",
     "vite": "^7.3.6"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.4"
   }
 }
