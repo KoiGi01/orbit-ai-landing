@@ -233,16 +233,45 @@ async function handleInternalClinics(req, res) {
 
     const body = await readJson(req);
     if (req.method === 'POST') {
-      const clinic = await createPaidClinic(req.headers.authorization, body);
+      const database = createDatabase();
+      let clinic;
+      try {
+        clinic = await createPaidClinic(req.headers.authorization, body, database);
+      } finally {
+        await database.close();
+      }
       sendJson(res, 201, { clinic });
       return;
     }
 
-    const clinic = body.action === 'confirm_payment'
-      ? await confirmManualPayment(req.headers.authorization, body.organizationId, body.payment)
-      : body.action === 'save_provisioning'
-        ? await saveProvisioning(req.headers.authorization, body.organizationId, body.provisioning)
-      : await transitionClinic(req.headers.authorization, body.organizationId, body.action, body.confirmation);
+    let clinic;
+    if (['confirm_payment', 'save_provisioning'].includes(body.action)) {
+      const database = createDatabase();
+      try {
+        clinic = body.action === 'confirm_payment'
+          ? await confirmManualPayment(
+            req.headers.authorization,
+            body.organizationId,
+            body.payment,
+            database,
+          )
+          : await saveProvisioning(
+            req.headers.authorization,
+            body.organizationId,
+            body.provisioning,
+            database,
+          );
+      } finally {
+        await database.close();
+      }
+    } else {
+      clinic = await transitionClinic(
+        req.headers.authorization,
+        body.organizationId,
+        body.action,
+        body.confirmation,
+      );
+    }
     sendJson(res, 200, { clinic });
   } catch (error) {
     const response = controlErrorResponse(error);

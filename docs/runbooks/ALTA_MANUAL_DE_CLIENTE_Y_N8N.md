@@ -8,9 +8,9 @@ Estado: guía operativa del MVP manual. Describe el proceso desde que el dinero 
 Pago acreditado
 → alta en Operaciones AutiveX
 → organización e invitación en Clerk
+→ workspace operativo en Supabase
 → sesión de onboarding
 → agente y telefonía en Retell
-→ workspace en Supabase
 → automatizaciones probadas en n8n
 → llamada real de aceptación
 → activación manual
@@ -30,8 +30,8 @@ La regla central es:
 | Panel interno `/admin` | Implementado; requiere Clerk configurado y una cuenta interna autorizada. |
 | Pago manual, organización e invitación | Implementados en Clerk. |
 | Migración CRM | Aplicada en el proyecto Supabase real. |
-| Alta del workspace en CRM | Disponible mediante `npm run db:seed:mvp`; todavía no está conectada al botón del panel. |
-| Agente Retell por cliente | Configuración manual; el panel sólo registra los IDs y comprobaciones. |
+| Alta del workspace en CRM | Automática al crear o confirmar un cliente pagado desde `/admin`. |
+| Agente Retell por cliente | Creación en Retell aún manual; al guardar IDs y comprobaciones, el panel sincroniza el agente con Supabase. |
 | Leads de la landing hacia n8n | La interfaz existe; faltan URL y secreto reales de n8n. |
 | Webhook post-llamada Retell → AutiveX | Pendiente de implementar. |
 | Escritura automática de llamadas en Supabase | Pendiente de implementar. |
@@ -39,6 +39,21 @@ La regla central es:
 | Calendario y WhatsApp del cliente | Pendientes; no guardar sus tokens en n8n. |
 
 No se debe activar un cliente real mientras el webhook post-llamada y la persistencia en Supabase no hayan sido probados de extremo a extremo.
+
+## Qué se crea automáticamente
+
+Al confirmar un cliente pagado:
+
+- Clerk crea o reutiliza la organización y envía una invitación al propietario.
+- Supabase crea o actualiza el workspace y guarda la ficha estructurada del negocio.
+- No se crea todavía un agente facturable en Retell.
+- No se duplica un workflow de n8n.
+
+La siguiente automatización de Retell debe ocurrir al iniciar **Configuración**, después de revisar la ficha: un botón creará un agente borrador desde una plantilla versionada. El operador seguirá aprobando prompt, voz, número, fallback y llamada de prueba antes de publicar.
+
+n8n usará un workflow compartido. Cada evento llevará `workspace_id`; AutiveX resolverá en Supabase qué calendario, alertas o acciones corresponden al cliente. Crear un cliente no debe crear un workflow independiente.
+
+Google Calendar y Calendly requieren autorización del propietario. Desde Admin se podrá enviar el enlace de conexión o abrirlo durante el onboarding, pero el cliente debe aprobar el acceso. WhatsApp Business seguirá un alta asistida equivalente; AutiveX nunca solicita ni guarda contraseñas.
 
 ## Responsabilidades
 
@@ -53,7 +68,7 @@ No se debe activar un cliente real mientras el webhook post-llamada y la persist
 
 - Crea o duplica el agente aprobado.
 - Configura el número, fallback, prompt y análisis post-llamada.
-- Da de alta el workspace en Supabase.
+- Verifica que el workspace creado por el panel tenga el agente correcto.
 - Ejecuta las pruebas de aceptación.
 
 ### Responsable de n8n
@@ -90,6 +105,8 @@ No empieces a configurar Retell durante la llamada de venta. Antes de la sesión
 
 No recolectes contraseñas de Google, WhatsApp, Calendly ni del correo del cliente.
 
+Para el primer MVP no se suben documentos. Usa los campos estructurados y notas internas. Si después se requieren menús, listas de precios o políticas, se almacenarán en un bucket privado con control de acceso y retención definidos; nunca en metadata de Clerk.
+
 ## Paso 1: verificar el pago
 
 1. Abre Mercado Pago, banco o la fuente real del cobro.
@@ -116,9 +133,9 @@ Procedimiento:
 1. Inicia sesión con la cuenta interna autorizada.
 2. Abre `https://app.autivexai.com/admin` o `/admin` en desarrollo.
 3. Selecciona **Crear cliente pagado**.
-4. Captura nombre del negocio, correo del propietario, ciudad, origen de la venta y datos del pago.
+4. Captura propietario, contacto, industria, descripción, ciudad, zona horaria, horarios, servicios, motivos de llamada, agenda actual, origen y datos del pago.
 5. Confirma **Confirmar pago y crear acceso**.
-6. Copia el ID de organización con formato `org_...` desde **Clerk Dashboard → Organizations**; será la llave que una Clerk con Supabase.
+6. El backend crea o reutiliza la organización de Clerk, envía la invitación y crea el workspace de Supabase usando el `org_...` como vínculo.
 
 El backend reutiliza una organización prospecto no pagada cuando el correo ya existe. Si el correo pertenece a un cliente pagado o tiene organizaciones ambiguas, detiene el alta para revisión manual.
 
@@ -128,6 +145,14 @@ Resultado esperado en Clerk:
 billingStatus = verified
 onboardingStatus = needs_onboarding
 serviceStatus = locked
+```
+
+Resultado esperado en Supabase:
+
+```text
+app.workspaces.clerk_organization_id = org_...
+app.workspaces.status = testing
+app.workspaces.settings.businessProfile = ficha estructurada del negocio
 ```
 
 Si el propietario todavía no tiene cuenta, Clerk envía una invitación de administrador válida durante 30 días y redirige a `/accept-invitation`.

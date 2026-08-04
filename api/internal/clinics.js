@@ -6,10 +6,20 @@ import {
   saveProvisioning,
   transitionClinic,
 } from '../../lib/server/clerk-control.js';
+import { createDatabase } from '../../lib/server/database.js';
 
 function sendJson(res, status, body) {
   res.status(status).setHeader('cache-control', 'no-store');
   res.json(body);
+}
+
+async function withDatabase(callback) {
+  const database = createDatabase();
+  try {
+    return await callback(database);
+  } finally {
+    await database.close();
+  }
 }
 
 export default async function handler(req, res) {
@@ -28,16 +38,30 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      const clinic = await createPaidClinic(authorization, req.body);
+      const clinic = await withDatabase((database) => createPaidClinic(
+        authorization,
+        req.body,
+        database,
+      ));
       sendJson(res, 201, { clinic });
       return;
     }
 
     const { organizationId, action } = req.body || {};
     const clinic = action === 'confirm_payment'
-      ? await confirmManualPayment(authorization, organizationId, req.body?.payment)
+      ? await withDatabase((database) => confirmManualPayment(
+        authorization,
+        organizationId,
+        req.body?.payment,
+        database,
+      ))
       : action === 'save_provisioning'
-        ? await saveProvisioning(authorization, organizationId, req.body?.provisioning)
+        ? await withDatabase((database) => saveProvisioning(
+          authorization,
+          organizationId,
+          req.body?.provisioning,
+          database,
+        ))
       : await transitionClinic(authorization, organizationId, action, req.body?.confirmation);
     sendJson(res, 200, { clinic });
   } catch (error) {

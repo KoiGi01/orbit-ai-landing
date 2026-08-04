@@ -7,6 +7,8 @@ import {
   getWorkspaceFoundation,
   listIntegrationCatalog,
   provisionMvpFoundation,
+  provisionVoiceAgentFoundation,
+  provisionWorkspaceFoundation,
 } from '../lib/server/crm-foundation.js';
 import { databaseConfig } from '../lib/server/database.js';
 import { inspectDatabaseHealth } from '../lib/server/database-health.js';
@@ -127,6 +129,70 @@ test('provisions one workspace and keeps a Retell agent bound to one tenant', as
     assert.equal(workspaceA.voiceAgents.length, 1);
     assert.equal(workspaceA.voiceAgents[0].externalAgentId, 'agent_retell_a_123');
     assert.equal(workspaceB, null);
+  } finally {
+    await client.close();
+  }
+});
+
+test('creates a manual Clerk workspace before attaching its production Retell agent', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    const workspace = await provisionWorkspaceFoundation(database, {
+      clerkOrganizationId: 'org_manual_client',
+      displayName: 'Negocio Manual',
+      timezone: 'America/Mexico_City',
+      settings: {
+        ownerEmail: 'cliente@example.com',
+        businessProfile: {
+          industry: 'Servicios profesionales',
+          schedulingProvider: 'google_calendar',
+        },
+      },
+    });
+    assert.equal(workspace.clerkOrganizationId, 'org_manual_client');
+    assert.equal(workspace.settings.ownerEmail, 'cliente@example.com');
+
+    const repeated = await provisionWorkspaceFoundation(database, {
+      clerkOrganizationId: 'org_manual_client',
+      displayName: 'Negocio Manual Actualizado',
+      timezone: 'America/Mexico_City',
+      settings: { acquisitionSource: 'local_sales' },
+    });
+    assert.equal(repeated.id, workspace.id);
+    assert.equal(repeated.displayName, 'Negocio Manual Actualizado');
+    assert.equal(repeated.settings.ownerEmail, 'cliente@example.com');
+    assert.equal(repeated.settings.acquisitionSource, 'local_sales');
+
+    const voiceAgent = await provisionVoiceAgentFoundation(database, {
+      clerkOrganizationId: 'org_manual_client',
+      externalAgentId: 'agent_manual_123',
+      displayName: 'Lucía',
+      assignedPhoneNumber: '+525512345678',
+      fallbackPhoneNumber: '+525587654321',
+      approvedTestCallId: 'call_manual_123',
+      webhookVerified: true,
+      fallbackTested: true,
+    });
+    assert.equal(voiceAgent.environment, 'production');
+    assert.equal(voiceAgent.assignedPhoneNumber, '+525512345678');
+    assert.equal(voiceAgent.fallbackPhoneNumber, '+525587654321');
+    assert.equal(voiceAgent.webhookVerified, true);
+
+    const foundation = await getWorkspaceFoundation(database, 'org_manual_client');
+    assert.equal(foundation.workspace.settings.businessProfile.industry, 'Servicios profesionales');
+    assert.equal(foundation.voiceAgents[0].externalAgentId, 'agent_manual_123');
+    assert.equal(foundation.voiceAgents[0].approvedTestCallId, 'call_manual_123');
+
+    const audit = await client.query(`
+      select action
+      from app.audit_log
+      where workspace_id = $1
+      order by created_at, action
+    `, [workspace.id]);
+    assert.deepEqual(
+      audit.rows.map((row) => row.action).sort(),
+      ['voice_agent.manual_provisioning_saved', 'workspace.manual_onboarding_created'],
+    );
   } finally {
     await client.close();
   }

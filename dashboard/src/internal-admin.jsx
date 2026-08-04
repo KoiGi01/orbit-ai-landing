@@ -41,6 +41,22 @@ const PAYMENT_METHODS = [
   ['other', 'Otro'],
 ];
 
+const TIMEZONES = [
+  ['America/Mexico_City', 'Centro de México'],
+  ['America/Cancun', 'Quintana Roo'],
+  ['America/Monterrey', 'Monterrey'],
+  ['America/Chihuahua', 'Chihuahua'],
+  ['America/Hermosillo', 'Sonora'],
+  ['America/Tijuana', 'Tijuana'],
+];
+
+const SCHEDULING_PROVIDERS = [
+  ['none', 'Todavía no definido'],
+  ['google_calendar', 'Google Calendar'],
+  ['calendly', 'Calendly'],
+  ['manual', 'Confirmación manual'],
+];
+
 const STAGE_TONES = {
   'Registro incompleto': 'neutral',
   'Prospecto en demo': 'demo',
@@ -93,8 +109,19 @@ const EMPTY_PAYMENT = {
 
 const EMPTY_CLIENT = {
   clinicName: '',
+  ownerName: '',
   email: '',
+  ownerPhone: '',
   city: '',
+  timezone: 'America/Mexico_City',
+  website: '',
+  industry: '',
+  description: '',
+  businessHours: '',
+  services: '',
+  callGoals: '',
+  schedulingProvider: 'none',
+  internalNotes: '',
   source: 'local_sales',
   payment: EMPTY_PAYMENT,
 };
@@ -138,6 +165,13 @@ function paymentPayload(form) {
   };
 }
 
+function splitList(value) {
+  return [...new Set(String(value || '')
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean))];
+}
+
 function PaymentFields({ value, onChange }) {
   const update = (field, next) => onChange({ ...value, [field]: next });
   return (
@@ -179,7 +213,7 @@ function ModalShell({ title, eyebrow, onClose, children, wide = false }) {
   );
 }
 
-function NewClientModal({ busy, error, onClose, onCreate }) {
+export function NewClientModal({ busy, error, onClose, onCreate }) {
   const [form, setForm] = useState(EMPTY_CLIENT);
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
   const submit = (event) => {
@@ -189,6 +223,21 @@ function NewClientModal({ busy, error, onClose, onCreate }) {
       email: form.email,
       city: form.city,
       source: form.source,
+      businessProfile: {
+        clinicName: form.clinicName,
+        ownerName: form.ownerName,
+        ownerPhone: form.ownerPhone,
+        city: form.city,
+        timezone: form.timezone,
+        website: form.website,
+        industry: form.industry,
+        description: form.description,
+        businessHours: form.businessHours,
+        services: splitList(form.services),
+        callGoals: splitList(form.callGoals),
+        schedulingProvider: form.schedulingProvider,
+        internalNotes: form.internalNotes,
+      },
       payment: paymentPayload(form.payment),
     });
   };
@@ -197,16 +246,32 @@ function NewClientModal({ busy, error, onClose, onCreate }) {
     <ModalShell title="Crear acceso pagado" eyebrow="Alta de cliente local" onClose={onClose} wide>
       <form className="ops-modal-body new-client-form" onSubmit={submit}>
         <div className="ops-form-section">
-          <div className="ops-section-heading"><span>01</span><div><strong>Clínica y propietario</strong><p>Si el correo ya tiene una cuenta prospecto, reutilizaremos esa clínica.</p></div></div>
+          <div className="ops-section-heading"><span>01</span><div><strong>Negocio y propietario</strong><p>Crearemos la organización y enviaremos una invitación segura al propietario.</p></div></div>
           <div className="ops-form-grid">
-            <label><span>Nombre de la clínica</span><input autoFocus required value={form.clinicName} onChange={(event) => update('clinicName', event.target.value)} placeholder="Clínica Dental Aurora" /></label>
+            <label><span>Nombre comercial</span><input autoFocus required value={form.clinicName} onChange={(event) => update('clinicName', event.target.value)} placeholder="Clínica Dental Aurora" /></label>
+            <label><span>Nombre del propietario</span><input required value={form.ownerName} onChange={(event) => update('ownerName', event.target.value)} placeholder="Ana Martínez" /></label>
             <label><span>Correo del propietario</span><input required type="email" value={form.email} onChange={(event) => update('email', event.target.value)} placeholder="propietario@clinica.mx" /></label>
-            <label><span>Ciudad · opcional</span><input value={form.city} onChange={(event) => update('city', event.target.value)} placeholder="Querétaro, Qro." /></label>
+            <label><span>WhatsApp o teléfono del propietario</span><input type="tel" inputMode="tel" value={form.ownerPhone} onChange={(event) => update('ownerPhone', event.target.value)} placeholder="+52 55 0000 0000" /></label>
+            <label><span>Ciudad</span><input required value={form.city} onChange={(event) => update('city', event.target.value)} placeholder="Querétaro, Qro." /></label>
+            <label><span>Zona horaria</span><select required value={form.timezone} onChange={(event) => update('timezone', event.target.value)}>{TIMEZONES.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+            <label><span>Industria</span><input required value={form.industry} onChange={(event) => update('industry', event.target.value)} placeholder="Clínica dental, inmobiliaria, taller…" /></label>
+            <label><span>Sitio web · opcional</span><input type="url" value={form.website} onChange={(event) => update('website', event.target.value)} placeholder="https://negocio.mx" /></label>
             <label><span>Origen</span><select value={form.source} onChange={(event) => update('source', event.target.value)}><option value="local_sales">Venta local</option><option value="cold_call">Cold call</option><option value="referral">Referido</option><option value="inbound">Registro orgánico</option></select></label>
           </div>
         </div>
         <div className="ops-form-section">
-          <div className="ops-section-heading"><span>02</span><div><strong>Pago que tú ya confirmaste</strong><p>Registrar una factura enviada no basta; usa esta acción únicamente cuando el dinero esté acreditado.</p></div></div>
+          <div className="ops-section-heading"><span>02</span><div><strong>Operación que debe aprender el agente</strong><p>Esta información formará el expediente inicial y la configuración del workspace.</p></div></div>
+          <div className="ops-form-grid">
+            <label className="ops-form-wide"><span>Qué hace el negocio</span><textarea required value={form.description} onChange={(event) => update('description', event.target.value)} placeholder="Describe en lenguaje simple qué ofrece, a quién atiende y qué no debe prometer el agente." /></label>
+            <label><span>Horarios</span><textarea required value={form.businessHours} onChange={(event) => update('businessHours', event.target.value)} placeholder="Lun–Vie 9:00–18:00; Sáb 9:00–14:00" /></label>
+            <label><span>Agenda actual</span><select value={form.schedulingProvider} onChange={(event) => update('schedulingProvider', event.target.value)}>{SCHEDULING_PROVIDERS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+            <label><span>Servicios principales</span><textarea required value={form.services} onChange={(event) => update('services', event.target.value)} placeholder="Consulta general, implantes, urgencias" /></label>
+            <label><span>Motivos de llamada</span><textarea required value={form.callGoals} onChange={(event) => update('callGoals', event.target.value)} placeholder="Agendar, precios, reprogramar, urgencias" /></label>
+            <label className="ops-form-wide"><span>Notas internas · opcional</span><textarea value={form.internalNotes} onChange={(event) => update('internalNotes', event.target.value)} placeholder="Restricciones, acuerdos comerciales o contexto que solo debe ver AutiveX." /></label>
+          </div>
+        </div>
+        <div className="ops-form-section">
+          <div className="ops-section-heading"><span>03</span><div><strong>Pago que tú ya confirmaste</strong><p>Registrar una factura enviada no basta; usa esta acción únicamente cuando el dinero esté acreditado.</p></div></div>
           <PaymentFields value={form.payment} onChange={(payment) => update('payment', payment)} />
         </div>
         {error && <p className="ops-form-error"><CircleAlert size={16} /> {error}</p>}
@@ -340,7 +405,7 @@ function ClinicDetail({ clinic, busy, error, onClose, onConfirmPayment, onSavePr
 
         {clinic.payment && <section className="ops-record-section"><header><Banknote size={17} /><h3>Pago verificado</h3></header><dl><div><dt>Monto</dt><dd>{moneyFromCents(clinic.payment.amountCents)}</dd></div><div><dt>Referencia</dt><dd>{clinic.payment.reference}</dd></div><div><dt>Fecha del pago</dt><dd>{dateTime(clinic.payment.paidAt)}</dd></div><div><dt>Verificado</dt><dd>{dateTime(clinic.payment.verifiedAt)}</dd></div></dl></section>}
 
-        {profile && <section className="ops-record-section"><header><Building2 size={17} /><h3>Borrador de la clínica</h3></header><dl><div><dt>Llamadas prioritarias</dt><dd>{profile.callGoals?.join(', ') || '—'}</dd></div><div><dt>Servicios</dt><dd>{profile.services?.join(', ') || '—'}</dd></div><div><dt>Horario</dt><dd>{profile.customSchedule || profile.schedule || '—'}</dd></div><div><dt>Resultado de cita</dt><dd>{profile.appointmentOutcome || '—'}</dd></div></dl></section>}
+        {profile && <section className="ops-record-section"><header><Building2 size={17} /><h3>Configuración del negocio</h3></header><dl><div><dt>Industria</dt><dd>{profile.industry || 'Por confirmar'}</dd></div><div><dt>Contacto</dt><dd>{profile.ownerPhone || clinic.owner.email || '—'}</dd></div><div><dt>Servicios</dt><dd>{profile.services?.join(', ') || '—'}</dd></div><div><dt>Motivos de llamada</dt><dd>{profile.callGoals?.join(', ') || '—'}</dd></div><div><dt>Horario</dt><dd>{profile.businessHours || profile.customSchedule || profile.schedule || '—'}</dd></div><div><dt>Agenda</dt><dd>{SCHEDULING_PROVIDERS.find(([key]) => key === profile.schedulingProvider)?.[1] || profile.appointmentOutcome || 'Por definir'}</dd></div>{profile.description && <div className="ops-record-wide"><dt>Descripción</dt><dd>{profile.description}</dd></div>}{profile.internalNotes && <div className="ops-record-wide"><dt>Notas internas</dt><dd>{profile.internalNotes}</dd></div>}</dl></section>}
 
         <section className="ops-record-section audit-section"><header><Clock3 size={17} /><h3>Auditoría reciente</h3></header>{clinic.auditTrail.length ? <ol>{clinic.auditTrail.map((entry) => <li key={entry.id}><i /><div><strong>{String(entry.action).replaceAll('_', ' ')}</strong><span>{dateTime(entry.at)} · {entry.actorUserId}</span></div></li>)}</ol> : <p>Este expediente todavía no tiene eventos.</p>}</section>
       </div>

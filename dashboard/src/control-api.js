@@ -6,6 +6,18 @@ const ERROR_MESSAGES = {
   internal_access_denied: 'Esta cuenta no tiene acceso a Operaciones AutiveX.',
   admin_access_not_configured: 'Falta configurar la cuenta interna autorizada en el servidor.',
   server_not_configured: 'Falta conectar las llaves privadas de Clerk en el servidor.',
+  database_not_configured: 'Falta conectar la base operativa de Supabase en el servidor.',
+  invalid_owner_name: 'Escribe el nombre del propietario.',
+  invalid_owner_phone: 'Escribe el teléfono del propietario en formato internacional, por ejemplo +525512345678.',
+  invalid_city: 'Escribe la ciudad del negocio.',
+  invalid_industry: 'Escribe la industria o giro del negocio.',
+  invalid_business_description: 'Describe brevemente qué hace el negocio.',
+  invalid_business_hours: 'Escribe los horarios del negocio.',
+  invalid_timezone: 'Selecciona una zona horaria válida.',
+  invalid_website: 'Escribe una URL completa, por ejemplo https://negocio.mx.',
+  invalid_services: 'Agrega al menos un servicio principal.',
+  invalid_call_goals: 'Agrega al menos un motivo de llamada.',
+  invalid_scheduling_provider: 'Selecciona cómo administra actualmente su agenda.',
   invalid_payment_amount: 'Escribe un monto válido.',
   invalid_payment_reference: 'Agrega una referencia o folio del pago.',
   invalid_payment_date: 'Selecciona la fecha en que se acreditó el pago.',
@@ -23,6 +35,8 @@ const ERROR_MESSAGES = {
   clinic_confirmation_mismatch: 'El nombre escrito no coincide con la clínica.',
   multiple_prospect_organizations: 'Ese correo tiene más de una clínica prospecto. Revísalo manualmente.',
   existing_customer_requires_review: 'Ese correo ya pertenece a un cliente pagado. Revisa su cuenta antes de crear otra clínica.',
+  workspace_not_provisioned: 'El workspace de Supabase todavía no está preparado para esta cuenta.',
+  retell_agent_already_assigned: 'Ese agente de Retell ya pertenece a otro cliente.',
 };
 
 export class ControlApiError extends Error {

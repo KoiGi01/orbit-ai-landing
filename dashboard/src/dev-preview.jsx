@@ -10,6 +10,7 @@ import {
   Settings2,
 } from 'lucide-react';
 import { PortalBrand, ProspectOnboarding, ProspectPreview } from './workspace';
+import { NewClientModal } from './internal-admin';
 
 const previewUser = {
   id: 'preview-user',
@@ -58,11 +59,12 @@ function MockStat({ label, value, detail, className, Icon }) {
 }
 
 function AdminPreview() {
+  const [creating, setCreating] = useState(false);
   return (
     <main className="ops-shell">
       <header className="ops-topbar"><PortalBrand label="Operaciones" /><nav><span>camila@autivexai.com</span><span className="portal-static-avatar">CM</span></nav></header>
       <div className="ops-layout">
-        <section className="ops-heading"><div><p>Control interno · Solo AutiveX</p><h1>Activa clientes sin perder el control.</h1><span>Un pago verificado abre onboarding; nunca producción automáticamente.</span></div><button type="button"><Plus size={18} /> Crear cliente pagado</button></section>
+        <section className="ops-heading"><div><p>Control interno · Solo AutiveX</p><h1>Activa clientes sin perder el control.</h1><span>Un pago verificado abre onboarding; nunca producción automáticamente.</span></div><button type="button" onClick={() => setCreating(true)}><Plus size={18} /> Crear cliente pagado</button></section>
         <section className="ops-stats">
           <MockStat label="Cobros por revisar" value="3" detail="Prospectos registrados" className="warning" Icon={Banknote} />
           <MockStat label="Onboarding" value="2" detail="Pagados, aún sin configurar" className="paid" Icon={CalendarCheck2} />
@@ -77,6 +79,7 @@ function AdminPreview() {
           </div>
         </section>
       </div>
+      {creating && <NewClientModal busy={false} error="" onClose={() => setCreating(false)} onCreate={() => setCreating(false)} />}
     </main>
   );
 }

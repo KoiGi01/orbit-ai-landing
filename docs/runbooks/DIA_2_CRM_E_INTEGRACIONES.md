@@ -1,6 +1,6 @@
 # Día 2: CRM persistente y conexiones por cliente
 
-Estado: la migración ya fue aplicada y verificada en el proyecto Supabase de AutiveX. El bootstrap del primer workspace está pendiente únicamente de configurar una organización real de Clerk.
+Estado: la migración ya fue aplicada y verificada en el proyecto Supabase de AutiveX. El alta manual desde `/admin` crea o actualiza automáticamente el workspace vinculado a la organización real de Clerk.
 
 ## Decisión de arquitectura
 
@@ -28,6 +28,7 @@ Una conexión pertenece al workspace del negocio, no a la cuenta personal de Aut
 - Relaciones compuestas que impiden asociar contactos o llamadas entre workspaces.
 - Cliente Postgres server-only en `lib/server/database.js`.
 - Bootstrap repetible del workspace y agente en `lib/server/crm-foundation.js`.
+- Sincronización Clerk → workspace durante el alta manual y Retell → `voice_agents` durante el provisionamiento.
 - Pruebas PostgreSQL offline con PGlite; no necesitan credenciales ni Docker.
 
 No se almacenan transcripciones, grabaciones, URLs temporales ni payloads completos de Retell. `safe_payload` deberá construirse por lista permitida cuando se implemente el webhook.
