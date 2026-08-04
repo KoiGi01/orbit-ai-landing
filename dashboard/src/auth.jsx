@@ -388,6 +388,7 @@ function AccountGate({ DashboardComponent }) {
 
   if (!userLoaded || !organizationLoaded || workspaceLoading) return <WorkspaceLoading />;
   if (workspaceError) return <WorkspaceMessage type="error" user={user} detail={workspaceError} />;
+  if (workspace?.view === 'internal_admin') return <Navigate to="/admin" replace />;
   if (!workspace || workspace.view === 'organization_required') return <WorkspaceMessage type="organization_required" user={user} />;
 
   if (workspace.view === 'prospect_intake') {
