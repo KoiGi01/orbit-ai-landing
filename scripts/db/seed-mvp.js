@@ -13,8 +13,8 @@ try {
     clerkOrganizationId: process.env.AUTIVEX_MVP_CLERK_ORG_ID,
     displayName: process.env.AUTIVEX_MVP_WORKSPACE_NAME,
     timezone: process.env.AUTIVEX_MVP_TIMEZONE,
-    externalAgentId: process.env.AUTIVEX_MVP_RETELL_AGENT_ID || process.env.RETELL_AGENT_ID_2,
-    externalAgentVersion: process.env.RETELL_AGENT_VERSION_2,
+    externalAgentId: process.env.AUTIVEX_MVP_RETELL_AGENT_ID,
+    externalAgentVersion: process.env.AUTIVEX_MVP_RETELL_AGENT_VERSION,
     agentDisplayName: 'Lucía MVP',
   });
 

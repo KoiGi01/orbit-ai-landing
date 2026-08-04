@@ -84,10 +84,9 @@ Las invitaciones llegan a `/accept-invitation`, conservan el ticket de Clerk y t
 
 ```dotenv
 RETELL_API_KEY=
-RETELL_AGENT_ID=
-RETELL_AGENT_ID_2=
-RETELL_AGENT_VERSION=
-RETELL_AGENT_VERSION_2=
+RETELL_DEMO_AGENT_ID=
+RETELL_DEMO_AGENT_VERSION=
+RETELL_PROVISIONING_TEMPLATE_AGENT_ID=
 ```
 
 En el prompt del agente de demostración deben existir estas variables:

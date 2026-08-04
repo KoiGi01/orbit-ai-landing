@@ -99,18 +99,14 @@ async function handleRetellToken(req, res) {
   try {
     const body = await readJson(req);
     const isIntro = body.type === 'intro';
-    const agentId = isIntro
-      ? process.env.RETELL_AGENT_ID
-      : process.env.RETELL_AGENT_ID_2;
+    const agentId = process.env.RETELL_DEMO_AGENT_ID;
 
     if (!agentId) {
       sendJson(res, 500, { error: 'missing_agent_id' });
       return;
     }
 
-    const agentVersion = configuredAgentVersion(isIntro
-      ? process.env.RETELL_AGENT_VERSION
-      : process.env.RETELL_AGENT_VERSION_2);
+    const agentVersion = configuredAgentVersion(process.env.RETELL_DEMO_AGENT_VERSION);
     const payload = {
       agent_id: agentId,
       ...(agentVersion !== null ? { agent_version: agentVersion } : {}),
