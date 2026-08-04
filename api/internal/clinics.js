@@ -4,6 +4,7 @@ import {
   errorResponse,
   listClinics,
   saveProvisioning,
+  startClinicConfiguration,
   transitionClinic,
 } from '../../lib/server/clerk-control.js';
 import { createDatabase } from '../../lib/server/database.js';
@@ -48,21 +49,30 @@ export default async function handler(req, res) {
     }
 
     const { organizationId, action } = req.body || {};
-    const clinic = action === 'confirm_payment'
-      ? await withDatabase((database) => confirmManualPayment(
+    let clinic;
+    if (action === 'confirm_payment') {
+      clinic = await withDatabase((database) => confirmManualPayment(
         authorization,
         organizationId,
         req.body?.payment,
         database,
-      ))
-      : action === 'save_provisioning'
-        ? await withDatabase((database) => saveProvisioning(
-          authorization,
-          organizationId,
-          req.body?.provisioning,
-          database,
-        ))
-      : await transitionClinic(authorization, organizationId, action, req.body?.confirmation);
+      ));
+    } else if (action === 'save_provisioning') {
+      clinic = await withDatabase((database) => saveProvisioning(
+        authorization,
+        organizationId,
+        req.body?.provisioning,
+        database,
+      ));
+    } else if (action === 'start_configuration') {
+      clinic = await withDatabase((database) => startClinicConfiguration(
+        authorization,
+        organizationId,
+        database,
+      ));
+    } else {
+      clinic = await transitionClinic(authorization, organizationId, action, req.body?.confirmation);
+    }
     sendJson(res, 200, { clinic });
   } catch (error) {
     const response = errorResponse(error);

@@ -10,6 +10,7 @@ import {
   listClinics,
   saveProvisioning,
   saveProspectProfile,
+  startClinicConfiguration,
   transitionClinic,
 } from '../lib/server/clerk-control.js';
 import { deliverLead, normalizeLead, validLead } from '../lib/server/lead-delivery.js';
@@ -245,7 +246,7 @@ async function handleInternalClinics(req, res) {
     }
 
     let clinic;
-    if (['confirm_payment', 'save_provisioning'].includes(body.action)) {
+    if (['confirm_payment', 'save_provisioning', 'start_configuration'].includes(body.action)) {
       const database = createDatabase();
       try {
         clinic = body.action === 'confirm_payment'
@@ -255,12 +256,18 @@ async function handleInternalClinics(req, res) {
             body.payment,
             database,
           )
-          : await saveProvisioning(
-            req.headers.authorization,
-            body.organizationId,
-            body.provisioning,
-            database,
-          );
+          : body.action === 'save_provisioning'
+            ? await saveProvisioning(
+              req.headers.authorization,
+              body.organizationId,
+              body.provisioning,
+              database,
+            )
+            : await startClinicConfiguration(
+              req.headers.authorization,
+              body.organizationId,
+              database,
+            );
       } finally {
         await database.close();
       }

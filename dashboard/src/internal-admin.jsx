@@ -302,7 +302,7 @@ function ProvisioningForm({ clinic, busy, error, onSave }) {
 
   useEffect(() => {
     setForm(provisioningFormValue(clinic.provisioning));
-  }, [clinic.id, clinic.provisioning?.updatedAt]);
+  }, [clinic.id, clinic.provisioning?.retellAgentId, clinic.provisioning?.updatedAt]);
 
   if (!editable && clinic.state.serviceStatus !== 'live') return null;
 
@@ -326,6 +326,15 @@ function ProvisioningForm({ clinic, busy, error, onSave }) {
         <h3>Provisionamiento de producción</h3>
         <span className={`provisioning-status ${provisioning.ready ? 'ready' : 'pending'}`}>{provisioning.ready ? 'Listo para avanzar' : 'Verificación incompleta'}</span>
       </header>
+
+      {clinic.provisioningDraft?.retellAgentId && (
+        <div className="provisioning-draft">
+          <div><span>Agente borrador creado</span><strong>{clinic.provisioningDraft.retellAgentId}</strong></div>
+          <div><span>Plantilla</span><strong>{clinic.provisioningDraft.promptTemplateVersion || 'AutiveX'}</strong></div>
+          <div><span>Voz</span><strong>{clinic.provisioningDraft.voiceModel || clinic.provisioningDraft.voiceId || 'Retell'}</strong></div>
+          <div><span>n8n</span><strong>{clinic.provisioningDraft.n8nStatus === 'delivered' ? 'Evento entregado' : 'Pendiente de conectar'}</strong></div>
+        </div>
+      )}
 
       {editable ? (
         <form className="provisioning-form" onSubmit={submit}>
@@ -373,12 +382,13 @@ function NextAction({ clinic, busy, error, onAction }) {
 
   const [action, label, Icon] = config;
   const goLive = action === 'go_live';
+  const startsConfiguration = action === 'start_configuration';
   const readinessRequired = ['publish_test', 'go_live'].includes(action);
   const readinessBlocked = readinessRequired && clinic.provisioning?.ready !== true;
   return (
     <section className={`ops-action-card${goLive ? ' go-live-card' : ''}`}>
       <div className="ops-action-icon"><Icon size={21} /></div>
-      <div className="ops-action-copy"><p>Siguiente acción</p><h3>{label}</h3><span>{readinessBlocked ? 'Completa las seis verificaciones de provisionamiento para habilitar esta acción.' : goLive ? 'Esto marca el servicio como activo. La analítica seguirá identificada como demo hasta conectar una fuente de datos real.' : 'La acción queda registrada con tu usuario y hora.'}</span></div>
+      <div className="ops-action-copy"><p>Siguiente acción</p><h3>{label}</h3><span>{readinessBlocked ? 'Completa las seis verificaciones de provisionamiento para habilitar esta acción.' : startsConfiguration ? 'Crea un agente borrador privado en Retell, lo vincula a Supabase y prepara el evento compartido de n8n.' : goLive ? 'Esto marca el servicio como activo. La analítica seguirá identificada como demo hasta conectar una fuente de datos real.' : 'La acción queda registrada con tu usuario y hora.'}</span></div>
       {goLive && <label className="ops-confirm-name"><span>Escribe “{clinic.name}” para confirmar</span><input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></label>}
       {error && <p className="ops-form-error"><CircleAlert size={16} /> {error}</p>}
       <button type="button" className="ops-button primary" disabled={busy || readinessBlocked || (goLive && confirmation !== clinic.name)} onClick={() => onAction(action, confirmation)}>{busy ? <LoaderCircle className="spin" size={17} /> : <Icon size={17} />} {label}</button>

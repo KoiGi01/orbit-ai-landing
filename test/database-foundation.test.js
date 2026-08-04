@@ -7,6 +7,7 @@ import {
   getWorkspaceFoundation,
   listIntegrationCatalog,
   provisionMvpFoundation,
+  provisionVoiceAgentDraft,
   provisionVoiceAgentFoundation,
   provisionWorkspaceFoundation,
 } from '../lib/server/crm-foundation.js';
@@ -163,6 +164,20 @@ test('creates a manual Clerk workspace before attaching its production Retell ag
     assert.equal(repeated.settings.ownerEmail, 'cliente@example.com');
     assert.equal(repeated.settings.acquisitionSource, 'local_sales');
 
+    const draftAgent = await provisionVoiceAgentDraft(database, {
+      clerkOrganizationId: 'org_manual_client',
+      externalAgentId: 'agent_draft_123',
+      externalAgentVersion: '4',
+      displayName: 'Lucía',
+      settings: {
+        retellLlmId: 'llm_draft_123',
+        promptTemplateVersion: 'autivex-es-mx-v1',
+      },
+    });
+    assert.equal(draftAgent.environment, 'staging');
+    assert.equal(draftAgent.status, 'draft');
+    assert.equal(draftAgent.settings.retellLlmId, 'llm_draft_123');
+
     const voiceAgent = await provisionVoiceAgentFoundation(database, {
       clerkOrganizationId: 'org_manual_client',
       externalAgentId: 'agent_manual_123',
@@ -180,8 +195,13 @@ test('creates a manual Clerk workspace before attaching its production Retell ag
 
     const foundation = await getWorkspaceFoundation(database, 'org_manual_client');
     assert.equal(foundation.workspace.settings.businessProfile.industry, 'Servicios profesionales');
-    assert.equal(foundation.voiceAgents[0].externalAgentId, 'agent_manual_123');
-    assert.equal(foundation.voiceAgents[0].approvedTestCallId, 'call_manual_123');
+    assert.equal(foundation.voiceAgents.length, 2);
+    const productionAgent = foundation.voiceAgents.find((agent) => agent.environment === 'production');
+    const savedDraftAgent = foundation.voiceAgents.find((agent) => agent.environment === 'staging');
+    assert.equal(productionAgent.externalAgentId, 'agent_manual_123');
+    assert.equal(productionAgent.approvedTestCallId, 'call_manual_123');
+    assert.equal(savedDraftAgent.externalAgentId, 'agent_draft_123');
+    assert.equal(savedDraftAgent.settings.promptTemplateVersion, 'autivex-es-mx-v1');
 
     const audit = await client.query(`
       select action
@@ -191,7 +211,11 @@ test('creates a manual Clerk workspace before attaching its production Retell ag
     `, [workspace.id]);
     assert.deepEqual(
       audit.rows.map((row) => row.action).sort(),
-      ['voice_agent.manual_provisioning_saved', 'workspace.manual_onboarding_created'],
+      [
+        'voice_agent.draft_created',
+        'voice_agent.manual_provisioning_saved',
+        'workspace.manual_onboarding_created',
+      ],
     );
   } finally {
     await client.close();

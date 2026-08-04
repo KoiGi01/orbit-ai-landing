@@ -132,6 +132,11 @@
 .provisioning-section > header { justify-content: flex-start; }
 .provisioning-status { margin-left: auto; padding: 6px 9px; color: #9a5d10; background: #fff3d8; border-radius: 999px; font-size: 9px; font-weight: 800; }
 .provisioning-status.ready { color: #116044; background: #dcf8ec; }
+.provisioning-draft { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid #dce4ef; border-radius: 12px; background: #dce4ef; }
+.provisioning-draft > div { display: grid; gap: 4px; min-width: 0; padding: 11px 12px; background: #f7f9fc; }
+.provisioning-draft span { color: #72819a; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.provisioning-draft strong { overflow: hidden; color: #14213a; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 720px) { .provisioning-draft { grid-template-columns: 1fr 1fr; } }
 .provisioning-form { display: grid; gap: 17px; }
 .provisioning-confirmations { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .provisioning-confirmations label { min-height: 66px; padding: 12px; display: flex; align-items: flex-start; gap: 10px; color: #334a69; background: #f6f8fc; border: 1px solid #dce4ef; border-radius: 11px; cursor: pointer; }

@@ -37,6 +37,10 @@ const ERROR_MESSAGES = {
   existing_customer_requires_review: 'Ese correo ya pertenece a un cliente pagado. Revisa su cuenta antes de crear otra clínica.',
   workspace_not_provisioned: 'El workspace de Supabase todavía no está preparado para esta cuenta.',
   retell_agent_already_assigned: 'Ese agente de Retell ya pertenece a otro cliente.',
+  retell_provisioning_not_configured: 'Falta configurar la plantilla privada de Retell en el servidor.',
+  retell_provisioning_failed: 'Retell no pudo crear el agente borrador. No se activó producción.',
+  provisioning_webhook_not_configured: 'El webhook de n8n tiene URL, pero le falta su secreto de firma.',
+  provisioning_webhook_failed: 'El agente quedó guardado, pero n8n no confirmó el evento. Intenta iniciar la configuración nuevamente.',
 };
 
 export class ControlApiError extends Error {
