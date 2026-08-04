@@ -57,11 +57,13 @@ Use `.env.example` as the source of truth for server configuration and `dashboar
 - `CLERK_*` and `AUTIVEX_ADMIN_*` for authentication and internal access
 - `LEAD_WEBHOOK_*` or `RESEND_*` for lead delivery
 - `AUTIVEX_PUBLIC_ORIGINS` and rate limits for public endpoint protection
-- `DATABASE_URL` for the server-only CRM database; never create a `VITE_` database variable
+- `DATABASE_URL` or Vercel's Supabase-provided `POSTGRES_URL` for the server-only CRM database; never create a `VITE_` database variable
 
 ## Persistent data
 
-The canonical schema lives in `db/migrations/`. Run `npm run db:migrate` to apply pending migrations and `npm run db:seed:mvp` to bind the first Clerk organization to its Retell agent.
+The canonical schema lives in `supabase/migrations/`. Run `npm run db:migrate` to apply pending migrations and `npm run db:seed:mvp` to bind the first Clerk organization to its Retell agent.
+
+The repository is linked locally to the hosted Supabase and Vercel projects. Link metadata under `supabase/.temp/` and `.vercel/` is intentionally ignored. Create every schema change as a new Supabase migration, inspect it with `supabase db push --linked --dry-run`, and only then push it. Do not make untracked structural changes in the production SQL Editor.
 
 Clerk owns identity, memberships, and organization roles. Postgres owns CRM activity, voice-agent bindings, webhook idempotency, and integration connection state. Every operational query must resolve and filter by the active Clerk organization; never trust a workspace ID supplied by browser input.
 

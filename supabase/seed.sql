@@ -1,0 +1,2 @@
+-- Intentionally empty. MVP records are provisioned with `npm run db:seed:mvp`
+-- after Clerk and Retell identifiers are available.

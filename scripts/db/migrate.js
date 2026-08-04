@@ -5,7 +5,7 @@ import { createDatabase, databaseConfig } from '../../lib/server/database.js';
 import { loadLocalEnvironment } from './load-local-env.js';
 
 const ROOT = resolve(import.meta.dirname, '../..');
-const MIGRATIONS_DIRECTORY = resolve(ROOT, 'db/migrations');
+const MIGRATIONS_DIRECTORY = resolve(ROOT, 'supabase/migrations');
 
 loadLocalEnvironment(ROOT);
 

@@ -1,3 +1,4 @@
+-- Canonical Supabase baseline for the AutiveX operational CRM schema.
 begin;
 
 create schema if not exists app;

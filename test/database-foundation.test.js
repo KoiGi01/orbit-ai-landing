@@ -11,7 +11,7 @@ import {
 import { databaseConfig } from '../lib/server/database.js';
 import { inspectDatabaseHealth } from '../lib/server/database-health.js';
 
-const MIGRATION_PATH = resolve('db/migrations/0001_crm_and_integrations.sql');
+const MIGRATION_PATH = resolve('supabase/migrations/20260804000000_crm_and_integrations.sql');
 const MIGRATION = await readFile(MIGRATION_PATH, 'utf8');
 
 function pgliteAdapter(client) {

@@ -18,7 +18,7 @@ Voice calls are powered exclusively by Retell AI. The browser requests a short-l
 - Local API and production static server: `server/index.js`.
 - Serverless API handlers: `api/`.
 - Shared server logic: `lib/server/`.
-- Versioned Postgres schema: `db/migrations/`.
+- Versioned Postgres schema: `supabase/migrations/`.
 
 ## Local development
 
@@ -73,3 +73,4 @@ After deployment, `GET /api/health/database` verifies the server-to-database con
 See `docs/runbooks/PRIMER_FLUJO_FUNCIONAL.md` for the end-to-end setup and operating procedure.
 See `docs/runbooks/DIA_2_CRM_E_INTEGRACIONES.md` for the database foundation and self-service integration architecture.
 See `docs/runbooks/ALTA_MANUAL_DE_CLIENTE_Y_N8N.md` for the manual customer onboarding, Retell, CRM, and n8n operating checklist.
+See `docs/runbooks/VERCEL_Y_SUPABASE.md` for linked-project operations, migrations, Preview deployments, and connection verification.

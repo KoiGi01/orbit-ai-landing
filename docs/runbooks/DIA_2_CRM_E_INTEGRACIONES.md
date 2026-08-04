@@ -19,7 +19,7 @@ Una conexión pertenece al workspace del negocio, no a la cuenta personal de Aut
 
 ## Qué quedó construido
 
-- Migración versionada `db/migrations/0001_crm_and_integrations.sql`.
+- Migración versionada `supabase/migrations/20260804000000_crm_and_integrations.sql`.
 - Esquema privado `app`, sin acceso directo para roles del navegador.
 - Tablas de CRM: `workspaces`, `voice_agents`, `contacts`, `calls`, `tasks` y `webhook_events`.
 - Catálogo y estado de conexiones: `integration_providers`, `integration_connections` e `integration_oauth_states`.
