@@ -1,10 +1,15 @@
 # AutiveX — handoff para Claude Code
 
-**Corte de información:** 5 de agosto de 2026, zona `America/Mexico_City`  
-**Repositorio:** `KoiGi01/orbit-ai-landing`  
-**Rama canónica:** `master`  
-**Commit desplegado:** `8e822b4` — `Make AutiveX onboarding and voice demo functional (#1)`  
-**Producción:** <https://autivexai.com>  
+**Corte de información:** 5 de agosto de 2026, zona `America/Mexico_City`
+
+**Repositorio:** `KoiGi01/orbit-ai-landing`
+
+**Rama canónica:** `master`
+
+**Commit desplegado:** `8e822b4` — `Make AutiveX onboarding and voice demo functional (#1)`
+
+**Producción:** <https://autivexai.com>
+
 **PR consolidado:** <https://github.com/KoiGi01/orbit-ai-landing/pull/1>
 
 Este documento es el punto de reanudación técnico. Describe el estado comprobado del sistema, no una visión aspiracional. Si otro documento contradice este handoff, primero verifica el código activo, el deployment y la fecha de cada fuente.
