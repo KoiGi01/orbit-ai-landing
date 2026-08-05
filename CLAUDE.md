@@ -1,5 +1,7 @@
 # Repository guidance
 
+> **Start here:** read `docs/CLAUDE_CODE_HANDOFF_2026-08-05.md` before making changes. It is the current verified handoff for production state, architecture, pending integrations, and next checkpoints. Older planning documents may describe superseded assumptions.
+
 ## Product
 
 AutiveX is a Spanish-first voice receptionist platform for businesses in Mexico. The public landing page demonstrates the product, while the Clerk-protected dashboard supports prospects, manually activated clients, and internal operators.
