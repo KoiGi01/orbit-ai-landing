@@ -2,39 +2,61 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
-import { GoogleGenAI } from '@google/genai';
+import {
+  confirmManualPayment,
+  createPaidClinic,
+  errorResponse as controlErrorResponse,
+  getWorkspace,
+  listClinics,
+  saveProvisioning,
+  saveProspectProfile,
+  startClinicConfiguration,
+  transitionClinic,
+} from '../lib/server/clerk-control.js';
+import { deliverLead, normalizeLead, validLead } from '../lib/server/lead-delivery.js';
+import { createDatabase } from '../lib/server/database.js';
+import { inspectDatabaseHealth } from '../lib/server/database-health.js';
+import {
+  buildRetellDemoVariables,
+  configuredAgentVersion,
+} from '../lib/server/retell-demo.js';
+import {
+  consumeRateLimit,
+  numericEnv,
+  requestOriginAllowed,
+} from '../lib/server/public-guard.js';
+
+const ROOT = resolve(process.cwd());
+loadLocalEnv();
 
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
-const ROOT = resolve(process.cwd());
 const DIST_DIR = join(ROOT, 'dist');
-const LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || 'gemini-2.5-flash-native-audio-preview-12-2025';
-const SPEECH_PREFIX_PADDING_MS = 160;
-const SPEECH_SILENCE_DURATION_MS = 1250;
-
-loadLocalEnv();
 
 function loadLocalEnv() {
-  const envPath = join(ROOT, '.env');
-  if (!existsSync(envPath)) return;
+  for (const name of ['.env', '.env.local']) {
+    const envPath = join(ROOT, name);
+    if (!existsSync(envPath)) continue;
 
-  const lines = readFileSync(envPath, 'utf8').split(/\r?\n/);
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const eq = trimmed.indexOf('=');
-    if (eq === -1) continue;
-    const key = trimmed.slice(0, eq).trim();
-    const value = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
-    if (key && process.env[key] === undefined) process.env[key] = value;
+    const lines = readFileSync(envPath, 'utf8').split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eq = trimmed.indexOf('=');
+      if (eq === -1) continue;
+      const key = trimmed.slice(0, eq).trim();
+      const value = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
+      if (key && process.env[key] === undefined) process.env[key] = value;
+    }
   }
 }
 
-function sendJson(res, status, body) {
+function sendJson(res, status, body, headers = {}) {
   const payload = JSON.stringify(body);
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
+    ...headers,
   });
   res.end(payload);
 }
@@ -46,63 +68,25 @@ async function readJson(req) {
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
-async function handleToken(req, res) {
-  if (req.method !== 'POST') {
-    sendJson(res, 405, { error: 'method_not_allowed' });
-    return;
-  }
-
-  if (!process.env.GEMINI_API_KEY) {
-    sendJson(res, 500, { error: 'missing_gemini_api_key' });
-    return;
-  }
-
-  try {
-    const client = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
-      httpOptions: { apiVersion: 'v1alpha' },
-    });
-    const expireTime = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    const token = await client.authTokens.create({
-      config: {
-        uses: 1,
-        expireTime,
-        newSessionExpireTime: new Date(Date.now() + 60 * 1000).toISOString(),
-        liveConnectConstraints: {
-          model: LIVE_MODEL,
-          config: {
-            responseModalities: ['AUDIO'],
-            inputAudioTranscription: {},
-            outputAudioTranscription: {},
-            realtimeInputConfig: {
-              automaticActivityDetection: {
-                disabled: false,
-                startOfSpeechSensitivity: 'START_SENSITIVITY_LOW',
-                endOfSpeechSensitivity: 'END_SENSITIVITY_LOW',
-                prefixPaddingMs: SPEECH_PREFIX_PADDING_MS,
-                silenceDurationMs: SPEECH_SILENCE_DURATION_MS,
-              },
-            },
-          },
-        },
-        httpOptions: { apiVersion: 'v1alpha' },
-      },
-    });
-
-    sendJson(res, 200, {
-      token: token.name,
-      model: LIVE_MODEL,
-      expireTime,
-    });
-  } catch (error) {
-    console.error('Failed to create Gemini Live token:', error?.message || error);
-    sendJson(res, 502, { error: 'token_creation_failed' });
-  }
-}
-
 async function handleRetellToken(req, res) {
   if (req.method !== 'POST') {
     sendJson(res, 405, { error: 'method_not_allowed' });
+    return;
+  }
+
+  if (!requestOriginAllowed(req)) {
+    sendJson(res, 403, { error: 'origin_not_allowed' });
+    return;
+  }
+
+  const rate = consumeRateLimit(
+    req,
+    'public-retell',
+    numericEnv('RETELL_DEMO_RATE_LIMIT_PER_15_MIN', 6, { max: 100 }),
+    15 * 60 * 1000,
+  );
+  if (!rate.allowed) {
+    sendJson(res, 429, { error: 'rate_limited' }, { 'retry-after': String(rate.retryAfter) });
     return;
   }
 
@@ -115,16 +99,18 @@ async function handleRetellToken(req, res) {
   try {
     const body = await readJson(req);
     const isIntro = body.type === 'intro';
-    const agentId = isIntro
-      ? process.env.RETELL_AGENT_ID
-      : process.env.RETELL_AGENT_ID_2;
+    const agentId = process.env.RETELL_DEMO_AGENT_ID;
 
     if (!agentId) {
       sendJson(res, 500, { error: 'missing_agent_id' });
       return;
     }
 
-    const payload = { agent_id: agentId };
+    const agentVersion = configuredAgentVersion(process.env.RETELL_DEMO_AGENT_VERSION);
+    const payload = {
+      agent_id: agentId,
+      ...(agentVersion !== null ? { agent_version: agentVersion } : {}),
+    };
 
     if (isIntro) {
       payload.override_agent_config = {
@@ -132,13 +118,10 @@ async function handleRetellToken(req, res) {
       };
     }
 
-    if (!isIntro && body.scenario) {
-      payload.retell_llm_dynamic_variables = {
-        business_role: String(body.scenario.business_role || ''),
-        customer_context: String(body.scenario.customer_context || ''),
-        first_line: String(body.scenario.first_line || ''),
-        scenario_label: String(body.scenario.label || ''),
-      };
+    if (!isIntro) {
+      const demo = buildRetellDemoVariables(body.scenario);
+      payload.metadata = { source: 'autivex_web_demo', scenario_id: demo.scenarioId };
+      payload.retell_llm_dynamic_variables = demo.variables;
     }
 
     const response = await fetch('https://api.retellai.com/v2/create-web-call', {
@@ -171,21 +154,153 @@ async function handleLead(req, res) {
     return;
   }
 
+  if (!requestOriginAllowed(req)) {
+    sendJson(res, 403, { error: 'origin_not_allowed' });
+    return;
+  }
+
+  const rate = consumeRateLimit(
+    req,
+    'public-lead',
+    numericEnv('LEAD_RATE_LIMIT_PER_HOUR', 4, { max: 100 }),
+    60 * 60 * 1000,
+  );
+  if (!rate.allowed) {
+    sendJson(res, 429, { error: 'rate_limited' }, { 'retry-after': String(rate.retryAfter) });
+    return;
+  }
+
   try {
     const body = await readJson(req);
-    const lead = {
-      receivedAt: new Date().toISOString(),
-      name: String(body.name || '').slice(0, 120),
-      whatsapp: String(body.whatsapp || '').replace(/\D/g, '').slice(0, 16),
-      whatsappConsent: Boolean(body.whatsappConsent),
-      source: String(body.source || 'voice_demo').slice(0, 80),
-      transcript: Array.isArray(body.transcript) ? body.transcript.slice(-12) : [],
-    };
-    console.info('Autivex AI demo lead:', lead);
-    sendJson(res, 200, { ok: true });
+    if (String(body.website || '').trim()) {
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    const lead = normalizeLead(body);
+    if (!validLead(lead)) {
+      sendJson(res, 400, { error: 'invalid_lead_payload' });
+      return;
+    }
+
+    const channels = await deliverLead(lead);
+    console.info('AutiveX landing lead delivered', {
+      id: lead.id,
+      source: lead.source,
+      channels,
+      receivedAt: lead.receivedAt,
+    });
+    sendJson(res, 200, { ok: true, leadId: lead.id });
   } catch (error) {
     console.error('Failed to capture lead:', error?.message || error);
-    sendJson(res, 400, { error: 'invalid_lead_payload' });
+    sendJson(res, 502, { error: 'lead_delivery_failed' });
+  }
+}
+
+async function handleWorkspace(req, res) {
+  if (!['GET', 'PUT'].includes(req.method)) {
+    sendJson(res, 405, { error: 'method_not_allowed' });
+    return;
+  }
+
+  try {
+    const workspace = req.method === 'GET'
+      ? await getWorkspace(req.headers.authorization)
+      : await saveProspectProfile(req.headers.authorization, (await readJson(req)).profile);
+    sendJson(res, 200, { workspace });
+  } catch (error) {
+    const response = controlErrorResponse(error);
+    sendJson(res, response.status, response.body);
+  }
+}
+
+async function handleInternalClinics(req, res) {
+  if (!['GET', 'POST', 'PATCH'].includes(req.method)) {
+    sendJson(res, 405, { error: 'method_not_allowed' });
+    return;
+  }
+
+  try {
+    if (req.method === 'GET') {
+      const query = new URL(req.url, `http://${req.headers.host}`).searchParams.get('query') || '';
+      const result = await listClinics(req.headers.authorization, query);
+      sendJson(res, 200, result);
+      return;
+    }
+
+    const body = await readJson(req);
+    if (req.method === 'POST') {
+      const database = createDatabase();
+      let clinic;
+      try {
+        clinic = await createPaidClinic(req.headers.authorization, body, database);
+      } finally {
+        await database.close();
+      }
+      sendJson(res, 201, { clinic });
+      return;
+    }
+
+    let clinic;
+    if (['confirm_payment', 'save_provisioning', 'start_configuration'].includes(body.action)) {
+      const database = createDatabase();
+      try {
+        clinic = body.action === 'confirm_payment'
+          ? await confirmManualPayment(
+            req.headers.authorization,
+            body.organizationId,
+            body.payment,
+            database,
+          )
+          : body.action === 'save_provisioning'
+            ? await saveProvisioning(
+              req.headers.authorization,
+              body.organizationId,
+              body.provisioning,
+              database,
+            )
+            : await startClinicConfiguration(
+              req.headers.authorization,
+              body.organizationId,
+              database,
+            );
+      } finally {
+        await database.close();
+      }
+    } else {
+      clinic = await transitionClinic(
+        req.headers.authorization,
+        body.organizationId,
+        body.action,
+        body.confirmation,
+      );
+    }
+    sendJson(res, 200, { clinic });
+  } catch (error) {
+    const response = controlErrorResponse(error);
+    sendJson(res, response.status, response.body);
+  }
+}
+
+async function handleDatabaseHealth(req, res) {
+  if (req.method !== 'GET') {
+    sendJson(res, 405, { error: 'method_not_allowed' });
+    return;
+  }
+
+  let database;
+  try {
+    database = createDatabase();
+    sendJson(res, 200, await inspectDatabaseHealth(database));
+  } catch (error) {
+    console.error('AutiveX database health check failed:', error?.message || error);
+    sendJson(res, 503, {
+      ok: false,
+      database: 'unavailable',
+      schema: 'unknown',
+    });
+  } finally {
+    await database?.close();
   }
 }
 
@@ -194,6 +309,9 @@ const MIME_TYPES = new Map([
   ['.js', 'text/javascript; charset=utf-8'],
   ['.css', 'text/css; charset=utf-8'],
   ['.svg', 'image/svg+xml'],
+  ['.png', 'image/png'],
+  ['.webp', 'image/webp'],
+  ['.ico', 'image/x-icon'],
   ['.woff2', 'font/woff2'],
 ]);
 
@@ -226,11 +344,6 @@ async function serveStatic(req, res) {
 const server = createServer(async (req, res) => {
   const pathname = new URL(req.url, `http://${req.headers.host}`).pathname;
 
-  if (pathname === '/api/demo/token') {
-    await handleToken(req, res);
-    return;
-  }
-
   if (pathname === '/api/demo/lead') {
     await handleLead(req, res);
     return;
@@ -238,6 +351,26 @@ const server = createServer(async (req, res) => {
 
   if (pathname === '/api/retell/token') {
     await handleRetellToken(req, res);
+    return;
+  }
+
+  if (pathname === '/api/workspace') {
+    await handleWorkspace(req, res);
+    return;
+  }
+
+  if (pathname === '/api/internal/clinics') {
+    await handleInternalClinics(req, res);
+    return;
+  }
+
+  if (pathname === '/api/health/database') {
+    await handleDatabaseHealth(req, res);
+    return;
+  }
+
+  if (pathname.startsWith('/api/')) {
+    sendJson(res, 404, { error: 'not_found' });
     return;
   }
 

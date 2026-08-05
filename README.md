@@ -1,115 +1,26 @@
-# Orbit AI Landing Page
+# AutiveX AI
 
-Orbit AI is a landing page for an AI-powered receptionist service. The site presents a voice agent that answers business calls, schedules appointments, follows up by WhatsApp, and prepares commercial summaries so sales teams can respond faster and lose fewer opportunities.
+AutiveX is a Spanish-first voice receptionist platform for businesses in Mexico. This repository contains the public landing page, the authenticated customer dashboard, the internal provisioning console, and the API layer that connects Clerk, Retell AI, lead delivery, and manual billing operations.
 
-## Landing Page Message
+## Current product flow
 
-**Main promise:** every call gets answered.
+1. A visitor explores the landing page and can run a real Retell AI voice demo.
+2. A prospect can register through Clerk and complete a lightweight onboarding profile.
+3. An AutiveX operator confirms an offline payment and provisions the client manually.
+4. The activated client sees their workspace, onboarding state, and enabled voice demo.
 
-The hero introduces Orbit AI as an artificial intelligence reception service available 24/7, 365 days a year. It explains that the AI voice agent can:
+Voice calls are powered exclusively by Retell AI. The browser requests a short-lived web-call access token from the backend; the Retell API key never reaches the client.
 
-- Answer incoming calls
-- Explain services and availability
-- Schedule appointments
-- Confirm details through WhatsApp
-- Follow up with prospects
-- Capture context for the sales team
+## Applications
 
-The primary call to action is **"Probar demo de voz"**, which opens an interactive voice demo modal. The secondary call to action points visitors to the service section.
+- Landing: `src/landing.jsx`, served by the root Vite app.
+- Dashboard: `dashboard/src/main.jsx`, served with `dashboard/vite.config.js`.
+- Local API and production static server: `server/index.js`.
+- Serverless API handlers: `api/`.
+- Shared server logic: `lib/server/`.
+- Versioned Postgres schema: `supabase/migrations/`.
 
-## Core Problem
-
-The page is built around a simple business pain:
-
-> Every missed call is a sale that someone else closed.
-
-Orbit AI is presented as a way to respond when the team is busy, identify the caller's real intent, and turn each conversation into a concrete appointment or follow-up.
-
-## How The Service Works
-
-The landing page describes the service as one connected flow:
-
-**AI voice + WhatsApp + scheduling + commercial summary**
-
-The process has four steps:
-
-1. **Atiende**  
-   Answers on the first ring with a voice trained on the business offer, hours, and policies.
-
-2. **Entiende**  
-   Detects intent, urgency, objections, and key information before moving to the next step.
-
-3. **Agenda**  
-   Suggests times, confirms the appointment, and prepares the details for the team.
-
-4. **Da seguimiento**  
-   Sends WhatsApp messages, reminders, and summaries so opportunities do not go cold.
-
-## Quality Positioning
-
-The page emphasizes that Orbit AI should behave like part of the team, not like a generic chatbot. The service is positioned around controlled, business-specific responses.
-
-Key quality points:
-
-- **Designed with your rules:** uses the business prices, limits, tone, services, and attention criteria.
-- **Escalates to a human:** transfers sensitive or high-value cases with full context.
-- **Registers every opportunity:** stores intent, status, summary, and next action.
-- **Weekly script adjustment:** improves responses based on real conversations.
-
-## Target Industries
-
-The page highlights businesses where slow responses can cost money:
-
-- Clinics
-- Real estate companies
-- Online courses
-- Local services
-- B2B sales
-- Consulting offices
-- Agencies
-- Restaurants
-
-## Demo Experience
-
-The page includes an interactive demo modal. When visitors start the demo, the AI receptionist goes through a short simulated call flow:
-
-1. Connects the call
-2. Introduces itself as the AI receptionist
-3. Explains that it can answer calls, explain services, and handle busy periods
-4. Describes scheduling, confirmation, and WhatsApp follow-up
-5. Asks the visitor to leave a WhatsApp number for a personalized demo
-
-The demo ends with a lead form asking for:
-
-- Name
-- WhatsApp
-
-After submission, the interface confirms that a personalized demo will be sent through WhatsApp.
-
-## Contact CTA
-
-The final section invites visitors to hear how their own AI receptionist would sound. It asks for WhatsApp contact details so a personalized demo can be built around the visitor's customer type, frequent questions, and appointment flow.
-
-## Visual Style
-
-The landing page uses a dark, futuristic visual direction with:
-
-- Animated AI aura/orb canvas
-- Floating call, WhatsApp, and appointment artifacts
-- Electric indigo, cyan, and lime accents
-- Smooth section transitions
-- Responsive layout for desktop and mobile
-
-## Tech Stack
-
-- React
-- Vite
-- Lucide React icons
-- DM Sans variable font
-- Custom CSS
-- Canvas animation for the AI aura
-
-## Project Scripts
+## Local development
 
 Install dependencies:
 
@@ -117,20 +28,49 @@ Install dependencies:
 npm install
 ```
 
-Run the local development server:
+Copy `.env.example` to `.env` and configure the server-only credentials. Copy `dashboard/.env.example` to `dashboard/.env` for Clerk's browser publishable key.
+
+Run the landing and API:
 
 ```bash
 npm run dev
 ```
 
-Build the production version:
+Run the dashboard and API:
 
 ```bash
+npm run dev:control
+```
+
+By default the landing is available at `http://127.0.0.1:5173`, the dashboard at `http://127.0.0.1:4184`, and the API at `http://127.0.0.1:8787`.
+
+Prepare the server-only CRM database after configuring `DATABASE_URL`, Vercel's Supabase-provided `POSTGRES_URL`, or the local Supabase fallback (`SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`, and `SUPABASE_DB_POOLER_HOST`):
+
+```bash
+npm run db:migrate
+npm run db:seed:mvp
+```
+
+Clerk remains the identity and organization system. Postgres stores operational CRM data and integration state; the browser never connects to Postgres directly.
+
+## Verification
+
+```bash
+npm test
 npm run build
+npm run build:dashboard
 ```
 
-Preview the production build:
+After deployment, `GET /api/health/database` verifies the server-to-database connection and migration readiness without returning connection details or credentials.
 
-```bash
-npm run preview
-```
+## Integrations
+
+- Retell AI: browser voice calls through `POST /api/retell/token`.
+- Clerk: authentication, invitations, roles, and workspace access.
+- n8n or Resend: lead delivery through `POST /api/demo/lead`.
+- Manual billing: internal operators confirm payment and activate clinics in the admin console.
+
+See `docs/runbooks/PRIMER_FLUJO_FUNCIONAL.md` for the end-to-end setup and operating procedure.
+See `docs/runbooks/DIA_2_CRM_E_INTEGRACIONES.md` for the database foundation and self-service integration architecture.
+See `docs/runbooks/ALTA_MANUAL_DE_CLIENTE_Y_N8N.md` for the manual customer onboarding, Retell, CRM, and n8n operating checklist.
+See `docs/runbooks/VERCEL_Y_SUPABASE.md` for linked-project operations, migrations, Preview deployments, and connection verification.
