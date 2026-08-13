@@ -36,6 +36,7 @@ import {
 import './styles.css';
 import './brand-theme.css';
 import DashboardAuth from './auth';
+import { CallExperience } from './workspace';
 
 const primaryNav = [
   { label: 'Hoy', icon: LayoutDashboard },
@@ -362,6 +363,13 @@ function App({ account, workspace }) {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [testCallOpen, setTestCallOpen] = useState(false);
+  const testProfile = workspace?.profile || { clinicName: identity.clinicName };
+  const testScenario = {
+    key: 'workspace_browser_test',
+    label: 'Llamada libre de prueba',
+    description: `Prueba privada del agente configurado para ${identity.clinicName}.`,
+  };
 
   const toast = (message, action = null) => {
     setNotice({ message: dataMode.isDemo ? `Simulación: ${message}` : message, action });
@@ -491,7 +499,7 @@ function App({ account, workspace }) {
               dataMode={dataMode}
             />
           ) : (
-            <ModulePage title={active} tasks={tasks} clinicName={identity.clinicName} dataMode={dataMode} onSelectTask={selectTask} onAction={toast} />
+            <ModulePage title={active} tasks={tasks} clinicName={identity.clinicName} dataMode={dataMode} onSelectTask={selectTask} onAction={toast} onTestAgent={() => setTestCallOpen(true)} />
           )}
         </div>
 
@@ -502,6 +510,7 @@ function App({ account, workspace }) {
       {selectedTask && <TaskDrawer task={selectedTask} dataMode={dataMode} onClose={() => setSelectedTask(null)} onResolve={resolveTask} onStart={startTask} onAssign={assignTask} />}
       {commandOpen && <CommandPalette tasks={tasks} isAdmin={identity.isAdmin} onClose={() => setCommandOpen(false)} onNavigate={navigate} onSelectTask={selectTask} />}
       {moreOpen && <MobileMoreSheet active={active} isAdmin={identity.isAdmin} onClose={() => setMoreOpen(false)} onNavigate={navigate} />}
+      {testCallOpen && <CallExperience profile={testProfile} scenario={testScenario} getToken={account.getToken} onClose={() => setTestCallOpen(false)} />}
       <div className="toast-region" aria-live="polite" aria-atomic="true">
         {notice && <div className="toast"><Check size={16} aria-hidden="true" /><span>{notice.message}</span>{notice.action && <button type="button" onClick={() => { const action = notice.action; setNotice(null); action.onClick(); }}>{notice.action.label}</button>}</div>}
       </div>
@@ -911,7 +920,7 @@ function CapacityPanel({ isAdmin, isDemoData, onNavigate }) {
   );
 }
 
-function ModulePage({ title, tasks, clinicName, dataMode, onSelectTask, onAction }) {
+function ModulePage({ title, tasks, clinicName, dataMode, onSelectTask, onAction, onTestAgent }) {
   const copy = moduleCopy[title];
   const demoDescriptions = {
     Conversaciones: 'Los nombres, llamadas y resultados de esta bitácora son ejemplos; todavía no provienen de tu telefonía.',
@@ -928,7 +937,7 @@ function ModulePage({ title, tasks, clinicName, dataMode, onSelectTask, onAction
       </section>
       {title === 'Conversaciones' && <ConversationsModule tasks={tasks} isDemoData={dataMode.isDemo} onSelectTask={onSelectTask} />}
       {title === 'Oportunidades' && <OpportunitiesModule tasks={tasks} onSelectTask={onSelectTask} />}
-      {title === 'Mi recepcionista' && <ReceptionistModule clinicName={clinicName} isDemoData={dataMode.isDemo} onAction={onAction} />}
+      {title === 'Mi recepcionista' && <ReceptionistModule clinicName={clinicName} isDemoData={dataMode.isDemo} onAction={onAction} onTestAgent={onTestAgent} />}
       {title === 'Conexiones' && <ConnectionsModule isDemoData={dataMode.isDemo} onAction={onAction} />}
       {title === 'Uso y plan' && <UsageModule isDemoData={dataMode.isDemo} />}
     </main>
@@ -994,10 +1003,10 @@ function OpportunitiesModule({ tasks, onSelectTask }) {
   );
 }
 
-function ReceptionistModule({ clinicName, isDemoData, onAction }) {
+function ReceptionistModule({ clinicName, isDemoData, onAction, onTestAgent }) {
   return (
     <section className="reception-layout">
-      <article className="reception-identity dark-module-card"><div className="large-orb"><span /></div><p className="dark-eyebrow">{isDemoData ? 'Configuración de ejemplo' : 'En línea ahora'}</p><h2>Lucía</h2><span>{isDemoData ? `Vista previa para ${clinicName}` : `Recepcionista de ${clinicName}`}</span><div className="reception-number">{isDemoData ? 'Número aún no conectado' : '+52 55 4160 0198'}</div><button type="button" onClick={() => onAction(isDemoData ? 'Experiencia de prueba iniciada' : 'Llamada de prueba iniciada')}><PhoneOutgoing size={16} /> {isDemoData ? 'Probar experiencia' : 'Hacer llamada de prueba'}</button></article>
+      <article className="reception-identity dark-module-card"><div className="large-orb"><span /></div><p className="dark-eyebrow">{isDemoData ? 'Agente privado de prueba' : 'En línea ahora'}</p><h2>Lucía</h2><span>{isDemoData ? `Configurada para ${clinicName}` : `Recepcionista de ${clinicName}`}</span><div className="reception-number">{isDemoData ? 'Prueba desde este navegador' : '+52 55 4160 0198'}</div><button type="button" onClick={onTestAgent}><PhoneOutgoing size={16} /> Probar mi agente</button></article>
       <article className="settings-list surface-panel">
         {(isDemoData ? [
           ['Disponibilidad', 'Horario ilustrativo · por configurar', Clock3],

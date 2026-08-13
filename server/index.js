@@ -4,7 +4,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 import {
   confirmManualPayment,
-  createPaidClinic,
+  createWorkspaceTestCall,
+  createLocation,
   errorResponse as controlErrorResponse,
   getWorkspace,
   listClinics,
@@ -198,12 +199,22 @@ async function handleLead(req, res) {
 }
 
 async function handleWorkspace(req, res) {
-  if (!['GET', 'PUT'].includes(req.method)) {
+  if (!['GET', 'PUT', 'POST'].includes(req.method)) {
     sendJson(res, 405, { error: 'method_not_allowed' });
     return;
   }
 
   try {
+    if (req.method === 'POST') {
+      const body = await readJson(req);
+      if (body.action !== 'create_test_call') {
+        sendJson(res, 400, { error: 'invalid_workspace_action' });
+        return;
+      }
+      const call = await createWorkspaceTestCall(req.headers.authorization, body, createDatabase());
+      sendJson(res, 200, call);
+      return;
+    }
     const workspace = req.method === 'GET'
       ? await getWorkspace(req.headers.authorization)
       : await saveProspectProfile(req.headers.authorization, (await readJson(req)).profile);
@@ -233,7 +244,7 @@ async function handleInternalClinics(req, res) {
       const database = createDatabase();
       let clinic;
       try {
-        clinic = await createPaidClinic(req.headers.authorization, body, database);
+        clinic = await createLocation(req.headers.authorization, body, database);
       } finally {
         await database.close();
       }

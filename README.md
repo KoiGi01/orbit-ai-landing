@@ -6,8 +6,11 @@ AutiveX is a Spanish-first voice receptionist platform for businesses in Mexico.
 
 1. A visitor explores the landing page and can run a real Retell AI voice demo.
 2. A prospect can register through Clerk and complete a lightweight onboarding profile.
-3. An AutiveX operator confirms an offline payment and provisions the client manually.
-4. The activated client sees their workspace, onboarding state, and enabled voice demo.
+3. An AutiveX operator creates a Location, assigns its users, and AutiveX creates the Clerk organization and Supabase workspace.
+4. The admin flow immediately attempts to create one private Retell draft for the Location; failed attempts remain safely retryable.
+5. Assigned users can enter the shared Location dashboard after accepting their Clerk invitation.
+
+Billing is intentionally outside the current MVP activation path. Legacy manual-payment operations remain in the code for later reuse, but a newly created Location uses `billingStatus: not_required` and can proceed through onboarding and provisioning without a payment record.
 
 Voice calls are powered exclusively by Retell AI. The browser requests a short-lived web-call access token from the backend; the Retell API key never reaches the client.
 
@@ -68,7 +71,7 @@ After deployment, `GET /api/health/database` verifies the server-to-database con
 - Retell AI: browser voice calls through `POST /api/retell/token`.
 - Clerk: authentication, invitations, roles, and workspace access.
 - n8n or Resend: lead delivery through `POST /api/demo/lead`.
-- Manual billing: internal operators confirm payment and activate clinics in the admin console.
+- Location operations: internal operators create workspaces, assign users, retry provisioning, and control production activation. Billing is deferred for the current MVP.
 
 See `docs/runbooks/PRIMER_FLUJO_FUNCIONAL.md` for the end-to-end setup and operating procedure.
 See `docs/runbooks/DIA_2_CRM_E_INTEGRACIONES.md` for the database foundation and self-service integration architecture.

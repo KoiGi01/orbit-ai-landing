@@ -26,6 +26,117 @@ import {
 } from 'lucide-react';
 import './landing.css';
 
+const MOTION_EXIT_MS = 320;
+
+function usePresence(open) {
+  const [mounted, setMounted] = useState(open);
+  const [state, setState] = useState(open ? 'is-open' : 'is-closed');
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      const frame = requestAnimationFrame(() => setState('is-open'));
+      return () => cancelAnimationFrame(frame);
+    }
+    setState('is-closing');
+    const timer = window.setTimeout(() => setMounted(false), MOTION_EXIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [open]);
+
+  return { mounted, state };
+}
+
+function AnimatedNumber({ value, suffix = '', format = (number) => Math.round(number).toLocaleString('es-MX') }) {
+  const ref = useRef(null);
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return undefined;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let frame;
+    const run = () => {
+      if (reduced) {
+        setDisplay(value);
+        return;
+      }
+      const startedAt = performance.now();
+      const tick = (now) => {
+        const progress = Math.min(1, (now - startedAt) / 1100);
+        setDisplay(value * (1 - ((1 - progress) ** 3)));
+        if (progress < 1) frame = requestAnimationFrame(tick);
+      };
+      frame = requestAnimationFrame(tick);
+    };
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      run();
+      observer.disconnect();
+    }, { threshold: 0.45 });
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [value]);
+
+  return <span ref={ref}>{format(display)}{suffix}</span>;
+}
+
+function MotionRuntime() {
+  useEffect(() => {
+    const root = document.documentElement;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const revealNodes = [...document.querySelectorAll('[data-reveal]')];
+    if (reduced) revealNodes.forEach((node) => node.classList.add('is-revealed'));
+    const observer = reduced ? null : new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('is-revealed');
+        observer.unobserve(entry.target);
+      });
+    }, { rootMargin: '0px 0px -10% 0px', threshold: 0.12 });
+    revealNodes.forEach((node) => observer?.observe(node));
+    if (reduced) return () => observer?.disconnect();
+
+    let frame = 0;
+    let pointerX = 0.5;
+    let pointerY = 0.3;
+    let scrollY = window.scrollY;
+    const render = () => {
+      root.style.setProperty('--pointer-x', pointerX.toFixed(3));
+      root.style.setProperty('--pointer-y', pointerY.toFixed(3));
+      root.style.setProperty('--pointer-shift-x', `${((pointerX - 0.5) * 22).toFixed(1)}px`);
+      root.style.setProperty('--pointer-shift-y', `${((pointerY - 0.5) * 18).toFixed(1)}px`);
+      const oceanScroll = Math.min(scrollY * 0.035, 90);
+      root.style.setProperty('--ocean-scroll', `${oceanScroll.toFixed(1)}px`);
+      root.style.setProperty('--ocean-scroll-back', `${(oceanScroll * -0.3).toFixed(1)}px`);
+      root.style.setProperty('--ocean-scroll-shallow', `${(oceanScroll * -0.18).toFixed(1)}px`);
+      frame = 0;
+    };
+    const schedule = () => { if (!frame && !document.hidden) frame = requestAnimationFrame(render); };
+    const onPointer = (event) => {
+      pointerX = event.clientX / window.innerWidth;
+      pointerY = event.clientY / window.innerHeight;
+      schedule();
+    };
+    const onScroll = () => { scrollY = window.scrollY; schedule(); };
+    const onVisibility = () => root.classList.toggle('motion-paused', document.hidden);
+    window.addEventListener('pointermove', onPointer, { passive: true });
+    window.addEventListener('scroll', onScroll, { passive: true });
+    document.addEventListener('visibilitychange', onVisibility);
+    schedule();
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('pointermove', onPointer);
+      window.removeEventListener('scroll', onScroll);
+      document.removeEventListener('visibilitychange', onVisibility);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, []);
+  return null;
+}
+
 const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_URL
   || (import.meta.env.DEV ? 'http://127.0.0.1:4184' : window.location.origin);
 
@@ -236,7 +347,7 @@ function HeroProduct() {
         <div className="product-metric-line">
           <div>
             <span>Llamadas atendidas</span>
-            <strong>128</strong>
+            <strong><AnimatedNumber value={128} /></strong>
           </div>
           <span className="metric-change">+12%</span>
         </div>
@@ -273,7 +384,7 @@ function Hero({ onDemo, onPilot }) {
         <div className="hero-copy">
           <h1>Que una llamada sin respuesta no te cueste un paciente.</h1>
           <p>AutiveX atiende las llamadas de tu clínica dental cuando recepción está ocupada, identifica el motivo y deja cada caso listo para confirmar una cita, devolver la llamada o escalar.</p>
-          <div className="hero-actions">
+          <div className="hero-actions" data-reveal style={{ '--reveal-delay': '280ms' }}>
             <button type="button" className="button button-coral" onClick={onDemo}>
               <Volume2 size={21} /> Probar la voz
             </button>
@@ -282,9 +393,9 @@ function Hero({ onDemo, onPilot }) {
             </button>
           </div>
         </div>
-        <HeroProduct />
+        <div data-reveal data-reveal-direction="right" style={{ '--reveal-delay': '160ms' }}><HeroProduct /></div>
       </div>
-      <div className="hero-capability-line" aria-label="Capacidades principales">
+      <div className="hero-capability-line" data-reveal aria-label="Capacidades principales">
         <span><PhoneCall size={22} /> Contesta</span>
         <span><CircleDot size={22} /> Clasifica</span>
         <span><Route size={22} /> Escala</span>
@@ -297,13 +408,13 @@ function Hero({ onDemo, onPilot }) {
 function CapabilitySection() {
   return (
     <section className="capability-section" id="producto">
-      <div className="section-heading">
+      <div className="section-heading" data-reveal>
         <h2>No solo contesta. Mueve la llamada hacia una decisión.</h2>
         <p>Cada conversación debe terminar con claridad, no con una transcripción abandonada.</p>
       </div>
       <div className="capability-grid">
-        {CAPABILITIES.map(({ title, text, Icon, className }) => (
-          <article className={`capability-card ${className}`} key={title}>
+        {CAPABILITIES.map(({ title, text, Icon, className }, index) => (
+          <article className={`capability-card ${className}`} key={title} data-reveal style={{ '--reveal-delay': `${index * 90}ms` }}>
             <span className="capability-icon"><Icon size={30} /></span>
             <h3>{title}</h3>
             <p>{text}</p>
@@ -334,7 +445,7 @@ function AnalyticsChart() {
 function ResultsSection() {
   return (
     <section className="results-section" id="resultados">
-      <div className="results-copy">
+      <div className="results-copy" data-reveal>
         <h2>Ve qué llamadas terminan en cita y cuáles necesitan atención.</h2>
         <p>Revisa el motivo, el resultado y el siguiente paso de cada conversación desde un solo tablero.</p>
         <ul>
@@ -343,7 +454,7 @@ function ResultsSection() {
           <li><Check size={20} /> Conversión visible por horario</li>
         </ul>
       </div>
-      <div className="analytics-window" aria-label="Ejemplo de tablero operativo">
+      <div className="analytics-window" data-reveal data-reveal-direction="right" aria-label="Ejemplo de tablero operativo">
         <header className="analytics-header">
           <div><BarChart3 size={23} /><strong>Tablero de ejemplo</strong></div>
           <span className="analytics-period">Últimas 12 horas</span>
@@ -383,11 +494,11 @@ function ValueCalculator({ onPilot }) {
 
   return (
     <section className="value-section" aria-labelledby="value-title">
-      <div className="value-heading">
+      <div className="value-heading" data-reveal>
         <h2 id="value-title">Ponle números al hueco.</h2>
         <p>Usa tus propios datos para dimensionar el valor que hoy pasa por llamadas sin respuesta. Es un escenario, no una garantía.</p>
       </div>
-      <div className="value-calculator">
+      <div className="value-calculator" data-reveal style={{ '--reveal-delay': '120ms' }}>
         <div className="calculator-controls">
           <label>
             <span>Llamadas sin respuesta por semana</span>
@@ -407,7 +518,7 @@ function ValueCalculator({ onPilot }) {
         </div>
         <div className="calculator-result" aria-live="polite">
           <span>Valor potencial al mes</span>
-          <strong>{formatMoney(monthlyValue)}</strong>
+          <strong className="animated-value">{formatMoney(monthlyValue)}</strong>
           <p>{opportunities} oportunidades de cita pasan por ese hueco cada mes.</p>
           <button type="button" className="button button-ink" onClick={onPilot}>Solicitar demo <ArrowRight size={21} /></button>
         </div>
@@ -429,7 +540,7 @@ function VoiceWave() {
 function VoiceSection({ onDemo }) {
   return (
     <section className="voice-section">
-      <div className="voice-copy">
+      <div className="voice-copy" data-reveal>
         <h2>No te pedimos que imagines la voz. Escúchala.</h2>
         <p>Entra como paciente, cambia el tema o haz una pregunta difícil. La mejor demo es una conversación que no sigue el guion perfecto.</p>
         <button type="button" className="button button-ink" onClick={onDemo}>
@@ -451,13 +562,13 @@ function VoiceSection({ onDemo }) {
 function PilotSection({ onPilot }) {
   return (
     <section className="pilot-section" id="piloto">
-      <div className="section-heading pilot-heading">
+      <div className="section-heading pilot-heading" data-reveal>
         <h2>Empieza con un piloto, no con una promesa.</h2>
         <p>Un alcance pequeño permite probar la experiencia y medir si realmente ayuda a recepción.</p>
       </div>
       <div className="pilot-grid">
         {PILOT_STEPS.map(({ title, text, Icon }, index) => (
-          <article key={title}>
+          <article key={title} data-reveal style={{ '--reveal-delay': `${index * 100}ms` }}>
             <span className="pilot-number">{index + 1}</span>
             <Icon size={30} />
             <h3>{title}</h3>
@@ -465,7 +576,7 @@ function PilotSection({ onPilot }) {
           </article>
         ))}
       </div>
-      <button type="button" className="button button-blue" onClick={onPilot}>Solicitar demo <ArrowRight size={21} /></button>
+      <button type="button" className="button button-blue" data-reveal onClick={onPilot}>Solicitar demo <ArrowRight size={21} /></button>
     </section>
   );
 }
@@ -474,7 +585,7 @@ function FaqSection() {
   return (
     <section className="faq-section" id="preguntas">
       <div className="faq-heading"><h2>Lo importante antes de conectar una línea.</h2></div>
-      <div className="faq-list">
+      <div className="faq-list" data-reveal data-reveal-direction="right">
         {FAQS.map((item) => (
           <details key={item.question}>
             <summary>{item.question}<ChevronDown size={23} aria-hidden="true" /></summary>
@@ -595,7 +706,7 @@ function LeadForm() {
 function ContactSection({ onDemo }) {
   return (
     <section className="contact-section" id="evaluacion">
-      <div className="contact-copy">
+      <div className="contact-copy" data-reveal>
         <h2>Veamos dónde se están perdiendo las llamadas.</h2>
         <p>Cuéntanos cómo funciona hoy tu recepción. Te proponemos un primer alcance para probar AutiveX sin cambiar toda la operación.</p>
         <ul>
@@ -604,7 +715,7 @@ function ContactSection({ onDemo }) {
         </ul>
         <button type="button" className="contact-demo" onClick={onDemo}><Headphones size={21} /> Probar la voz</button>
       </div>
-      <LeadForm />
+      <div data-reveal data-reveal-direction="right"><LeadForm /></div>
     </section>
   );
 }
@@ -614,6 +725,7 @@ function VoiceBars({ active }) {
 }
 
 function DemoDialog({ open, onClose, onPilot }) {
+  const presence = usePresence(open);
   const clientRef = useRef(null);
   const dialogRef = useRef(null);
   const closeRef = useRef(null);
@@ -740,10 +852,10 @@ function DemoDialog({ open, onClose, onPilot }) {
     track('written_demo_opened');
   };
 
-  if (!open) return null;
+  if (!presence.mounted) return null;
 
   return (
-    <div className="dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
+    <div className={`dialog-backdrop ${presence.state}`} onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
       <section ref={dialogRef} className="demo-dialog" role="dialog" aria-modal="true" aria-labelledby="demo-title">
         <header className="dialog-header">
           <Brand />
@@ -823,6 +935,7 @@ function DemoDialog({ open, onClose, onPilot }) {
 }
 
 function PrivacyDialog({ open, onClose }) {
+  const presence = usePresence(open);
   const dialogRef = useRef(null);
   const closeRef = useRef(null);
 
@@ -839,10 +952,10 @@ function PrivacyDialog({ open, onClose }) {
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!presence.mounted) return null;
 
   return (
-    <div className="dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className={`dialog-backdrop ${presence.state}`} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section ref={dialogRef} className="privacy-dialog" role="dialog" aria-modal="true" aria-labelledby="privacy-title">
         <button ref={closeRef} type="button" onClick={onClose} aria-label="Cerrar"><X size={24} /></button>
         <h2 id="privacy-title">Prueba siempre con un caso ficticio.</h2>
@@ -881,6 +994,7 @@ function App() {
 
   return (
     <div className="site-shell">
+      <MotionRuntime />
       <a className="skip-link" href="#main-content">Saltar al contenido</a>
       <Navigation onDemo={() => openDemo('navigation')} onPilot={() => goToForm('navigation')} />
       <main id="main-content">

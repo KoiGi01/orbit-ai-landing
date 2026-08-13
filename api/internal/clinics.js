@@ -1,6 +1,6 @@
 import {
   confirmManualPayment,
-  createPaidClinic,
+  createLocation,
   errorResponse,
   listClinics,
   saveProvisioning,
@@ -39,7 +39,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      const clinic = await withDatabase((database) => createPaidClinic(
+      const clinic = await withDatabase((database) => createLocation(
         authorization,
         req.body,
         database,

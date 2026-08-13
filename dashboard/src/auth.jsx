@@ -405,6 +405,9 @@ function AccountGate({ DashboardComponent }) {
 
   if (['onboarding', 'provisioning'].includes(workspace.view)) {
     const status = workspace.state?.onboardingStatus || 'needs_onboarding';
+    if (workspace.state?.billingStatus === 'not_required' && location.pathname.startsWith('/app')) {
+      return <DashboardComponent key={organization.id} account={{ user, organization, membership, getToken }} workspace={workspace} />;
+    }
     if (location.pathname.startsWith('/app')) return <Navigate to="/onboarding" replace />;
     return <OnboardingPage organization={organization} user={user} status={status} />;
   }
@@ -413,7 +416,7 @@ function AccountGate({ DashboardComponent }) {
     return <Navigate to="/app" replace />;
   }
 
-  return <DashboardComponent key={organization.id} account={{ user, organization, membership }} workspace={workspace} />;
+  return <DashboardComponent key={organization.id} account={{ user, organization, membership, getToken }} workspace={workspace} />;
 }
 
 function DashboardRoutes({ DashboardComponent }) {

@@ -13,6 +13,9 @@ import {
   Clock3,
   ExternalLink,
   FileCheck2,
+  Database,
+  ServerCog,
+  TerminalSquare,
   LoaderCircle,
   LockKeyhole,
   Mail,
@@ -52,6 +55,7 @@ const TIMEZONES = [
 
 const SCHEDULING_PROVIDERS = [
   ['none', 'Todavía no definido'],
+  ['cal_com', 'Cal.com'],
   ['google_calendar', 'Google Calendar'],
   ['calendly', 'Calendly'],
   ['manual', 'Confirmación manual'],
@@ -68,7 +72,7 @@ const STAGE_TONES = {
 };
 
 const ACTIONS = {
-  needs_onboarding: ['schedule_onboarding', 'Marcar onboarding agendado', CalendarCheck2],
+  needs_onboarding: ['start_configuration', 'Crear agente Retell', Settings2],
   scheduled: ['start_configuration', 'Iniciar configuración', Settings2],
   configuring: ['publish_test', 'Publicar llamada de prueba', FileCheck2],
   review: ['go_live', 'Activar producción', BadgeCheck],
@@ -122,8 +126,8 @@ const EMPTY_CLIENT = {
   callGoals: '',
   schedulingProvider: 'none',
   internalNotes: '',
+  memberEmails: '',
   source: 'local_sales',
-  payment: EMPTY_PAYMENT,
 };
 
 const EMPTY_PROVISIONING = {
@@ -186,12 +190,13 @@ function PaymentFields({ value, onChange }) {
 }
 
 function ClinicRow({ clinic, selected, onClick }) {
+  const accessCount = clinic.accessAssignments?.length || clinic.membersCount || 0;
   return (
     <button type="button" className={`ops-clinic-row${selected ? ' selected' : ''}`} onClick={onClick}>
       <span className="ops-clinic-mark">{clinic.name.split(' ').slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span>
       <span className="ops-clinic-main"><strong>{clinic.name}</strong><small>{clinic.owner.email || 'Sin correo asociado'}</small></span>
       <span className={`ops-stage ${STAGE_TONES[clinic.stage] || 'neutral'}`}><i /> {clinic.stage}</span>
-      <span className="ops-method">{clinic.payment ? PAYMENT_METHODS.find(([key]) => key === clinic.payment.method)?.[1] || clinic.payment.method : 'Sin pago'}</span>
+      <span className="ops-method">{accessCount} {accessCount === 1 ? 'usuario' : 'usuarios'}</span>
       <time>{relativeTime(clinic.createdAt)}</time>
       <ChevronRight size={17} />
     </button>
@@ -219,10 +224,11 @@ export function NewClientModal({ busy, error, onClose, onCreate }) {
   const submit = (event) => {
     event.preventDefault();
     onCreate({
-      clinicName: form.clinicName,
-      email: form.email,
+      locationName: form.clinicName,
+      ownerEmail: form.email,
       city: form.city,
       source: form.source,
+      members: splitList(form.memberEmails).map((email) => ({ email, role: 'org:member' })),
       businessProfile: {
         clinicName: form.clinicName,
         ownerName: form.ownerName,
@@ -238,15 +244,20 @@ export function NewClientModal({ busy, error, onClose, onCreate }) {
         schedulingProvider: form.schedulingProvider,
         internalNotes: form.internalNotes,
       },
-      payment: paymentPayload(form.payment),
     });
   };
 
   return (
-    <ModalShell title="Crear acceso pagado" eyebrow="Alta de cliente local" onClose={onClose} wide>
+    <ModalShell title="Provisionar tenant" eyebrow="Create / Location pipeline" onClose={onClose} wide>
       <form className="ops-modal-body new-client-form" onSubmit={submit}>
+        <div className="ops-provision-plan">
+          <span><b>01</b> Clerk organization + invitations</span>
+          <span><b>02</b> Supabase workspace isolation</span>
+          <span><b>03</b> Private Retell agent + system prompt</span>
+          <code>billing: not_required</code>
+        </div>
         <div className="ops-form-section">
-          <div className="ops-section-heading"><span>01</span><div><strong>Negocio y propietario</strong><p>Crearemos la organización y enviaremos una invitación segura al propietario.</p></div></div>
+          <div className="ops-section-heading"><span>01</span><div><strong>Tenant identity & access</strong><p>Crea la Organization de Clerk, el owner administrativo y las asignaciones de acceso.</p></div></div>
           <div className="ops-form-grid">
             <label><span>Nombre comercial</span><input autoFocus required value={form.clinicName} onChange={(event) => update('clinicName', event.target.value)} placeholder="Clínica Dental Aurora" /></label>
             <label><span>Nombre del propietario</span><input required value={form.ownerName} onChange={(event) => update('ownerName', event.target.value)} placeholder="Ana Martínez" /></label>
@@ -257,10 +268,11 @@ export function NewClientModal({ busy, error, onClose, onCreate }) {
             <label><span>Industria</span><input required value={form.industry} onChange={(event) => update('industry', event.target.value)} placeholder="Clínica dental, inmobiliaria, taller…" /></label>
             <label><span>Sitio web · opcional</span><input type="url" value={form.website} onChange={(event) => update('website', event.target.value)} placeholder="https://negocio.mx" /></label>
             <label><span>Origen</span><select value={form.source} onChange={(event) => update('source', event.target.value)}><option value="local_sales">Venta local</option><option value="cold_call">Cold call</option><option value="referral">Referido</option><option value="inbound">Registro orgánico</option></select></label>
+            <label className="ops-form-wide"><span>Usuarios adicionales · opcional</span><textarea value={form.memberEmails} onChange={(event) => update('memberEmails', event.target.value)} placeholder={'equipo@negocio.mx\nrecepcion@negocio.mx'} /><small>Un correo por línea. El propietario será administrador; estos usuarios serán miembros.</small></label>
           </div>
         </div>
         <div className="ops-form-section">
-          <div className="ops-section-heading"><span>02</span><div><strong>Operación que debe aprender el agente</strong><p>Esta información formará el expediente inicial y la configuración del workspace.</p></div></div>
+          <div className="ops-section-heading"><span>02</span><div><strong>Agent runtime context</strong><p>Estos campos se normalizan y compilan dentro del system prompt privado de Retell.</p></div></div>
           <div className="ops-form-grid">
             <label className="ops-form-wide"><span>Qué hace el negocio</span><textarea required value={form.description} onChange={(event) => update('description', event.target.value)} placeholder="Describe en lenguaje simple qué ofrece, a quién atiende y qué no debe prometer el agente." /></label>
             <label><span>Horarios</span><textarea required value={form.businessHours} onChange={(event) => update('businessHours', event.target.value)} placeholder="Lun–Vie 9:00–18:00; Sáb 9:00–14:00" /></label>
@@ -270,12 +282,8 @@ export function NewClientModal({ busy, error, onClose, onCreate }) {
             <label className="ops-form-wide"><span>Notas internas · opcional</span><textarea value={form.internalNotes} onChange={(event) => update('internalNotes', event.target.value)} placeholder="Restricciones, acuerdos comerciales o contexto que solo debe ver AutiveX." /></label>
           </div>
         </div>
-        <div className="ops-form-section">
-          <div className="ops-section-heading"><span>03</span><div><strong>Pago que tú ya confirmaste</strong><p>Registrar una factura enviada no basta; usa esta acción únicamente cuando el dinero esté acreditado.</p></div></div>
-          <PaymentFields value={form.payment} onChange={(payment) => update('payment', payment)} />
-        </div>
         {error && <p className="ops-form-error"><CircleAlert size={16} /> {error}</p>}
-        <footer><button type="button" className="ops-button secondary" onClick={onClose}>Cancelar</button><button type="submit" className="ops-button primary" disabled={busy}>{busy ? <LoaderCircle className="spin" size={17} /> : <ShieldCheck size={17} />} Confirmar pago y crear acceso</button></footer>
+        <footer><span className="ops-submit-note"><LockKeyhole size={14} /> Server-side provisioning · auditable</span><button type="button" className="ops-button secondary" onClick={onClose}>Cancelar</button><button type="submit" className="ops-button primary" disabled={busy}>{busy ? <LoaderCircle className="spin" size={17} /> : <ShieldCheck size={17} />} Execute provisioning</button></footer>
       </form>
     </ModalShell>
   );
@@ -374,13 +382,16 @@ function NextAction({ clinic, busy, error, onAction }) {
   const config = ACTIONS[clinic.state.onboardingStatus];
   const [confirmation, setConfirmation] = useState('');
 
-  if (clinic.state.billingStatus !== 'verified') return null;
+  if (!['verified', 'not_required'].includes(clinic.state.billingStatus)) return null;
   if (clinic.state.serviceStatus === 'live') {
     return <section className="ops-action-card live-card"><div className="ops-action-icon"><BadgeCheck size={21} /></div><div className="ops-action-copy"><p>Servicio activo</p><h3>La clínica está en producción.</h3><span>Agente, prueba, webhook y fallback quedaron verificados antes de la activación.</span></div></section>;
   }
   if (!config) return null;
 
-  const [action, label, Icon] = config;
+  const [action, configuredLabel, Icon] = config;
+  const label = action === 'start_configuration' && clinic.provisioningDraft?.status === 'error'
+    ? 'Reintentar creación del agente'
+    : configuredLabel;
   const goLive = action === 'go_live';
   const startsConfiguration = action === 'start_configuration';
   const readinessRequired = ['publish_test', 'go_live'].includes(action);
@@ -398,20 +409,23 @@ function NextAction({ clinic, busy, error, onAction }) {
 
 function ClinicDetail({ clinic, busy, error, onClose, onConfirmPayment, onSaveProvisioning, onAction }) {
   const profile = clinic.profile;
+  const accountEnabled = ['verified', 'not_required'].includes(clinic.state.billingStatus);
   return (
     <ModalShell title={clinic.name} eyebrow={`Expediente · ${clinic.stage}`} onClose={onClose} wide>
       <div className="ops-detail-body">
         <div className="ops-detail-summary">
           <article><span><UserRound size={18} /></span><div><small>Propietario</small><strong>{clinic.owner.name || 'Por confirmar'}</strong><p>{clinic.owner.email || 'Sin correo asociado'}</p></div></article>
           <article><span><MapPin size={18} /></span><div><small>Ciudad</small><strong>{profile?.city || 'Por confirmar'}</strong><p>{profile ? 'Capturada en Preview' : 'Pendiente de onboarding'}</p></div></article>
-          <article><span><Banknote size={18} /></span><div><small>Cobro</small><strong>{clinic.payment ? moneyFromCents(clinic.payment.amountCents) : 'No verificado'}</strong><p>{clinic.payment ? PAYMENT_METHODS.find(([key]) => key === clinic.payment.method)?.[1] : 'Requiere revisión manual'}</p></div></article>
+          <article><span><UserRound size={18} /></span><div><small>Acceso</small><strong>{clinic.accessAssignments?.length || clinic.membersCount || 0} usuarios</strong><p>Organización de Clerk</p></div></article>
         </div>
 
-        {clinic.state.billingStatus === 'verified' && <ProvisioningForm clinic={clinic} busy={busy} error={error} onSave={onSaveProvisioning} />}
+        {accountEnabled && <ProvisioningForm clinic={clinic} busy={busy} error={error} onSave={onSaveProvisioning} />}
 
-        {clinic.state.billingStatus !== 'verified'
+        {!accountEnabled
           ? <ConfirmPayment clinic={clinic} busy={busy} error={error} onConfirm={onConfirmPayment} />
           : <NextAction clinic={clinic} busy={busy} error={error} onAction={onAction} />}
+
+        <section className="ops-record-section"><header><UserRound size={17} /><h3>Usuarios de la Location</h3></header><dl>{(clinic.accessAssignments || []).map((assignment) => <div key={assignment.email}><dt>{assignment.role === 'org:admin' ? 'Administrador' : 'Miembro'}</dt><dd>{assignment.email} · {assignment.status === 'active' ? 'Activo' : assignment.status === 'invited' ? 'Invitación enviada' : 'Requiere atención'}</dd></div>)}</dl></section>
 
         {clinic.payment && <section className="ops-record-section"><header><Banknote size={17} /><h3>Pago verificado</h3></header><dl><div><dt>Monto</dt><dd>{moneyFromCents(clinic.payment.amountCents)}</dd></div><div><dt>Referencia</dt><dd>{clinic.payment.reference}</dd></div><div><dt>Fecha del pago</dt><dd>{dateTime(clinic.payment.paidAt)}</dd></div><div><dt>Verificado</dt><dd>{dateTime(clinic.payment.verifiedAt)}</dd></div></dl></section>}
 
@@ -476,10 +490,19 @@ export default function InternalAdmin() {
     setBusy(true);
     setActionError('');
     try {
-      const { clinic } = await createInternalClinic(getToken, body);
-      replaceClinic(clinic);
+      const { clinic: created } = await createInternalClinic(getToken, body);
+      replaceClinic(created);
       setCreating(false);
-      setSelectedId(clinic.id);
+      setSelectedId(created.id);
+      try {
+        const { clinic: provisioned } = await updateInternalClinic(getToken, {
+          organizationId: created.id,
+          action: 'start_configuration',
+        });
+        replaceClinic(provisioned);
+      } catch (provisioningError) {
+        setActionError(`La Location quedó creada, pero el agente no pudo provisionarse: ${provisioningError.message}`);
+      }
     } catch (error) {
       setActionError(error.message);
     } finally {
@@ -502,7 +525,7 @@ export default function InternalAdmin() {
 
   if (!loading && accessError) return <AccessDenied error={accessError} />;
 
-  const unpaid = clinics.filter((clinic) => clinic.state.billingStatus !== 'verified').length;
+  const agentsPending = clinics.filter((clinic) => !clinic.provisioningDraft?.retellAgentId).length;
   const onboarding = clinics.filter((clinic) => clinic.stage === 'Onboarding').length;
   const configuring = clinics.filter((clinic) => clinic.stage === 'Configuración').length;
   const live = clinics.filter((clinic) => clinic.stage === 'En producción').length;
@@ -510,26 +533,33 @@ export default function InternalAdmin() {
   return (
     <main className="ops-shell">
       <header className="ops-topbar">
-        <PortalBrand label="Operaciones" />
+        <div className="ops-console-brand"><PortalBrand label="Admin Console" /><span className="ops-env"><i /> PROD</span></div>
         <nav><a href="/app"><ArrowLeft size={16} /> Ver producto</a><span>{user?.primaryEmailAddress?.emailAddress}</span><UserButton appearance={{ elements: { avatarBox: 'ops-user-avatar' } }} /></nav>
       </header>
       <div className="ops-layout">
-        <section className="ops-heading"><div><p>Control interno · Solo AutiveX</p><h1>Activa clientes sin perder el control.</h1><span>Un pago verificado abre onboarding; nunca producción automáticamente.</span></div><button type="button" onClick={() => { setActionError(''); setCreating(true); }}><Plus size={18} /> Crear cliente pagado</button></section>
+        <section className="ops-heading"><div><p><TerminalSquare size={14} /> Internal operations / tenant control</p><h1>Admin Console</h1><span>Provisionamiento multi-tenant de Clerk, Supabase y Retell.</span></div><button type="button" onClick={() => { setActionError(''); setCreating(true); }}><Plus size={18} /> Provisionar Location</button></section>
+
+        <section className="ops-system-strip" aria-label="Estado de infraestructura">
+          <span><ShieldCheck size={15} /><b>Clerk</b><i>Identity active</i></span>
+          <span><Database size={15} /><b>Supabase</b><i>Workspace store</i></span>
+          <span><ServerCog size={15} /><b>Retell</b><i>Agent provisioning</i></span>
+          <span className="ops-system-scope">Scope <code>production</code></span>
+        </section>
 
         <section className="ops-stats">
-          <StatCard label="Cobros por revisar" value={unpaid} detail="Prospectos registrados" tone="warning" icon={Banknote} />
-          <StatCard label="Onboarding" value={onboarding} detail="Pagados, aún sin configurar" tone="paid" icon={CalendarCheck2} />
-          <StatCard label="Configurando" value={configuring} detail="Agente o integraciones" tone="progress" icon={Settings2} />
-          <StatCard label="En producción" value={live} detail="Servicio activo" tone="live" icon={BadgeCheck} />
+          <StatCard label="Provisioning queue" value={agentsPending} detail="Locations sin agente Retell" tone="warning" icon={Settings2} />
+          <StatCard label="Onboarding" value={onboarding} detail="Locations aún sin configurar" tone="paid" icon={CalendarCheck2} />
+          <StatCard label="Staging" value={configuring} detail="Agentes en validación" tone="progress" icon={Settings2} />
+          <StatCard label="Production" value={live} detail="Tenants activos" tone="live" icon={BadgeCheck} />
         </section>
 
         <section className="ops-queue">
-          <header><div><h2>Clínicas</h2><span>{clinics.length} expedientes</span></div><div className="ops-tools"><label><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Clínica, correo o referencia" /></label><select value={filter} onChange={(event) => setFilter(event.target.value)}><option>Todos</option><option>Por cobrar</option><option>Onboarding</option><option>Configuración</option><option>Activos</option></select></div></header>
-          <div className="ops-table-head"><span>Clínica</span><span>Etapa</span><span>Método</span><span>Antigüedad</span><span /></div>
+          <header><div><h2>Tenant registry</h2><span>{clinics.length} records</span></div><div className="ops-tools"><label><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search tenant or owner…" /></label><select value={filter} onChange={(event) => setFilter(event.target.value)}><option>Todos</option><option>Onboarding</option><option>Configuración</option><option>Activos</option></select></div></header>
+          <div className="ops-table-head"><span>Location</span><span>Etapa</span><span>Usuarios</span><span>Antigüedad</span><span /></div>
           <div className="ops-clinic-list">
             {loading && <div className="ops-list-state"><LoaderCircle className="spin" size={22} /><span>Cargando expedientes…</span></div>}
             {!loading && visible.map((clinic) => <ClinicRow key={clinic.id} clinic={clinic} selected={clinic.id === selectedId} onClick={() => { setActionError(''); setSelectedId(clinic.id); }} />)}
-            {!loading && visible.length === 0 && <div className="ops-list-state"><Building2 size={22} /><strong>No encontramos clínicas.</strong><span>Ajusta la búsqueda o crea el primer cliente pagado.</span></div>}
+            {!loading && visible.length === 0 && <div className="ops-list-state"><Building2 size={22} /><strong>No encontramos Locations.</strong><span>Ajusta la búsqueda o crea la primera Location.</span></div>}
           </div>
         </section>
       </div>

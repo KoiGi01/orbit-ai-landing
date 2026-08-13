@@ -30,6 +30,9 @@ const ERROR_MESSAGES = {
   provisioning_not_allowed: 'Primero inicia la configuración de esta clínica.',
   provisioning_not_ready: 'Falta completar y verificar el provisionamiento antes de avanzar.',
   invalid_email: 'Escribe un correo válido.',
+  invalid_location_name: 'Escribe el nombre de la Location.',
+  invalid_location_role: 'Selecciona un rol válido para el usuario.',
+  too_many_location_users: 'Una Location puede tener hasta 25 usuarios en este MVP.',
   payment_already_verified: 'Este pago ya fue verificado.',
   transition_not_allowed: 'Ese cambio todavía no está permitido para esta clínica.',
   clinic_confirmation_mismatch: 'El nombre escrito no coincide con la clínica.',
@@ -41,6 +44,9 @@ const ERROR_MESSAGES = {
   retell_provisioning_failed: 'Retell no pudo crear el agente borrador. No se activó producción.',
   provisioning_webhook_not_configured: 'El webhook de n8n tiene URL, pero le falta su secreto de firma.',
   provisioning_webhook_failed: 'El agente quedó guardado, pero n8n no confirmó el evento. Intenta iniciar la configuración nuevamente.',
+  workspace_agent_not_ready: 'El agente de esta clínica todavía no está listo para probarse.',
+  workspace_test_call_not_allowed: 'Esta cuenta todavía no puede iniciar llamadas de prueba.',
+  workspace_test_call_failed: 'Retell no pudo iniciar la llamada de prueba. Intenta de nuevo.',
 };
 
 export class ControlApiError extends Error {
@@ -84,6 +90,13 @@ export function saveWorkspaceProfile(getToken, profile) {
   return controlRequest(getToken, '/api/workspace', {
     method: 'PUT',
     body: JSON.stringify({ profile }),
+  });
+}
+
+export function createWorkspaceTestCall(getToken, scenario) {
+  return controlRequest(getToken, '/api/workspace', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'create_test_call', scenario }),
   });
 }
 

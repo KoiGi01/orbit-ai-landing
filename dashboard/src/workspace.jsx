@@ -22,7 +22,7 @@ import {
   Stethoscope,
   X,
 } from 'lucide-react';
-import { saveWorkspaceProfile } from './control-api';
+import { createWorkspaceTestCall, saveWorkspaceProfile } from './control-api';
 import './workspace.css';
 
 const SALES_URL = import.meta.env.VITE_SALES_CONTACT_URL
@@ -361,7 +361,7 @@ function scenarioFromGoal(goal, profile) {
   };
 }
 
-function CallExperience({ profile, scenario, onClose, onCompleted }) {
+export function CallExperience({ profile, scenario, onClose, onCompleted = () => {}, getToken = null }) {
   const clientRef = useRef(null);
   const transcriptRef = useRef([]);
   const completionRef = useRef(false);
@@ -383,13 +383,16 @@ function CallExperience({ profile, scenario, onClose, onCompleted }) {
     setError('');
     setTranscript([]);
     try {
-      const response = await fetch('/api/retell/token', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ type: 'main', scenario }),
-      });
-      if (!response.ok) throw new Error('token_failed');
-      const { accessToken } = await response.json();
+      const { accessToken } = getToken
+        ? await createWorkspaceTestCall(getToken, scenario)
+        : await fetch('/api/retell/token', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ type: 'main', scenario }),
+        }).then(async (response) => {
+          if (!response.ok) throw new Error('token_failed');
+          return response.json();
+        });
       const client = new RetellWebClient();
       clientRef.current = client;
       client.on('call_started', () => setPhase('live'));
