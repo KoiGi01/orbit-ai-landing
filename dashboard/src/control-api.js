@@ -18,6 +18,7 @@ const ERROR_MESSAGES = {
   invalid_services: 'Agrega al menos un servicio principal.',
   invalid_call_goals: 'Agrega al menos un motivo de llamada.',
   invalid_scheduling_provider: 'Selecciona cómo administra actualmente su agenda.',
+  invalid_voice_provider: 'La voz seleccionada no pertenece a ese proveedor.',
   invalid_payment_amount: 'Escribe un monto válido.',
   invalid_payment_reference: 'Agrega una referencia o folio del pago.',
   invalid_payment_date: 'Selecciona la fecha en que se acreditó el pago.',

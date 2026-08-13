@@ -71,11 +71,38 @@ test('creates an unpublished Retell draft from the configured template', async (
   assert.equal(requests[1].body.default_dynamic_variables.workspace_id, 'workspace-123');
   assert.equal(requests[2].body.response_engine.llm_id, 'llm_new_123');
   assert.equal(requests[2].body.language, 'es-419');
-  assert.equal(requests[2].body.voice_model, 'eleven_flash_v2_5');
+  assert.equal(requests[2].body.voice_id, 'cartesia-Sofia');
+  assert.equal(requests[2].body.voice_emotion, 'calm');
+  assert.equal(requests[2].body.voice_model, undefined);
   assert.equal(requests[2].body.enable_dynamic_responsiveness, true);
   assert.equal(result.agentId, 'agent_new_123');
   assert.equal(result.isPublished, false);
   assert.equal(result.promptTemplateVersion, RETELL_PROMPT_TEMPLATE_VERSION);
+  assert.equal(result.voiceId, 'cartesia-Sofia');
+});
+
+test('keeps the template voice model only for an ElevenLabs selection', async () => {
+  const requests = [];
+  const fetchImpl = async (url, options = {}) => {
+    requests.push({ url, body: options.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/get-agent/agent_template_123')) return jsonResponse({ agent_id: 'agent_template_123', voice_id: '11labs-Claudia', voice_model: 'eleven_flash_v2_5' });
+    if (url.endsWith('/create-retell-llm')) return jsonResponse({ llm_id: 'llm_new_123' });
+    if (url.endsWith('/create-agent')) return jsonResponse({ agent_id: 'agent_new_123' });
+    throw new Error(`unexpected_request:${url}`);
+  };
+
+  await createRetellAgentDraft({
+    workspaceId: 'workspace-123',
+    clerkOrganizationId: 'org_123',
+    profile: { clinicName: 'Negocio Ejemplo', voiceProvider: 'elevenlabs', voicePreset: 'gaby_warm' },
+  }, {
+    env: { RETELL_API_KEY: 'test-key', RETELL_PROVISIONING_TEMPLATE_AGENT_ID: 'agent_template_123' },
+    fetchImpl,
+  });
+
+  assert.equal(requests[2].body.voice_id, '11labs-Gaby');
+  assert.equal(requests[2].body.voice_model, 'eleven_flash_v2_5');
+  assert.equal(requests[2].body.voice_emotion, undefined);
 });
 
 test('signs the shared n8n provisioning event and keeps its id deterministic', async () => {

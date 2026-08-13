@@ -61,12 +61,20 @@ const SCHEDULING_PROVIDERS = [
   ['manual', 'Confirmación manual'],
 ];
 
-const VOICE_PRESETS = [
-  ['andrea_natural', 'Andrea · Natural y profesional'],
-  ['gaby_warm', 'Gaby · Joven y cálida'],
-  ['sofia_calm', 'Sofía · Serena y formal'],
-  ['alejandro_natural', 'Alejandro · Natural y profesional'],
+const VOICE_PROVIDERS = [
+  ['cartesia', 'Cartesia'],
+  ['elevenlabs', 'ElevenLabs'],
+  ['retell', 'Retell'],
 ];
+
+const VOICES_BY_PROVIDER = {
+  cartesia: [['sofia_calm', 'Sofía · Serena y natural']],
+  elevenlabs: [['gaby_warm', 'Gaby · Joven y cálida']],
+  retell: [
+    ['andrea_natural', 'Andrea · Natural y profesional'],
+    ['alejandro_natural', 'Alejandro · Natural y profesional'],
+  ],
+};
 
 const STAGE_TONES = {
   'Registro incompleto': 'neutral',
@@ -132,7 +140,8 @@ const EMPTY_CLIENT = {
   services: '',
   callGoals: '',
   schedulingProvider: 'none',
-  voicePreset: 'andrea_natural',
+  voiceProvider: 'cartesia',
+  voicePreset: 'sofia_calm',
   internalNotes: '',
   memberEmails: '',
   source: 'local_sales',
@@ -250,6 +259,7 @@ export function NewClientModal({ busy, error, onClose, onCreate }) {
         services: splitList(form.services),
         callGoals: splitList(form.callGoals),
         schedulingProvider: form.schedulingProvider,
+        voiceProvider: form.voiceProvider,
         voicePreset: form.voicePreset,
         internalNotes: form.internalNotes,
       },
@@ -286,7 +296,8 @@ export function NewClientModal({ busy, error, onClose, onCreate }) {
             <label className="ops-form-wide"><span>Qué hace el negocio</span><textarea required value={form.description} onChange={(event) => update('description', event.target.value)} placeholder="Describe en lenguaje simple qué ofrece, a quién atiende y qué no debe prometer el agente." /></label>
             <label><span>Horarios</span><textarea required value={form.businessHours} onChange={(event) => update('businessHours', event.target.value)} placeholder="Lun–Vie 9:00–18:00; Sáb 9:00–14:00" /></label>
             <label><span>Agenda actual</span><select value={form.schedulingProvider} onChange={(event) => update('schedulingProvider', event.target.value)}>{SCHEDULING_PROVIDERS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-            <label><span>Voz del agente</span><select value={form.voicePreset} onChange={(event) => update('voicePreset', event.target.value)}>{VOICE_PRESETS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><small>Andrea es el default recomendado. La voz se aplica al crear el agente.</small></label>
+            <label><span>Proveedor de voz</span><select value={form.voiceProvider} onChange={(event) => { const provider = event.target.value; setForm((current) => ({ ...current, voiceProvider: provider, voicePreset: VOICES_BY_PROVIDER[provider][0][0] })); }}>{VOICE_PROVIDERS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><small>Cartesia es el default recomendado para español.</small></label>
+            <label><span>Voz del agente</span><select value={form.voicePreset} onChange={(event) => update('voicePreset', event.target.value)}>{VOICES_BY_PROVIDER[form.voiceProvider].map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><small>La voz se aplica al crear el agente privado.</small></label>
             <label><span>Servicios principales</span><textarea required value={form.services} onChange={(event) => update('services', event.target.value)} placeholder="Consulta general, implantes, urgencias" /></label>
             <label><span>Motivos de llamada</span><textarea required value={form.callGoals} onChange={(event) => update('callGoals', event.target.value)} placeholder="Agendar, precios, reprogramar, urgencias" /></label>
             <label className="ops-form-wide"><span>Notas internas · opcional</span><textarea value={form.internalNotes} onChange={(event) => update('internalNotes', event.target.value)} placeholder="Restricciones, acuerdos comerciales o contexto que solo debe ver AutiveX." /></label>
