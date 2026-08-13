@@ -203,6 +203,52 @@
 
 @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2s; } }
 
+/* Admin information architecture */
+.ops-primary-nav { height: 58px; position: sticky; z-index: 55; top: 62px; padding: 0 max(28px, calc((100vw - 1440px) / 2)); display: flex; align-items: stretch; gap: 6px; background: rgba(7, 14, 27, .96); border-bottom: 1px solid #202c40; backdrop-filter: blur(18px); }
+.ops-primary-nav button { min-width: 112px; padding: 0 18px; color: #8fa0b9; background: transparent; border: 0; border-bottom: 2px solid transparent; font: inherit; font-size: 13px; font-weight: 720; cursor: pointer; }
+.ops-primary-nav button:hover { color: #dce7f8; }
+.ops-primary-nav button.active { color: #fff; border-bottom-color: #47e6de; }
+.ops-business-kpis { margin-top: 34px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.ops-business-kpis .ops-stat { min-height: 155px; }
+.ops-business-kpis .ops-stat small, .ops-business-kpis .ops-stat p { font-size: 12px; }
+.ops-business-kpis .ops-stat strong { font-size: 30px; }
+.ops-overview-grid { margin-top: 16px; display: grid; grid-template-columns: 1.45fr 1fr; gap: 16px; }
+.ops-chart-card { min-height: 330px; padding: 25px; background: #0b1220; border: 1px solid #202c40; border-radius: 19px; }
+.ops-chart-card > header { display: flex; justify-content: space-between; color: #47e6de; }
+.ops-chart-card header p { margin: 0 0 5px; color: #7f90aa; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; }
+.ops-chart-card h2 { margin: 0; color: #e7edf7; font-size: 23px; }
+.ops-stage-chart { margin-top: 28px; display: grid; gap: 18px; }
+.ops-stage-chart > div { display: grid; grid-template-columns: 145px 1fr 25px; align-items: center; gap: 13px; color: #9fb0ca; font-size: 12px; }
+.ops-stage-chart i { height: 9px; overflow: hidden; background: #18243a; border-radius: 99px; }
+.ops-stage-chart b { height: 100%; display: block; background: linear-gradient(90deg, #1859ff, #47e6de); border-radius: inherit; }
+.ops-stage-chart strong { color: #fff; font-size: 14px; text-align: right; }
+.ops-data-status { min-height: 230px; display: grid; place-content: center; gap: 10px; color: #8fa0b9; }
+.ops-data-status strong { color: #f4f7fc; font-size: 18px; }
+.ops-data-status p { max-width: 390px; margin: 0; font-size: 13px; line-height: 1.55; }
+.ops-data-status span { color: #47e6de; font-size: 12px; }
+.ops-overview-action { margin-top: 16px; padding: 23px 25px; display: flex; align-items: center; justify-content: space-between; gap: 20px; background: linear-gradient(120deg, #10294f, #0b1220); border: 1px solid #263d61; border-radius: 18px; }
+.ops-overview-action div { display: grid; gap: 5px; }
+.ops-overview-action strong { font-size: 17px; }.ops-overview-action span { color: #9fb0ca; font-size: 12px; }
+.ops-overview-action button { min-height: 43px; padding: 0 15px; display: flex; align-items: center; gap: 8px; color: #071631; background: #47e6de; border: 0; border-radius: 10px; font-weight: 800; cursor: pointer; }
+.ops-simple-view { min-height: 420px; }.ops-agent-grid { padding: 18px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.ops-agent-grid button { min-height: 88px; padding: 16px; display: grid; grid-template-columns: 38px 1fr auto; align-items: center; gap: 13px; color: #dfe8f6; background: #0e1727; border: 1px solid #202c40; border-radius: 13px; text-align: left; cursor: pointer; }
+.ops-agent-grid button > span { min-width: 0; display: grid; gap: 5px; }.ops-agent-grid small { overflow: hidden; color: #7f90aa; text-overflow: ellipsis; }.ops-agent-grid i { color: #47e6de; font-size: 11px; font-style: normal; }
+.ops-activity-feed { padding: 10px 24px 25px; }.ops-activity-feed > div { min-height: 64px; display: grid; grid-template-columns: 10px 1fr; align-items: center; gap: 14px; border-bottom: 1px solid #202c40; }.ops-activity-feed i { width: 8px; height: 8px; background: #47e6de; border-radius: 50%; }.ops-activity-feed span { display: grid; gap: 5px; }.ops-activity-feed small { color: #7f90aa; font-size: 11px; text-transform: capitalize; }
+.location-management > header span { margin-left: auto; color: #7587a2; font-size: 11px; }
+.ops-management-grid { display: grid; grid-template-columns: repeat(3, 1fr) auto; align-items: end; gap: 11px; }
+.ops-management-grid label { display: grid; gap: 7px; color: #7f90aa; font-size: 11px; font-weight: 700; }
+.ops-management-grid input, .ops-management-grid select, .ops-danger-zone input { min-height: 43px; padding: 0 11px; color: #e7edf7; background: #0e1727; border: 1px solid #2a3952; border-radius: 9px; font: inherit; font-size: 13px; }
+.ops-member-manager { margin-top: 22px; padding-top: 20px; border-top: 1px solid #26344a; }.ops-member-manager > div:first-child { margin-bottom: 13px; display: grid; gap: 4px; }.ops-member-manager > div:first-child span { color: #7f90aa; font-size: 11px; }
+.ops-stage-manager { margin-top: 18px; padding-top: 18px; display: grid; grid-template-columns: 1fr 210px auto; align-items: end; gap: 11px; border-top: 1px solid #26344a; }.ops-stage-manager > div { display: grid; gap: 4px; }.ops-stage-manager span { color: #7f90aa; font-size: 11px; }.ops-stage-manager select { min-height: 43px; padding: 0 11px; color: #e7edf7; background: #0e1727; border: 1px solid #2a3952; border-radius: 9px; font: inherit; font-size: 13px; }
+.member-grid { grid-template-columns: 1.2fr 1fr 1fr 1fr auto; }
+.ops-danger-zone { margin-top: 22px; padding: 17px; display: grid; grid-template-columns: 1fr minmax(180px, .7fr) auto auto; align-items: center; gap: 10px; background: rgba(255, 90, 78, .06); border: 1px solid rgba(255, 112, 88, .24); border-radius: 12px; }.ops-danger-zone > div { display: grid; gap: 4px; }.ops-danger-zone span { color: #a7b5c9; font-size: 10px; }.ops-button.bypass { color: #ffd36c; background: rgba(255, 202, 72, .08); border: 1px solid rgba(255, 202, 72, .3); }.ops-button.danger { color: #fff; background: #a73529; border: 1px solid #c7493c; }
+
+/* Readability overrides */
+.ops-clinic-main strong { font-size: 15px; }.ops-clinic-main small, .ops-method, .ops-clinic-row time { font-size: 12px; }.ops-stage { font-size: 11px; }.ops-record-section h3 { font-size: 16px; }.ops-record-section dt { font-size: 11px; }.ops-record-section dd { font-size: 13px; }.ops-action-copy span { font-size: 12px; }.ops-form-grid label, .ops-confirm-name { font-size: 12px; }.ops-form-grid input, .ops-form-grid select, .ops-form-grid textarea { font-size: 13px; }
+
+@media (max-width: 950px) { .ops-business-kpis { grid-template-columns: 1fr 1fr; }.ops-overview-grid { grid-template-columns: 1fr; }.ops-management-grid, .member-grid, .ops-danger-zone, .ops-stage-manager { grid-template-columns: 1fr 1fr; }.ops-agent-grid { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { .ops-primary-nav { padding: 0 10px; overflow-x: auto; }.ops-primary-nav button { min-width: 94px; padding: 0 12px; }.ops-business-kpis { grid-template-columns: 1fr; }.ops-management-grid, .member-grid, .ops-danger-zone, .ops-stage-manager { grid-template-columns: 1fr; }.ops-overview-action { align-items: stretch; flex-direction: column; }.ops-stage-chart > div { grid-template-columns: 110px 1fr 20px; } }
+
 /* Dark operations console */
 .ops-shell {
   --ops-bg: #050914;

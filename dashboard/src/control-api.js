@@ -40,6 +40,10 @@ const ERROR_MESSAGES = {
   payment_already_verified: 'Este pago ya fue verificado.',
   transition_not_allowed: 'Ese cambio todavía no está permitido para esta clínica.',
   clinic_confirmation_mismatch: 'El nombre escrito no coincide con la clínica.',
+  member_not_found: 'Ese miembro todavía no tiene una cuenta activa.',
+  member_move_same_location: 'Selecciona otra Location para mover al miembro.',
+  member_move_requires_active_user: 'Solo puedes mover miembros que ya aceptaron su invitación.',
+  invalid_stage_override: 'Selecciona una etapa válida.',
   multiple_prospect_organizations: 'Ese correo tiene más de una clínica prospecto. Revísalo manualmente.',
   existing_customer_requires_review: 'Ese correo ya pertenece a un cliente pagado. Revisa su cuenta antes de crear otra clínica.',
   workspace_not_provisioned: 'El workspace de Supabase todavía no está preparado para esta cuenta.',
@@ -130,6 +134,13 @@ export function createInternalClinic(getToken, body) {
 export function updateInternalClinic(getToken, body) {
   return controlRequest(getToken, '/api/internal/clinics', {
     method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteInternalClinic(getToken, body) {
+  return controlRequest(getToken, '/api/internal/clinics', {
+    method: 'DELETE',
     body: JSON.stringify(body),
   });
 }

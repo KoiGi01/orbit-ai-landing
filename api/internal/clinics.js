@@ -1,11 +1,16 @@
 import {
+  bypassClinicLive,
   confirmManualPayment,
   createLocation,
+  deleteClinicRecord,
   errorResponse,
   listClinics,
+  manageClinicMember,
+  overrideClinicStage,
   saveProvisioning,
   startClinicConfiguration,
   transitionClinic,
+  updateClinicRecord,
 } from '../../lib/server/clerk-control.js';
 import { createDatabase } from '../../lib/server/database.js';
 
@@ -24,7 +29,7 @@ async function withDatabase(callback) {
 }
 
 export default async function handler(req, res) {
-  if (!['GET', 'POST', 'PATCH'].includes(req.method)) {
+  if (!['GET', 'POST', 'PATCH', 'DELETE'].includes(req.method)) {
     sendJson(res, 405, { error: 'method_not_allowed' });
     return;
   }
@@ -49,6 +54,11 @@ export default async function handler(req, res) {
     }
 
     const { organizationId, action } = req.body || {};
+    if (req.method === 'DELETE') {
+      const result = await withDatabase((database) => deleteClinicRecord(authorization, organizationId, req.body?.confirmation, database));
+      sendJson(res, 200, result);
+      return;
+    }
     let clinic;
     if (action === 'confirm_payment') {
       clinic = await withDatabase((database) => confirmManualPayment(
@@ -70,6 +80,14 @@ export default async function handler(req, res) {
         organizationId,
         database,
       ));
+    } else if (action === 'update_location') {
+      clinic = await updateClinicRecord(authorization, organizationId, req.body?.location);
+    } else if (action === 'manage_member') {
+      clinic = await manageClinicMember(authorization, organizationId, req.body?.member);
+    } else if (action === 'bypass_live') {
+      clinic = await bypassClinicLive(authorization, organizationId, req.body?.confirmation);
+    } else if (action === 'override_stage') {
+      clinic = await overrideClinicStage(authorization, organizationId, req.body?.stage);
     } else {
       clinic = await transitionClinic(authorization, organizationId, action, req.body?.confirmation);
     }

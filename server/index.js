@@ -3,18 +3,23 @@ import { readFile, stat } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 import {
+  bypassClinicLive,
   confirmManualPayment,
   createWorkspaceTestCall,
   createLocation,
+  deleteClinicRecord,
   errorResponse as controlErrorResponse,
   getWorkspace,
   getWorkspaceVoiceCatalog,
   listClinics,
+  manageClinicMember,
+  overrideClinicStage,
   saveProvisioning,
   saveProspectProfile,
   saveWorkspaceVoice,
   startClinicConfiguration,
   transitionClinic,
+  updateClinicRecord,
 } from '../lib/server/clerk-control.js';
 import { deliverLead, normalizeLead, validLead } from '../lib/server/lead-delivery.js';
 import { createDatabase } from '../lib/server/database.js';
@@ -241,7 +246,7 @@ async function handleWorkspace(req, res) {
 }
 
 async function handleInternalClinics(req, res) {
-  if (!['GET', 'POST', 'PATCH'].includes(req.method)) {
+  if (!['GET', 'POST', 'PATCH', 'DELETE'].includes(req.method)) {
     sendJson(res, 405, { error: 'method_not_allowed' });
     return;
   }
@@ -255,6 +260,12 @@ async function handleInternalClinics(req, res) {
     }
 
     const body = await readJson(req);
+    if (req.method === 'DELETE') {
+      const database = createDatabase();
+      try { sendJson(res, 200, await deleteClinicRecord(req.headers.authorization, body.organizationId, body.confirmation, database)); }
+      finally { await database.close(); }
+      return;
+    }
     if (req.method === 'POST') {
       const database = createDatabase();
       let clinic;
@@ -293,6 +304,14 @@ async function handleInternalClinics(req, res) {
       } finally {
         await database.close();
       }
+    } else if (body.action === 'update_location') {
+      clinic = await updateClinicRecord(req.headers.authorization, body.organizationId, body.location);
+    } else if (body.action === 'manage_member') {
+      clinic = await manageClinicMember(req.headers.authorization, body.organizationId, body.member);
+    } else if (body.action === 'bypass_live') {
+      clinic = await bypassClinicLive(req.headers.authorization, body.organizationId, body.confirmation);
+    } else if (body.action === 'override_stage') {
+      clinic = await overrideClinicStage(req.headers.authorization, body.organizationId, body.stage);
     } else {
       clinic = await transitionClinic(
         req.headers.authorization,

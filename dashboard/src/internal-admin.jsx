@@ -3,6 +3,7 @@ import { UserButton, useAuth, useUser } from '@clerk/react';
 import {
   ArrowLeft,
   ArrowRight,
+  BarChart3,
   BadgeCheck,
   Banknote,
   Building2,
@@ -20,15 +21,19 @@ import {
   LockKeyhole,
   Mail,
   MapPin,
+  MoveRight,
   Plus,
   Search,
   Settings2,
   ShieldCheck,
+  Trash2,
+  UserPlus,
   UserRound,
   X,
 } from 'lucide-react';
 import {
   createInternalClinic,
+  deleteInternalClinic,
   getInternalClinics,
   updateInternalClinic,
 } from './control-api';
@@ -428,7 +433,41 @@ function NextAction({ clinic, busy, error, onAction }) {
   );
 }
 
-function ClinicDetail({ clinic, busy, error, onClose, onConfirmPayment, onSaveProvisioning, onAction }) {
+function LocationManagement({ clinic, clinics, busy, onEdit, onMember, onStage, onBypass, onDelete }) {
+  const [edit, setEdit] = useState({ name: clinic.name, city: clinic.profile?.city || '', industry: clinic.profile?.industry || '' });
+  const [member, setMember] = useState({ email: '', role: 'org:member', operation: 'add', targetOrganizationId: '' });
+  const [confirmation, setConfirmation] = useState('');
+  const [stage, setStage] = useState('configuring');
+  useEffect(() => setEdit({ name: clinic.name, city: clinic.profile?.city || '', industry: clinic.profile?.industry || '' }), [clinic.id, clinic.name]);
+  return <section className="ops-record-section location-management">
+    <header><Settings2 size={19} /><h3>Administrar Location</h3><span>Cambios reales en Clerk</span></header>
+    <form className="ops-management-grid" onSubmit={(event) => { event.preventDefault(); onEdit(edit); }}>
+      <label><span>Nombre</span><input value={edit.name} onChange={(event) => setEdit({ ...edit, name: event.target.value })} /></label>
+      <label><span>Ciudad</span><input value={edit.city} onChange={(event) => setEdit({ ...edit, city: event.target.value })} /></label>
+      <label><span>Industria</span><input value={edit.industry} onChange={(event) => setEdit({ ...edit, industry: event.target.value })} /></label>
+      <button className="ops-button secondary" disabled={busy}>Guardar datos</button>
+    </form>
+    <div className="ops-member-manager">
+      <div><strong>Acceso y miembros</strong><span>Invita, cambia el rol o mueve una cuenta activa.</span></div>
+      <div className="ops-management-grid member-grid">
+        <label><span>Correo</span><input type="email" value={member.email} onChange={(event) => setMember({ ...member, email: event.target.value })} placeholder="equipo@clinica.mx" /></label>
+        <label><span>Acción</span><select value={member.operation} onChange={(event) => setMember({ ...member, operation: event.target.value })}><option value="add">Agregar / cambiar rol</option><option value="move">Mover a otra Location</option><option value="remove">Quitar acceso</option></select></label>
+        {member.operation !== 'remove' && <label><span>Rol</span><select value={member.role} onChange={(event) => setMember({ ...member, role: event.target.value })}><option value="org:member">Miembro</option><option value="org:admin">Administrador</option></select></label>}
+        {member.operation === 'move' && <label><span>Destino</span><select value={member.targetOrganizationId} onChange={(event) => setMember({ ...member, targetOrganizationId: event.target.value })}><option value="">Selecciona Location</option>{clinics.filter((item) => item.id !== clinic.id).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
+        <button type="button" className="ops-button secondary" disabled={busy || !member.email || (member.operation === 'move' && !member.targetOrganizationId)} onClick={() => onMember(member)}>{member.operation === 'move' ? <MoveRight size={16} /> : <UserPlus size={16} />} Aplicar</button>
+      </div>
+    </div>
+    <div className="ops-stage-manager"><div><strong>Etapa y acceso</strong><span>Cambia manualmente el ciclo de vida del tenant.</span></div><select value={stage} onChange={(event) => setStage(event.target.value)}><option value="prospect">Prospecto</option><option value="onboarding">Onboarding</option><option value="configuring">Configuración</option><option value="review">Revisión</option><option value="live">Producción</option><option value="suspended">Suspendido</option></select><button type="button" className="ops-button secondary" disabled={busy} onClick={() => onStage(stage)}>Actualizar etapa</button></div>
+    <div className="ops-danger-zone">
+      <div><strong>Acciones avanzadas</strong><span>Escribe el nombre exacto para habilitarlas.</span></div>
+      <input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder={clinic.name} />
+      <button type="button" className="ops-button bypass" disabled={busy || confirmation !== clinic.name || clinic.state.serviceStatus === 'live'} onClick={() => onBypass(confirmation)}>Bypass → habilitar ahora</button>
+      <button type="button" className="ops-button danger" disabled={busy || confirmation !== clinic.name} onClick={() => onDelete(confirmation)}><Trash2 size={16} /> Eliminar Location</button>
+    </div>
+  </section>;
+}
+
+function ClinicDetail({ clinic, clinics, busy, error, onClose, onConfirmPayment, onSaveProvisioning, onAction, onEdit, onMember, onStage, onBypass, onDelete }) {
   const profile = clinic.profile;
   const accountEnabled = ['verified', 'not_required'].includes(clinic.state.billingStatus);
   return (
@@ -439,6 +478,8 @@ function ClinicDetail({ clinic, busy, error, onClose, onConfirmPayment, onSavePr
           <article><span><MapPin size={18} /></span><div><small>Ciudad</small><strong>{profile?.city || 'Por confirmar'}</strong><p>{profile ? 'Capturada en Preview' : 'Pendiente de onboarding'}</p></div></article>
           <article><span><UserRound size={18} /></span><div><small>Acceso</small><strong>{clinic.accessAssignments?.length || clinic.membersCount || 0} usuarios</strong><p>Organización de Clerk</p></div></article>
         </div>
+
+        <LocationManagement clinic={clinic} clinics={clinics} busy={busy} onEdit={onEdit} onMember={onMember} onStage={onStage} onBypass={onBypass} onDelete={onDelete} />
 
         {accountEnabled && <ProvisioningForm clinic={clinic} busy={busy} error={error} onSave={onSaveProvisioning} />}
 
@@ -464,6 +505,27 @@ function AccessDenied({ error }) {
   );
 }
 
+function AdminOverview({ clinics, onOpenLocations }) {
+  const revenue = clinics.reduce((sum, clinic) => sum + Number(clinic.payment?.amountCents || 0), 0);
+  const live = clinics.filter((clinic) => clinic.state.serviceStatus === 'live').length;
+  const leads = clinics.filter((clinic) => ['Registro incompleto', 'Prospecto en demo'].includes(clinic.stage)).length;
+  const agents = clinics.filter((clinic) => clinic.provisioningDraft?.retellAgentId || clinic.provisioning?.retellAgentId).length;
+  const stages = ['Registro incompleto', 'Prospecto en demo', 'Onboarding', 'Configuración', 'En producción'];
+  return <>
+    <section className="ops-business-kpis">
+      <StatCard label="Locations" value={clinics.length} detail={`${live} activas en producción`} tone="live" icon={Building2} />
+      <StatCard label="Leads registrados" value={leads} detail="Prospectos e intake incompleto" tone="paid" icon={UserRound} />
+      <StatCard label="Ingresos registrados" value={moneyFromCents(revenue)} detail="Pagos verificados en consola" tone="warning" icon={Banknote} />
+      <StatCard label="Agentes creados" value={agents} detail={`${Math.max(agents - live, 0)} en staging o configuración`} tone="progress" icon={ServerCog} />
+    </section>
+    <section className="ops-overview-grid">
+      <article className="ops-chart-card"><header><div><p>Pipeline operativo</p><h2>Locations por etapa</h2></div><BarChart3 size={20} /></header><div className="ops-stage-chart">{stages.map((stage) => { const count = clinics.filter((clinic) => clinic.stage === stage).length; return <div key={stage}><span>{stage}</span><i><b style={{ width: `${clinics.length ? Math.max((count / clinics.length) * 100, count ? 8 : 0) : 0}%` }} /></i><strong>{count}</strong></div>; })}</div></article>
+      <article className="ops-chart-card spend-card"><header><div><p>Infraestructura</p><h2>Uso y gasto de agentes</h2></div><ServerCog size={20} /></header><div className="ops-data-status"><strong>Sin fuente de costos conectada</strong><p>Retell todavía no entrega consumo de tokens/minutos a esta consola. No mostramos estimaciones falsas.</p><span>{agents} agentes identificados · {live} activos</span></div></article>
+    </section>
+    <section className="ops-overview-action"><div><strong>Administración de Locations</strong><span>Edita tenants, miembros, etapas y accesos desde un solo lugar.</span></div><button type="button" onClick={onOpenLocations}>Abrir Locations <ArrowRight size={17} /></button></section>
+  </>;
+}
+
 export default function InternalAdmin() {
   const { getToken } = useAuth();
   const { user } = useUser();
@@ -476,6 +538,7 @@ export default function InternalAdmin() {
   const [filter, setFilter] = useState('Todos');
   const [selectedId, setSelectedId] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [section, setSection] = useState('Resumen');
 
   const load = async () => {
     setLoading(true);
@@ -537,11 +600,25 @@ export default function InternalAdmin() {
     try {
       const { clinic } = await updateInternalClinic(getToken, { organizationId: selectedId, ...body });
       replaceClinic(clinic);
+      if (body.action === 'manage_member') {
+        const refreshed = await getInternalClinics(getToken);
+        setClinics(refreshed.clinics);
+      }
     } catch (error) {
       setActionError(error.message);
     } finally {
       setBusy(false);
     }
+  };
+
+  const removeClinic = async (confirmation) => {
+    setBusy(true); setActionError('');
+    try {
+      await deleteInternalClinic(getToken, { organizationId: selectedId, confirmation });
+      setClinics((current) => current.filter((clinic) => clinic.id !== selectedId));
+      setSelectedId(null);
+    } catch (error) { setActionError(error.message); }
+    finally { setBusy(false); }
   };
 
   if (!loading && accessError) return <AccessDenied error={accessError} />;
@@ -557,8 +634,11 @@ export default function InternalAdmin() {
         <div className="ops-console-brand"><PortalBrand label="Admin Console" /><span className="ops-env"><i /> PROD</span></div>
         <nav><a href="/app"><ArrowLeft size={16} /> Ver producto</a><span>{user?.primaryEmailAddress?.emailAddress}</span><UserButton appearance={{ elements: { avatarBox: 'ops-user-avatar' } }} /></nav>
       </header>
+      <nav className="ops-primary-nav" aria-label="Navegación de Admin Console">
+        {['Resumen', 'Locations', 'Agentes', 'Actividad'].map((item) => <button type="button" className={section === item ? 'active' : ''} key={item} onClick={() => setSection(item)}>{item}</button>)}
+      </nav>
       <div className="ops-layout">
-        <section className="ops-heading"><div><p><TerminalSquare size={14} /> Internal operations / tenant control</p><h1>Admin Console</h1><span>Provisionamiento multi-tenant de Clerk, Supabase y Retell.</span></div><button type="button" onClick={() => { setActionError(''); setCreating(true); }}><Plus size={18} /> Provisionar Location</button></section>
+        <section className="ops-heading"><div><p><TerminalSquare size={14} /> Internal operations / {section.toLowerCase()}</p><h1>{section === 'Resumen' ? 'Admin Console' : section}</h1><span>{section === 'Resumen' ? 'Estado comercial y operativo de AutiveX.' : section === 'Locations' ? 'Clientes, miembros, acceso y ciclo de vida.' : section === 'Agentes' ? 'Inventario y estado de agentes Retell.' : 'Auditoría reciente de operaciones.'}</span></div><button type="button" onClick={() => { setActionError(''); setCreating(true); }}><Plus size={18} /> Nueva Location</button></section>
 
         <section className="ops-system-strip" aria-label="Estado de infraestructura">
           <span><ShieldCheck size={15} /><b>Clerk</b><i>Identity active</i></span>
@@ -567,7 +647,9 @@ export default function InternalAdmin() {
           <span className="ops-system-scope">Scope <code>production</code></span>
         </section>
 
-        <section className="ops-stats">
+        {section === 'Resumen' && <AdminOverview clinics={clinics} onOpenLocations={() => setSection('Locations')} />}
+
+        {section === 'Locations' && <><section className="ops-stats">
           <StatCard label="Provisioning queue" value={agentsPending} detail="Locations sin agente Retell" tone="warning" icon={Settings2} />
           <StatCard label="Onboarding" value={onboarding} detail="Locations aún sin configurar" tone="paid" icon={CalendarCheck2} />
           <StatCard label="Staging" value={configuring} detail="Agentes en validación" tone="progress" icon={Settings2} />
@@ -582,10 +664,12 @@ export default function InternalAdmin() {
             {!loading && visible.map((clinic) => <ClinicRow key={clinic.id} clinic={clinic} selected={clinic.id === selectedId} onClick={() => { setActionError(''); setSelectedId(clinic.id); }} />)}
             {!loading && visible.length === 0 && <div className="ops-list-state"><Building2 size={22} /><strong>No encontramos Locations.</strong><span>Ajusta la búsqueda o crea la primera Location.</span></div>}
           </div>
-        </section>
+        </section></>}
+        {section === 'Agentes' && <section className="ops-queue ops-simple-view"><header><div><h2>Agent inventory</h2><span>{clinics.filter((clinic) => clinic.provisioningDraft?.retellAgentId).length} configured</span></div></header><div className="ops-agent-grid">{clinics.map((clinic) => <button type="button" key={clinic.id} onClick={() => setSelectedId(clinic.id)}><ServerCog size={20} /><span><strong>{clinic.name}</strong><small>{clinic.provisioningDraft?.retellAgentId || 'Sin agente'}</small></span><i>{clinic.state.serviceStatus === 'live' ? 'Activo' : clinic.stage}</i></button>)}</div></section>}
+        {section === 'Actividad' && <section className="ops-queue ops-simple-view"><header><div><h2>Audit trail</h2><span>Eventos recientes</span></div></header><div className="ops-activity-feed">{clinics.flatMap((clinic) => clinic.auditTrail.map((entry) => ({ ...entry, clinic: clinic.name }))).sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 40).map((entry) => <div key={`${entry.clinic}-${entry.id}`}><i /><span><strong>{entry.clinic}</strong><small>{String(entry.action).replaceAll('_', ' ')} · {dateTime(entry.at)}</small></span></div>)}</div></section>}
       </div>
       {creating && <NewClientModal busy={busy} error={actionError} onClose={() => setCreating(false)} onCreate={createClinic} />}
-      {selected && <ClinicDetail clinic={selected} busy={busy} error={actionError} onClose={() => setSelectedId(null)} onConfirmPayment={(payment) => mutateClinic({ action: 'confirm_payment', payment })} onSaveProvisioning={(provisioning) => mutateClinic({ action: 'save_provisioning', provisioning })} onAction={(action, confirmation) => mutateClinic({ action, confirmation })} />}
+      {selected && <ClinicDetail clinic={selected} clinics={clinics} busy={busy} error={actionError} onClose={() => setSelectedId(null)} onConfirmPayment={(payment) => mutateClinic({ action: 'confirm_payment', payment })} onSaveProvisioning={(provisioning) => mutateClinic({ action: 'save_provisioning', provisioning })} onAction={(action, confirmation) => mutateClinic({ action, confirmation })} onEdit={(location) => mutateClinic({ action: 'update_location', location })} onMember={(member) => mutateClinic({ action: 'manage_member', member })} onStage={(stage) => mutateClinic({ action: 'override_stage', stage })} onBypass={(confirmation) => mutateClinic({ action: 'bypass_live', confirmation })} onDelete={removeClinic} />}
     </main>
   );
 }
