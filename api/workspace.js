@@ -2,7 +2,9 @@ import {
   createWorkspaceTestCall,
   errorResponse,
   getWorkspace,
+  getWorkspaceVoiceCatalog,
   saveProspectProfile,
+  saveWorkspaceVoice,
 } from '../lib/server/clerk-control.js';
 import { createDatabase } from '../lib/server/database.js';
 
@@ -12,13 +14,25 @@ function sendJson(res, status, body) {
 }
 
 export default async function handler(req, res) {
-  if (!['GET', 'PUT', 'POST'].includes(req.method)) {
+  if (!['GET', 'PUT', 'POST', 'PATCH'].includes(req.method)) {
     sendJson(res, 405, { error: 'method_not_allowed' });
     return;
   }
 
   try {
     const authorization = req.headers.authorization;
+    if (req.method === 'GET' && req.query?.resource === 'voices') {
+      sendJson(res, 200, await getWorkspaceVoiceCatalog(authorization));
+      return;
+    }
+    if (req.method === 'PATCH') {
+      if (req.body?.action !== 'update_voice') {
+        sendJson(res, 400, { error: 'invalid_workspace_action' });
+        return;
+      }
+      sendJson(res, 200, await saveWorkspaceVoice(authorization, req.body, createDatabase()));
+      return;
+    }
     if (req.method === 'POST') {
       if (req.body?.action !== 'create_test_call') {
         sendJson(res, 400, { error: 'invalid_workspace_action' });

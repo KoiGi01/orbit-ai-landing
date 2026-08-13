@@ -37,6 +37,7 @@ import './styles.css';
 import './brand-theme.css';
 import DashboardAuth from './auth';
 import { CallExperience } from './workspace';
+import { getWorkspaceVoices, updateWorkspaceVoice } from './control-api';
 
 const primaryNav = [
   { label: 'Hoy', icon: LayoutDashboard },
@@ -499,7 +500,7 @@ function App({ account, workspace }) {
               dataMode={dataMode}
             />
           ) : (
-            <ModulePage title={active} tasks={tasks} clinicName={identity.clinicName} dataMode={dataMode} onSelectTask={selectTask} onAction={toast} onTestAgent={() => setTestCallOpen(true)} />
+            <ModulePage title={active} tasks={tasks} clinicName={identity.clinicName} dataMode={dataMode} profile={workspace?.profile} getToken={account.getToken} isAdmin={identity.isAdmin} onSelectTask={selectTask} onAction={toast} onTestAgent={() => setTestCallOpen(true)} />
           )}
         </div>
 
@@ -920,7 +921,7 @@ function CapacityPanel({ isAdmin, isDemoData, onNavigate }) {
   );
 }
 
-function ModulePage({ title, tasks, clinicName, dataMode, onSelectTask, onAction, onTestAgent }) {
+function ModulePage({ title, tasks, clinicName, dataMode, profile, getToken, isAdmin, onSelectTask, onAction, onTestAgent }) {
   const copy = moduleCopy[title];
   const demoDescriptions = {
     Conversaciones: 'Los nombres, llamadas y resultados de esta bitácora son ejemplos; todavía no provienen de tu telefonía.',
@@ -937,7 +938,7 @@ function ModulePage({ title, tasks, clinicName, dataMode, onSelectTask, onAction
       </section>
       {title === 'Conversaciones' && <ConversationsModule tasks={tasks} isDemoData={dataMode.isDemo} onSelectTask={onSelectTask} />}
       {title === 'Oportunidades' && <OpportunitiesModule tasks={tasks} onSelectTask={onSelectTask} />}
-      {title === 'Mi recepcionista' && <ReceptionistModule clinicName={clinicName} isDemoData={dataMode.isDemo} onAction={onAction} onTestAgent={onTestAgent} />}
+      {title === 'Mi recepcionista' && <ReceptionistModule clinicName={clinicName} isDemoData={dataMode.isDemo} profile={profile} getToken={getToken} isAdmin={isAdmin} onAction={onAction} onTestAgent={onTestAgent} />}
       {title === 'Conexiones' && <ConnectionsModule isDemoData={dataMode.isDemo} onAction={onAction} />}
       {title === 'Uso y plan' && <UsageModule isDemoData={dataMode.isDemo} />}
     </main>
@@ -1003,11 +1004,60 @@ function OpportunitiesModule({ tasks, onSelectTask }) {
   );
 }
 
-function ReceptionistModule({ clinicName, isDemoData, onAction, onTestAgent }) {
+const VOICE_PROVIDER_NAMES = { platform: 'Retell', cartesia: 'Cartesia', elevenlabs: 'ElevenLabs', minimax: 'MiniMax', fish_audio: 'Fish Audio', openai: 'OpenAI', deepgram: 'Deepgram' };
+
+function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin, onAction, onTestAgent }) {
+  const [voices, setVoices] = useState([]);
+  const [provider, setProvider] = useState(profile?.voiceProvider || 'cartesia');
+  const [voiceId, setVoiceId] = useState(profile?.voiceId || 'cartesia-Sofia');
+  const [voiceStatus, setVoiceStatus] = useState('loading');
+  const [voiceError, setVoiceError] = useState('');
+  const providers = useMemo(() => [...new Set(voices.map((voice) => voice.provider))], [voices]);
+  const providerVoices = useMemo(() => voices.filter((voice) => voice.provider === provider), [voices, provider]);
+
+  useEffect(() => {
+    let active = true;
+    getWorkspaceVoices(getToken).then((result) => {
+      if (!active) return;
+      setVoices(result.voices || []);
+      const current = (result.voices || []).find((voice) => voice.id === (profile?.voiceId || 'cartesia-Sofia'));
+      if (current) { setProvider(current.provider); setVoiceId(current.id); }
+      setVoiceStatus('ready');
+    }).catch((error) => { if (active) { setVoiceError(error.message); setVoiceStatus('error'); } });
+    return () => { active = false; };
+  }, [getToken, profile?.voiceId]);
+
+  const changeProvider = (nextProvider) => {
+    setProvider(nextProvider);
+    setVoiceId(voices.find((voice) => voice.provider === nextProvider)?.id || '');
+    setVoiceStatus('ready');
+    setVoiceError('');
+  };
+  const saveVoice = async () => {
+    setVoiceStatus('saving'); setVoiceError('');
+    try { await updateWorkspaceVoice(getToken, voiceId); setVoiceStatus('saved'); }
+    catch (error) { setVoiceError(error.message); setVoiceStatus('error'); }
+  };
+  const selectedVoice = voices.find((voice) => voice.id === voiceId);
   return (
     <section className="reception-layout">
       <article className="reception-identity dark-module-card"><div className="large-orb"><span /></div><p className="dark-eyebrow">{isDemoData ? 'Agente privado de prueba' : 'En línea ahora'}</p><h2>Lucía</h2><span>{isDemoData ? `Configurada para ${clinicName}` : `Recepcionista de ${clinicName}`}</span><div className="reception-number">{isDemoData ? 'Prueba desde este navegador' : '+52 55 4160 0198'}</div><button type="button" onClick={onTestAgent}><PhoneOutgoing size={16} /> Probar mi agente</button></article>
       <article className="settings-list surface-panel">
+        <div className="voice-settings">
+          <div className="voice-settings-heading"><span className="setting-icon"><Headphones size={18} /></span><span><strong>Voz de tu recepcionista</strong><small>Voces disponibles con acento mexicano en Retell.</small></span></div>
+          {voiceStatus === 'loading' ? <p>Cargando catálogo de voces…</p> : <>
+            <div className="voice-settings-fields">
+              <label><span>Proveedor</span><select disabled={!isAdmin || voiceStatus === 'saving'} value={provider} onChange={(event) => changeProvider(event.target.value)}>{providers.map((item) => <option value={item} key={item}>{VOICE_PROVIDER_NAMES[item] || item}</option>)}</select></label>
+              <label><span>Voz</span><select disabled={!isAdmin || voiceStatus === 'saving'} value={voiceId} onChange={(event) => { setVoiceId(event.target.value); setVoiceStatus('ready'); }}>{providerVoices.map((voice) => <option value={voice.id} key={voice.id}>{voice.name} · {voice.gender === 'female' ? 'Femenina' : 'Masculina'}{voice.recommended ? ' · Recomendada' : ''}</option>)}</select></label>
+            </div>
+            <div className="voice-settings-actions">
+              {selectedVoice?.previewUrl && <audio controls preload="none" src={selectedVoice.previewUrl}>Tu navegador no puede reproducir esta muestra.</audio>}
+              {isAdmin ? <button type="button" className="primary-action" disabled={!voiceId || voiceStatus === 'saving'} onClick={saveVoice}>{voiceStatus === 'saving' ? 'Guardando…' : 'Guardar voz'}</button> : <small>Solo un administrador puede cambiar la voz.</small>}
+            </div>
+          </>}
+          {voiceStatus === 'saved' && <p className="voice-success"><CheckCircle2 size={15} /> Voz actualizada. La siguiente llamada usará esta voz.</p>}
+          {voiceError && <p className="voice-error">{voiceError}</p>}
+        </div>
         {(isDemoData ? [
           ['Disponibilidad', 'Horario ilustrativo · por configurar', Clock3],
           ['Servicios que conoce', 'Contenido ilustrativo · por configurar', FileText],

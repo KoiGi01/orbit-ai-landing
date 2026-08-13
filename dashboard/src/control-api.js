@@ -19,6 +19,9 @@ const ERROR_MESSAGES = {
   invalid_call_goals: 'Agrega al menos un motivo de llamada.',
   invalid_scheduling_provider: 'Selecciona cómo administra actualmente su agenda.',
   invalid_voice_provider: 'La voz seleccionada no pertenece a ese proveedor.',
+  invalid_mexican_voice: 'Selecciona una voz disponible para español de México.',
+  voice_catalog_failed: 'No pudimos cargar las voces de Retell en este momento.',
+  workspace_voice_update_failed: 'Retell no pudo guardar la nueva voz. Intenta nuevamente.',
   invalid_payment_amount: 'Escribe un monto válido.',
   invalid_payment_reference: 'Agrega una referencia o folio del pago.',
   invalid_payment_date: 'Selecciona la fecha en que se acreditó el pago.',
@@ -98,6 +101,17 @@ export function createWorkspaceTestCall(getToken, scenario) {
   return controlRequest(getToken, '/api/workspace', {
     method: 'POST',
     body: JSON.stringify({ action: 'create_test_call', scenario }),
+  });
+}
+
+export function getWorkspaceVoices(getToken) {
+  return controlRequest(getToken, '/api/workspace?resource=voices');
+}
+
+export function updateWorkspaceVoice(getToken, voiceId) {
+  return controlRequest(getToken, '/api/workspace', {
+    method: 'PATCH',
+    body: JSON.stringify({ action: 'update_voice', voiceId }),
   });
 }
 

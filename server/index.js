@@ -8,9 +8,11 @@ import {
   createLocation,
   errorResponse as controlErrorResponse,
   getWorkspace,
+  getWorkspaceVoiceCatalog,
   listClinics,
   saveProvisioning,
   saveProspectProfile,
+  saveWorkspaceVoice,
   startClinicConfiguration,
   transitionClinic,
 } from '../lib/server/clerk-control.js';
@@ -199,12 +201,25 @@ async function handleLead(req, res) {
 }
 
 async function handleWorkspace(req, res) {
-  if (!['GET', 'PUT', 'POST'].includes(req.method)) {
+  if (!['GET', 'PUT', 'POST', 'PATCH'].includes(req.method)) {
     sendJson(res, 405, { error: 'method_not_allowed' });
     return;
   }
 
   try {
+    if (req.method === 'GET' && new URL(req.url, 'http://localhost').searchParams.get('resource') === 'voices') {
+      sendJson(res, 200, await getWorkspaceVoiceCatalog(req.headers.authorization));
+      return;
+    }
+    if (req.method === 'PATCH') {
+      const body = await readJson(req);
+      if (body.action !== 'update_voice') {
+        sendJson(res, 400, { error: 'invalid_workspace_action' });
+        return;
+      }
+      sendJson(res, 200, await saveWorkspaceVoice(req.headers.authorization, body, createDatabase()));
+      return;
+    }
     if (req.method === 'POST') {
       const body = await readJson(req);
       if (body.action !== 'create_test_call') {

@@ -4,8 +4,10 @@ import test from 'node:test';
 import {
   buildRetellBusinessPrompt,
   createRetellAgentDraft,
+  listRetellMexicanVoices,
   notifyProvisioningStarted,
   RETELL_PROMPT_TEMPLATE_VERSION,
+  updateRetellAgentVoice,
 } from '../lib/server/retell-provisioning.js';
 
 function jsonResponse(body, init = {}) {
@@ -103,6 +105,37 @@ test('keeps the template voice model only for an ElevenLabs selection', async ()
   assert.equal(requests[2].body.voice_id, '11labs-Gaby');
   assert.equal(requests[2].body.voice_model, 'eleven_flash_v2_5');
   assert.equal(requests[2].body.voice_emotion, undefined);
+});
+
+test('lists every Mexican voice and updates an agent with a validated selection', async () => {
+  const requests = [];
+  const catalog = [
+    { voice_id: 'cartesia-Sofia', voice_name: 'Sofia', provider: 'cartesia', accent: 'Mexican', gender: 'Female', age: 'Middle Aged', preview_audio_url: 'https://example.test/sofia.mp3' },
+    { voice_id: '11labs-Gaby', voice_name: 'Gaby', provider: 'elevenlabs', accent: 'Mexican', gender: 'female', age: 'Young' },
+    { voice_id: 'cartesia-Isabel', voice_name: 'Isabel', provider: 'cartesia', accent: 'Spanish', gender: 'female', age: 'Middle Aged' },
+  ];
+  const fetchImpl = async (url, options = {}) => {
+    requests.push({ url, method: options.method || 'GET', body: options.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/list-voices')) return jsonResponse(catalog);
+    if (url.endsWith('/update-agent/agent_new_123')) return jsonResponse({ agent_id: 'agent_new_123', version: 4 });
+    throw new Error(`unexpected_request:${url}`);
+  };
+  const dependencies = { env: { RETELL_API_KEY: 'test-key' }, fetchImpl };
+
+  const voices = await listRetellMexicanVoices(dependencies);
+  assert.deepEqual(voices.map((voice) => voice.id).sort(), ['11labs-Gaby', 'cartesia-Sofia']);
+  const result = await updateRetellAgentVoice('agent_new_123', 'cartesia-Sofia', dependencies);
+
+  assert.equal(result.voice.name, 'Sofia');
+  assert.deepEqual(requests.at(-1).body, { voice_id: 'cartesia-Sofia', voice_model: null, voice_emotion: 'calm' });
+});
+
+test('rejects a voice that is not in the live Mexican catalog', async () => {
+  const fetchImpl = async () => jsonResponse([{ voice_id: 'cartesia-Isabel', voice_name: 'Isabel', provider: 'cartesia', accent: 'Spanish' }]);
+  await assert.rejects(
+    updateRetellAgentVoice('agent_new_123', 'cartesia-Isabel', { env: { RETELL_API_KEY: 'test-key' }, fetchImpl }),
+    /invalid_mexican_voice/,
+  );
 });
 
 test('signs the shared n8n provisioning event and keeps its id deterministic', async () => {
