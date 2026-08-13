@@ -363,6 +363,7 @@ function scenarioFromGoal(goal, profile) {
 
 export function CallExperience({ profile, scenario, onClose, onCompleted = () => {}, getToken = null }) {
   const clientRef = useRef(null);
+  const mountedRef = useRef(true);
   const transcriptRef = useRef([]);
   const completionRef = useRef(false);
   const [phase, setPhase] = useState('ready');
@@ -371,10 +372,27 @@ export function CallExperience({ profile, scenario, onClose, onCompleted = () =>
   const [muted, setMuted] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => () => {
-    clientRef.current?.stopCall?.().catch(() => {});
+  const disposeClient = () => {
+    const client = clientRef.current;
     clientRef.current = null;
+    if (!client) return;
+    try {
+      const stopped = client.stopCall?.();
+      if (stopped && typeof stopped.catch === 'function') stopped.catch(() => {});
+    } catch {}
+    try { client.removeAllListeners?.(); } catch {}
+  };
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; disposeClient(); };
   }, []);
+
+  const close = () => {
+    // Unmount the dialog first so a late SDK event cannot leave its backdrop on screen.
+    onClose();
+    queueMicrotask(disposeClient);
+  };
 
   const start = async () => {
     completionRef.current = false;
@@ -395,16 +413,19 @@ export function CallExperience({ profile, scenario, onClose, onCompleted = () =>
         });
       const client = new RetellWebClient();
       clientRef.current = client;
-      client.on('call_started', () => setPhase('live'));
-      client.on('agent_start_talking', () => setSpeaking(true));
-      client.on('agent_stop_talking', () => setSpeaking(false));
+      client.on('call_started', () => { if (mountedRef.current) setPhase('live'); });
+      client.on('agent_start_talking', () => { if (mountedRef.current) setSpeaking(true); });
+      client.on('agent_stop_talking', () => { if (mountedRef.current) setSpeaking(false); });
       client.on('update', (update) => {
-        if (Array.isArray(update.transcript)) {
+        if (mountedRef.current && Array.isArray(update.transcript)) {
           transcriptRef.current = [...update.transcript];
           setTranscript(transcriptRef.current);
         }
       });
       client.on('call_ended', () => {
+        if (!mountedRef.current) return;
+        clientRef.current = null;
+        try { client.removeAllListeners?.(); } catch {}
         setSpeaking(false);
         setPhase('ended');
         if (!completionRef.current) {
@@ -413,6 +434,9 @@ export function CallExperience({ profile, scenario, onClose, onCompleted = () =>
         }
       });
       client.on('error', () => {
+        if (!mountedRef.current) return;
+        clientRef.current = null;
+        try { client.removeAllListeners?.(); } catch {}
         setSpeaking(false);
         setError('La llamada se interrumpió. Puedes intentarlo otra vez.');
         setPhase('error');
@@ -425,8 +449,12 @@ export function CallExperience({ profile, scenario, onClose, onCompleted = () =>
   };
 
   const stop = async () => {
-    await clientRef.current?.stopCall?.().catch(() => {});
+    const client = clientRef.current;
     clientRef.current = null;
+    try {
+      const stopped = client?.stopCall?.();
+      if (stopped && typeof stopped.then === 'function') await stopped.catch(() => {});
+    } catch {}
     setSpeaking(false);
     setPhase('ended');
     if (!completionRef.current) {
@@ -443,9 +471,9 @@ export function CallExperience({ profile, scenario, onClose, onCompleted = () =>
   };
 
   return (
-    <div className="preview-dialog-layer" onMouseDown={(event) => event.target === event.currentTarget && phase !== 'live' && onClose()}>
+    <div className="preview-dialog-layer" onMouseDown={(event) => event.target === event.currentTarget && phase !== 'live' && close()}>
       <section className="preview-call-dialog" role="dialog" aria-modal="true" aria-labelledby="preview-call-title">
-        <header><PortalBrand label="Llamada de prueba" /><button type="button" onClick={onClose} disabled={phase === 'live'} aria-label="Cerrar"><X size={20} /></button></header>
+        <header><PortalBrand label="Llamada de prueba" /><button type="button" onClick={close} disabled={phase === 'live'} aria-label="Cerrar"><X size={20} /></button></header>
         <div className={`call-orb-stage ${speaking ? 'speaking' : ''}`}><div className="call-orb"><i /></div><span>{phase === 'live' ? speaking ? 'Lucía está hablando' : 'Lucía te escucha' : phase === 'connecting' ? 'Conectando llamada' : 'Lista para probar'}</span></div>
         <div className="call-dialog-copy">
           <p className="portal-kicker">{profile.clinicName}</p>
@@ -461,7 +489,7 @@ export function CallExperience({ profile, scenario, onClose, onCompleted = () =>
           {phase === 'ready' && <button type="button" className="call-primary" onClick={start}><Mic size={18} /> Empezar llamada</button>}
           {phase === 'connecting' && <button type="button" className="call-primary" disabled>Conectando…</button>}
           {phase === 'live' && <><button type="button" className="call-secondary" onClick={toggleMute}>{muted ? <Mic size={18} /> : <MicOff size={18} />} {muted ? 'Activar micrófono' : 'Silenciar'}</button><button type="button" className="call-end" onClick={stop}>Terminar</button></>}
-          {['ended', 'error'].includes(phase) && <><button type="button" className="call-secondary" onClick={start}><RotateCcw size={17} /> Intentar de nuevo</button><button type="button" className="call-primary" onClick={onClose}>Ver resultado <ArrowRight size={17} /></button></>}
+          {['ended', 'error'].includes(phase) && <><button type="button" className="call-secondary" onClick={start}><RotateCcw size={17} /> Intentar de nuevo</button><button type="button" className="call-primary" onClick={close}>Volver al dashboard <ArrowRight size={17} /></button></>}
         </footer>
       </section>
     </div>
