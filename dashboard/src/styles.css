@@ -2461,6 +2461,20 @@ select:focus-visible,
   padding: 8px 24px;
 }
 
+.connections-workspace { display: grid; gap: 18px; }
+.connections-summary { min-height: 190px; padding: 28px; display: grid; align-content: center; gap: 9px; }
+.connections-summary h2 { margin: 0; font-size: clamp(28px, 4vw, 43px); letter-spacing: -.045em; }
+.connections-summary > span { max-width: 680px; color: #a5b1c4; font-size: 13px; line-height: 1.55; }
+.connection-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 13px; }
+.connection-card { min-height: 205px; padding: 23px; display: grid; align-content: start; gap: 12px; }
+.connection-card header { display: flex; align-items: center; justify-content: space-between; }
+.connection-card header i { padding: 6px 9px; color: #876d2d; background: #f5edcf; border-radius: 999px; font-size: 9px; font-style: normal; font-weight: 800; }
+.connection-card header i.connected { color: #17684b; background: #ddf5e9; }
+.connection-card h3 { margin: 4px 0 0; font-size: 17px; }
+.connection-card p { margin: 0; color: #73766f; font-size: 12px; line-height: 1.55; }
+.connection-card code { width: max-content; max-width: 100%; overflow: hidden; color: #1859ff; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 720px) { .connection-grid { grid-template-columns: 1fr; } }
+
 .connection-list > button {
   min-height: 96px;
 }

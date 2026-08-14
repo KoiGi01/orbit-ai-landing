@@ -44,6 +44,8 @@ const ERROR_MESSAGES = {
   member_move_same_location: 'Selecciona otra Location para mover al miembro.',
   member_move_requires_active_user: 'Solo puedes mover miembros que ya aceptaron su invitación.',
   invalid_stage_override: 'Selecciona una etapa válida.',
+  invalid_google_calendar_id: 'Escribe el ID completo del calendario de Google.',
+  calendar_agent_update_failed: 'No pudimos conectar el calendario al agente de Retell.',
   multiple_prospect_organizations: 'Ese correo tiene más de una clínica prospecto. Revísalo manualmente.',
   existing_customer_requires_review: 'Ese correo ya pertenece a un cliente pagado. Revisa su cuenta antes de crear otra clínica.',
   workspace_not_provisioned: 'El workspace de Supabase todavía no está preparado para esta cuenta.',

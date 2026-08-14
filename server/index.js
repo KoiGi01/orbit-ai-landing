@@ -15,6 +15,7 @@ import {
   manageClinicMember,
   overrideClinicStage,
   saveProvisioning,
+  saveClinicCalendar,
   saveProspectProfile,
   saveWorkspaceVoice,
   startClinicConfiguration,
@@ -312,6 +313,8 @@ async function handleInternalClinics(req, res) {
       clinic = await bypassClinicLive(req.headers.authorization, body.organizationId, body.confirmation);
     } else if (body.action === 'override_stage') {
       clinic = await overrideClinicStage(req.headers.authorization, body.organizationId, body.stage);
+    } else if (body.action === 'save_calendar') {
+      clinic = await saveClinicCalendar(req.headers.authorization, body.organizationId, body.calendar);
     } else {
       clinic = await transitionClinic(
         req.headers.authorization,

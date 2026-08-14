@@ -8,6 +8,7 @@ import {
   notifyProvisioningStarted,
   RETELL_PROMPT_TEMPLATE_VERSION,
   updateRetellAgentVoice,
+  updateRetellCalendarIntegration,
 } from '../lib/server/retell-provisioning.js';
 
 function jsonResponse(body, init = {}) {
@@ -136,6 +137,21 @@ test('rejects a voice that is not in the live Mexican catalog', async () => {
     updateRetellAgentVoice('agent_new_123', 'cartesia-Isabel', { env: { RETELL_API_KEY: 'test-key' }, fetchImpl }),
     /invalid_mexican_voice/,
   );
+});
+
+test('adds a Location-scoped Google Calendar tool without removing other tools', async () => {
+  const requests = [];
+  const fetchImpl = async (url, options = {}) => {
+    requests.push({ url, method: options.method || 'GET', body: options.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/get-retell-llm/llm_new_123')) return jsonResponse({ general_tools: [{ type: 'custom', name: 'lookup_patient' }, { type: 'end_call', name: 'end_call' }] });
+    if (url.endsWith('/update-retell-llm/llm_new_123')) return jsonResponse({ llm_id: 'llm_new_123', version: 2 });
+    throw new Error(`unexpected_request:${url}`);
+  };
+  await updateRetellCalendarIntegration({ llmId: 'llm_new_123', calendarId: 'clinic@group.calendar.google.com' }, { env: { RETELL_API_KEY: 'test-key', RETELL_CALENDAR_WEBHOOK_URL: 'https://n8n.example.test/calendar' }, fetchImpl });
+  const tools = requests.at(-1).body.general_tools;
+  assert.deepEqual(tools.map((tool) => tool.name), ['lookup_patient', 'manage_calendar', 'end_call']);
+  assert.equal(tools[1].parameters.properties.calendarId.const, 'clinic@group.calendar.google.com');
+  assert.equal(tools[1].url, 'https://n8n.example.test/calendar');
 });
 
 test('signs the shared n8n provisioning event and keeps its id deterministic', async () => {

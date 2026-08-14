@@ -8,6 +8,7 @@ import {
   manageClinicMember,
   overrideClinicStage,
   saveProvisioning,
+  saveClinicCalendar,
   startClinicConfiguration,
   transitionClinic,
   updateClinicRecord,
@@ -88,6 +89,8 @@ export default async function handler(req, res) {
       clinic = await bypassClinicLive(authorization, organizationId, req.body?.confirmation);
     } else if (action === 'override_stage') {
       clinic = await overrideClinicStage(authorization, organizationId, req.body?.stage);
+    } else if (action === 'save_calendar') {
+      clinic = await saveClinicCalendar(authorization, organizationId, req.body?.calendar);
     } else {
       clinic = await transitionClinic(authorization, organizationId, action, req.body?.confirmation);
     }
