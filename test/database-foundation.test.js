@@ -13,6 +13,8 @@ import {
   provisionWorkspaceFoundation,
   recordWebhookEvent,
   resolveWebhookWorkspace,
+  upsertCallEnded,
+  upsertCallStarted,
 } from '../lib/server/crm-foundation.js';
 import { databaseConfig } from '../lib/server/database.js';
 import { inspectDatabaseHealth } from '../lib/server/database-health.js';
@@ -498,6 +500,106 @@ test('records a webhook event once and marks its terminal status', async () => {
     const failedRow = await client.query('select status, last_error_code from app.webhook_events where id = $1', [id]);
     assert.equal(failedRow.rows[0].status, 'failed');
     assert.equal(failedRow.rows[0].last_error_code, 'boom');
+  } finally {
+    await client.close();
+  }
+});
+
+test('creates an ongoing phone call with a linked contact, then closes it on call_ended', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    const foundation = await provisionMvpFoundation(database, {
+      clerkOrganizationId: 'org_call_lifecycle',
+      displayName: 'Call Lifecycle',
+      externalAgentId: 'agent_call_lifecycle_123',
+    });
+
+    const callId = await upsertCallStarted(database, {
+      workspaceId: foundation.workspace.id,
+      externalCallId: 'call_lifecycle_1',
+      channel: 'phone',
+      direction: 'inbound',
+      fromPhone: '+525511112222',
+      toPhone: '+525599998888',
+      startedAt: '2026-08-22T10:00:00.000Z',
+    });
+
+    const started = await client.query('select status, channel, contact_id from app.calls where id = $1', [callId]);
+    assert.equal(started.rows[0].status, 'ongoing');
+    assert.equal(started.rows[0].channel, 'phone');
+    assert.ok(started.rows[0].contact_id);
+
+    const contact = await client.query('select phone_e164 from app.contacts where id = $1', [started.rows[0].contact_id]);
+    assert.equal(contact.rows[0].phone_e164, '+525511112222');
+
+    const repeated = await upsertCallStarted(database, {
+      workspaceId: foundation.workspace.id,
+      externalCallId: 'call_lifecycle_1',
+      channel: 'phone',
+      direction: 'inbound',
+      fromPhone: '+525511112222',
+    });
+    assert.equal(repeated, callId);
+
+    const closedId = await upsertCallEnded(database, {
+      workspaceId: foundation.workspace.id,
+      externalCallId: 'call_lifecycle_1',
+      endedAt: '2026-08-22T10:03:00.000Z',
+      durationSeconds: 180,
+    });
+    assert.equal(closedId, callId);
+
+    const ended = await client.query('select status, duration_seconds from app.calls where id = $1', [callId]);
+    assert.equal(ended.rows[0].status, 'ended');
+    assert.equal(ended.rows[0].duration_seconds, 180);
+  } finally {
+    await client.close();
+  }
+});
+
+test('does not create a contact for a web call', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    const foundation = await provisionMvpFoundation(database, {
+      clerkOrganizationId: 'org_web_call',
+      displayName: 'Web Call',
+      externalAgentId: 'agent_web_call_123',
+    });
+
+    const callId = await upsertCallStarted(database, {
+      workspaceId: foundation.workspace.id,
+      externalCallId: 'call_web_1',
+      channel: 'web',
+      direction: 'inbound',
+    });
+
+    const row = await client.query('select contact_id, channel from app.calls where id = $1', [callId]);
+    assert.equal(row.rows[0].contact_id, null);
+    assert.equal(row.rows[0].channel, 'web');
+  } finally {
+    await client.close();
+  }
+});
+
+test('call_ended creates a row when call_started was never delivered', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    const foundation = await provisionMvpFoundation(database, {
+      clerkOrganizationId: 'org_out_of_order',
+      displayName: 'Out Of Order',
+      externalAgentId: 'agent_out_of_order_123',
+    });
+
+    const callId = await upsertCallEnded(database, {
+      workspaceId: foundation.workspace.id,
+      externalCallId: 'call_out_of_order_1',
+      endedAt: '2026-08-22T10:03:00.000Z',
+      durationSeconds: 42,
+    });
+
+    const row = await client.query('select status, duration_seconds from app.calls where id = $1', [callId]);
+    assert.equal(row.rows[0].status, 'ended');
+    assert.equal(row.rows[0].duration_seconds, 42);
   } finally {
     await client.close();
   }
