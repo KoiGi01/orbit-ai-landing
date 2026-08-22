@@ -11,3 +11,4 @@ output/
 .vite/
 .playwright-cli/
 .vercel
+.superpowers/
