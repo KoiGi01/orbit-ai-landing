@@ -13,6 +13,7 @@ import {
   provisionWorkspaceFoundation,
   recordWebhookEvent,
   resolveWebhookWorkspace,
+  upsertCallAnalyzed,
   upsertCallEnded,
   upsertCallStarted,
 } from '../lib/server/crm-foundation.js';
@@ -600,6 +601,94 @@ test('call_ended creates a row when call_started was never delivered', async () 
     const row = await client.query('select status, duration_seconds from app.calls where id = $1', [callId]);
     assert.equal(row.rows[0].status, 'ended');
     assert.equal(row.rows[0].duration_seconds, 42);
+  } finally {
+    await client.close();
+  }
+});
+
+test('analyzes a call, derives normal urgency, and creates exactly one review task', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    const foundation = await provisionMvpFoundation(database, {
+      clerkOrganizationId: 'org_call_analyzed',
+      displayName: 'Call Analyzed',
+      externalAgentId: 'agent_call_analyzed_123',
+    });
+    const callId = await upsertCallStarted(database, {
+      workspaceId: foundation.workspace.id,
+      externalCallId: 'call_analyzed_1',
+      channel: 'phone',
+      direction: 'inbound',
+      fromPhone: '+525511112222',
+    });
+
+    await upsertCallAnalyzed(database, {
+      workspaceId: foundation.workspace.id,
+      externalCallId: 'call_analyzed_1',
+      summary: 'El cliente pidió una cita para el viernes.',
+      inVoicemail: false,
+      callSuccessful: true,
+      analysis: { user_sentiment: 'Positive' },
+    });
+
+    const call = await client.query('select status, urgency, follow_up_required from app.calls where id = $1', [callId]);
+    assert.equal(call.rows[0].status, 'analyzed');
+    assert.equal(call.rows[0].urgency, 'normal');
+    assert.equal(call.rows[0].follow_up_required, false);
+
+    const tasks = await client.query('select kind, priority, contact_id, call_id from app.tasks where call_id = $1', [callId]);
+    assert.equal(tasks.rows.length, 1);
+    assert.equal(tasks.rows[0].kind, 'review_call');
+    assert.equal(tasks.rows[0].priority, 'normal');
+    assert.ok(tasks.rows[0].contact_id);
+
+    await upsertCallAnalyzed(database, {
+      workspaceId: foundation.workspace.id,
+      externalCallId: 'call_analyzed_1',
+      summary: 'El cliente pidió una cita para el viernes.',
+      inVoicemail: false,
+      callSuccessful: true,
+      analysis: { user_sentiment: 'Positive' },
+    });
+    const tasksAfterRetry = await client.query('select id from app.tasks where call_id = $1', [callId]);
+    assert.equal(tasksAfterRetry.rows.length, 1);
+  } finally {
+    await client.close();
+  }
+});
+
+test('escalates urgency and task priority for a voicemail', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    const foundation = await provisionMvpFoundation(database, {
+      clerkOrganizationId: 'org_voicemail',
+      displayName: 'Voicemail',
+      externalAgentId: 'agent_voicemail_123',
+    });
+    const callId = await upsertCallStarted(database, {
+      workspaceId: foundation.workspace.id,
+      externalCallId: 'call_voicemail_1',
+      channel: 'phone',
+      direction: 'inbound',
+      fromPhone: '+525511113333',
+    });
+
+    await upsertCallAnalyzed(database, {
+      workspaceId: foundation.workspace.id,
+      externalCallId: 'call_voicemail_1',
+      summary: 'Buzón de voz.',
+      inVoicemail: true,
+      callSuccessful: false,
+      analysis: { in_voicemail: true },
+    });
+
+    const call = await client.query('select urgency, follow_up_required from app.calls where id = $1', [callId]);
+    assert.equal(call.rows[0].urgency, 'urgent');
+    assert.equal(call.rows[0].follow_up_required, true);
+
+    const task = await client.query('select kind, priority from app.tasks where call_id = $1', [callId]);
+    assert.equal(task.rows[0].kind, 'urgent_callback');
+    assert.equal(task.rows[0].priority, 'urgent');
   } finally {
     await client.close();
   }
