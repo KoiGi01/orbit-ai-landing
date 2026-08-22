@@ -506,6 +506,48 @@ test('records a webhook event once and marks its terminal status', async () => {
   }
 });
 
+test('allows a webhook event to be reprocessed after it was previously marked failed', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    const foundation = await provisionMvpFoundation(database, {
+      clerkOrganizationId: 'org_webhook_retry',
+      displayName: 'Webhook Retry',
+      externalAgentId: 'agent_webhook_retry_123',
+    });
+
+    const id = await recordWebhookEvent(database, {
+      workspaceId: foundation.workspace.id,
+      eventKey: 'call_started:call_retry_1',
+      eventType: 'call_started',
+      externalObjectId: 'call_retry_1',
+      payloadSha256: 'a'.repeat(64),
+      safePayload: { event: 'call_started' },
+    });
+    assert.ok(id);
+
+    await markWebhookEventStatus(database, id, 'failed', 'boom');
+
+    const retried = await recordWebhookEvent(database, {
+      workspaceId: foundation.workspace.id,
+      eventKey: 'call_started:call_retry_1',
+      eventType: 'call_started',
+      externalObjectId: 'call_retry_1',
+      payloadSha256: 'a'.repeat(64),
+      safePayload: { event: 'call_started' },
+    });
+    assert.equal(retried, id);
+
+    const row = await client.query(
+      'select status, attempt_count from app.webhook_events where id = $1',
+      [id],
+    );
+    assert.equal(row.rows[0].status, 'received');
+    assert.equal(row.rows[0].attempt_count, 1);
+  } finally {
+    await client.close();
+  }
+});
+
 test('creates an ongoing phone call with a linked contact, then closes it on call_ended', async () => {
   const { client, database } = await migratedDatabase();
   try {
