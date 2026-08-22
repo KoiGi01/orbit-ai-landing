@@ -6,10 +6,13 @@ import { PGlite } from '@electric-sql/pglite';
 import {
   getWorkspaceFoundation,
   listIntegrationCatalog,
+  markWebhookEventStatus,
   provisionMvpFoundation,
   provisionVoiceAgentDraft,
   provisionVoiceAgentFoundation,
   provisionWorkspaceFoundation,
+  recordWebhookEvent,
+  resolveWebhookWorkspace,
 } from '../lib/server/crm-foundation.js';
 import { databaseConfig } from '../lib/server/database.js';
 import { inspectDatabaseHealth } from '../lib/server/database-health.js';
@@ -437,4 +440,65 @@ test('reports database connectivity without exposing connection details', async 
     schema: 'ready',
   });
   assert.equal(JSON.stringify(health).includes('postgres'), false);
+});
+
+test('resolves a webhook workspace only for a real, active workspace id', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    const foundation = await provisionMvpFoundation(database, {
+      clerkOrganizationId: 'org_webhook_resolve',
+      displayName: 'Webhook Resolve',
+      externalAgentId: 'agent_webhook_resolve_123',
+    });
+
+    assert.equal(await resolveWebhookWorkspace(database, foundation.workspace.id), foundation.workspace.id);
+    assert.equal(await resolveWebhookWorkspace(database, '00000000-0000-0000-0000-000000000000'), null);
+    assert.equal(await resolveWebhookWorkspace(database, 'not-a-uuid'), null);
+    assert.equal(await resolveWebhookWorkspace(database, undefined), null);
+  } finally {
+    await client.close();
+  }
+});
+
+test('records a webhook event once and marks its terminal status', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    const foundation = await provisionMvpFoundation(database, {
+      clerkOrganizationId: 'org_webhook_record',
+      displayName: 'Webhook Record',
+      externalAgentId: 'agent_webhook_record_123',
+    });
+
+    const id = await recordWebhookEvent(database, {
+      workspaceId: foundation.workspace.id,
+      eventKey: 'call_started:call_1',
+      eventType: 'call_started',
+      externalObjectId: 'call_1',
+      payloadSha256: 'a'.repeat(64),
+      safePayload: { event: 'call_started' },
+    });
+    assert.ok(id);
+
+    const duplicate = await recordWebhookEvent(database, {
+      workspaceId: foundation.workspace.id,
+      eventKey: 'call_started:call_1',
+      eventType: 'call_started',
+      externalObjectId: 'call_1',
+      payloadSha256: 'a'.repeat(64),
+      safePayload: { event: 'call_started' },
+    });
+    assert.equal(duplicate, null);
+
+    await markWebhookEventStatus(database, id, 'processed');
+    const processedRow = await client.query('select status, processed_at from app.webhook_events where id = $1', [id]);
+    assert.equal(processedRow.rows[0].status, 'processed');
+    assert.ok(processedRow.rows[0].processed_at);
+
+    await markWebhookEventStatus(database, id, 'failed', 'boom');
+    const failedRow = await client.query('select status, last_error_code from app.webhook_events where id = $1', [id]);
+    assert.equal(failedRow.rows[0].status, 'failed');
+    assert.equal(failedRow.rows[0].last_error_code, 'boom');
+  } finally {
+    await client.close();
+  }
 });
