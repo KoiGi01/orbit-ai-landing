@@ -28,6 +28,8 @@ Retell AI is the only voice provider in this repository. Do not add another voic
 
 Do not infer an active frontend from an old filename. Confirm the relevant `index.html` entrypoint before changing UI code.
 
+In production, `vercel.json` rewrites `/sign-in`, `/sign-up`, `/accept-invitation`, `/onboarding`, `/app`, `/admin`, and `/internal` (plus their subpaths) to `dashboard.html`; everything else falls through to the landing build. `npm run build:platform` is what produces that combined `dist/` output and is the command Vercel actually runs.
+
 ## Voice architecture
 
 Both the landing and the eligible dashboard workspace use `retell-client-js-sdk`. They POST the selected scenario to `/api/retell/token`, receive a short-lived `access_token`, and start a browser call with `RetellWebClient`.
@@ -45,9 +47,11 @@ npm run dev:control      # dashboard + local API
 npm run dev:web          # landing only
 npm run dev:dashboard    # dashboard only
 npm run dev:server       # API only
-npm test
+npm test                 # node --test (all files in test/)
+node --test test/retell-provisioning.test.js  # run a single test file
 npm run build
 npm run build:dashboard
+npm run build:platform    # builds both apps into dist/; this is Vercel's buildCommand
 npm start                # API and built landing
 ```
 
@@ -77,6 +81,7 @@ The `app` Postgres schema is private and has no browser role grants. OAuth crede
 - `POST /api/demo/lead`: validate and deliver a public lead.
 - `/api/workspace`: authenticated prospect/client workspace state.
 - `/api/internal/clinics`: internal manual-payment and provisioning operations.
+- `POST /api/retell/webhook`: verifies and persists Retell call lifecycle events (call_started/call_ended/call_analyzed) into the CRM schema.
 
 Unknown `/api/*` paths must return JSON `404`, never the SPA fallback.
 

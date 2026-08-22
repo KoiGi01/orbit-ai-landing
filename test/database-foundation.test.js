@@ -624,6 +624,47 @@ test('does not create a contact for a web call', async () => {
   }
 });
 
+test('call_started fills in a stub row created out-of-order by call_ended', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    const foundation = await provisionMvpFoundation(database, {
+      clerkOrganizationId: 'org_out_of_order_started',
+      displayName: 'Out Of Order Started',
+      externalAgentId: 'agent_out_of_order_started_123',
+    });
+
+    const stubCallId = await upsertCallEnded(database, {
+      workspaceId: foundation.workspace.id,
+      externalCallId: 'call_out_of_order_started_1',
+      endedAt: '2026-08-22T10:03:00.000Z',
+      durationSeconds: 42,
+    });
+
+    const stub = await client.query('select channel, contact_id from app.calls where id = $1', [stubCallId]);
+    assert.equal(stub.rows[0].channel, 'web');
+    assert.equal(stub.rows[0].contact_id, null);
+
+    const startedCallId = await upsertCallStarted(database, {
+      workspaceId: foundation.workspace.id,
+      externalCallId: 'call_out_of_order_started_1',
+      channel: 'phone',
+      direction: 'inbound',
+      fromPhone: '+525511119999',
+      startedAt: '2026-08-22T10:00:00.000Z',
+    });
+    assert.equal(startedCallId, stubCallId);
+
+    const filled = await client.query('select channel, contact_id from app.calls where id = $1', [stubCallId]);
+    assert.equal(filled.rows[0].channel, 'phone');
+    assert.ok(filled.rows[0].contact_id);
+
+    const contact = await client.query('select phone_e164 from app.contacts where id = $1', [filled.rows[0].contact_id]);
+    assert.equal(contact.rows[0].phone_e164, '+525511119999');
+  } finally {
+    await client.close();
+  }
+});
+
 test('call_ended creates a row when call_started was never delivered', async () => {
   const { client, database } = await migratedDatabase();
   try {
@@ -673,10 +714,11 @@ test('analyzes a call, derives normal urgency, and creates exactly one review ta
       analysis: { user_sentiment: 'Positive' },
     });
 
-    const call = await client.query('select status, urgency, follow_up_required from app.calls where id = $1', [callId]);
+    const call = await client.query('select status, urgency, follow_up_required, disposition from app.calls where id = $1', [callId]);
     assert.equal(call.rows[0].status, 'analyzed');
     assert.equal(call.rows[0].urgency, 'normal');
     assert.equal(call.rows[0].follow_up_required, false);
+    assert.equal(call.rows[0].disposition, 'completed');
 
     const tasks = await client.query('select kind, priority, contact_id, call_id from app.tasks where call_id = $1', [callId]);
     assert.equal(tasks.rows.length, 1);
@@ -724,9 +766,10 @@ test('escalates urgency and task priority for a voicemail', async () => {
       analysis: { in_voicemail: true },
     });
 
-    const call = await client.query('select urgency, follow_up_required from app.calls where id = $1', [callId]);
+    const call = await client.query('select urgency, follow_up_required, disposition from app.calls where id = $1', [callId]);
     assert.equal(call.rows[0].urgency, 'urgent');
     assert.equal(call.rows[0].follow_up_required, true);
+    assert.equal(call.rows[0].disposition, 'voicemail');
 
     const task = await client.query('select kind, priority from app.tasks where call_id = $1', [callId]);
     assert.equal(task.rows[0].kind, 'urgent_callback');

@@ -18,8 +18,9 @@ export default async function handler(req, res) {
     return;
   }
 
-  const database = createDatabase();
+  let database;
   try {
+    database = createDatabase();
     const rawBody = await readRawBody(req);
     const result = await handleRetellWebhookRequest({
       rawBody,
@@ -32,6 +33,6 @@ export default async function handler(req, res) {
     console.error('Retell webhook failed:', error?.message || error);
     res.status(502).setHeader('cache-control', 'no-store').json({ error: 'webhook_processing_failed' });
   } finally {
-    await database.close();
+    if (database) await database.close();
   }
 }
