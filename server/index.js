@@ -29,6 +29,7 @@ import {
   buildRetellDemoVariables,
   configuredAgentVersion,
 } from '../lib/server/retell-demo.js';
+import { handleRetellWebhookRequest, readRawBody } from '../lib/server/retell-webhook.js';
 import {
   consumeRateLimit,
   numericEnv,
@@ -154,6 +155,35 @@ async function handleRetellToken(req, res) {
   } catch (error) {
     console.error('Retell token failed:', error?.message || error);
     sendJson(res, 502, { error: 'retell_token_failed' });
+  }
+}
+
+async function handleRetellWebhook(req, res) {
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { error: 'method_not_allowed' });
+    return;
+  }
+
+  const database = createDatabase();
+  try {
+    const rawBody = await readRawBody(req);
+    const result = await handleRetellWebhookRequest({
+      rawBody,
+      signatureHeader: req.headers['x-retell-signature'],
+      database,
+      dependencies: {},
+    });
+    if (result.body === null) {
+      res.writeHead(result.status, { 'cache-control': 'no-store' });
+      res.end();
+      return;
+    }
+    sendJson(res, result.status, result.body);
+  } catch (error) {
+    console.error('Retell webhook failed:', error?.message || error);
+    sendJson(res, 502, { error: 'webhook_processing_failed' });
+  } finally {
+    await database.close();
   }
 }
 
@@ -399,6 +429,11 @@ const server = createServer(async (req, res) => {
 
   if (pathname === '/api/retell/token') {
     await handleRetellToken(req, res);
+    return;
+  }
+
+  if (pathname === '/api/retell/webhook') {
+    await handleRetellWebhook(req, res);
     return;
   }
 
