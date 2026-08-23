@@ -78,10 +78,63 @@ test('creates an unpublished Retell draft from the configured template', async (
   assert.equal(requests[2].body.voice_emotion, 'calm');
   assert.equal(requests[2].body.voice_model, undefined);
   assert.equal(requests[2].body.enable_dynamic_responsiveness, true);
+  assert.equal(requests[2].body.webhook_url, undefined);
   assert.equal(result.agentId, 'agent_new_123');
   assert.equal(result.isPublished, false);
   assert.equal(result.promptTemplateVersion, RETELL_PROMPT_TEMPLATE_VERSION);
   assert.equal(result.voiceId, 'cartesia-Sofia');
+});
+
+test('points the new agent at the deployed webhook receiver when AUTIVEX_APP_URL is configured', async () => {
+  const requests = [];
+  const fetchImpl = async (url, options = {}) => {
+    requests.push({ url, body: options.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/get-agent/agent_template_123')) return jsonResponse({ agent_id: 'agent_template_123', voice_id: '11labs-Claudia' });
+    if (url.endsWith('/create-retell-llm')) return jsonResponse({ llm_id: 'llm_new_123' });
+    if (url.endsWith('/create-agent')) return jsonResponse({ agent_id: 'agent_new_123' });
+    throw new Error(`unexpected_request:${url}`);
+  };
+
+  await createRetellAgentDraft({
+    workspaceId: 'workspace-123',
+    clerkOrganizationId: 'org_123',
+    profile: { clinicName: 'Negocio Ejemplo' },
+  }, {
+    env: {
+      RETELL_API_KEY: 'test-key',
+      RETELL_PROVISIONING_TEMPLATE_AGENT_ID: 'agent_template_123',
+      AUTIVEX_APP_URL: 'https://autivexai.com/',
+    },
+    fetchImpl,
+  });
+
+  assert.equal(requests[2].body.webhook_url, 'https://autivexai.com/api/retell/webhook');
+});
+
+test('omits webhook_url when AUTIVEX_APP_URL is not a real https address', async () => {
+  const requests = [];
+  const fetchImpl = async (url, options = {}) => {
+    requests.push({ url, body: options.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/get-agent/agent_template_123')) return jsonResponse({ agent_id: 'agent_template_123', voice_id: '11labs-Claudia' });
+    if (url.endsWith('/create-retell-llm')) return jsonResponse({ llm_id: 'llm_new_123' });
+    if (url.endsWith('/create-agent')) return jsonResponse({ agent_id: 'agent_new_123' });
+    throw new Error(`unexpected_request:${url}`);
+  };
+
+  await createRetellAgentDraft({
+    workspaceId: 'workspace-123',
+    clerkOrganizationId: 'org_123',
+    profile: { clinicName: 'Negocio Ejemplo' },
+  }, {
+    env: {
+      RETELL_API_KEY: 'test-key',
+      RETELL_PROVISIONING_TEMPLATE_AGENT_ID: 'agent_template_123',
+      AUTIVEX_APP_URL: 'http://127.0.0.1:4184',
+    },
+    fetchImpl,
+  });
+
+  assert.equal(requests[2].body.webhook_url, undefined);
 });
 
 test('keeps the template voice model only for an ElevenLabs selection', async () => {
