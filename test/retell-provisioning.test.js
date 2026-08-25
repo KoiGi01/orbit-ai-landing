@@ -7,6 +7,7 @@ import {
   listRetellMexicanVoices,
   notifyProvisioningStarted,
   RETELL_PROMPT_TEMPLATE_VERSION,
+  syncRetellAgentWebhook,
   updateRetellAgentPrompt,
   updateRetellAgentVoice,
   updateRetellCalendarIntegration,
@@ -86,6 +87,40 @@ test('rejects updateRetellAgentPrompt without an llmId', async () => {
   await assert.rejects(
     updateRetellAgentPrompt({ profile: {} }, { env: { RETELL_API_KEY: 'test-key' }, fetchImpl: async () => { throw new Error('should not be called'); } }),
     /missing_retell_llm_id/,
+  );
+});
+
+test('syncs webhook_url onto an existing agent that predates it', async () => {
+  const requests = [];
+  const fetchImpl = async (url, options = {}) => {
+    requests.push({ url, method: options.method, body: options.body ? JSON.parse(options.body) : null });
+    return new Response(null, { status: 204 });
+  };
+
+  const result = await syncRetellAgentWebhook(
+    { agentId: 'agent_old_123' },
+    { env: { RETELL_API_KEY: 'test-key', AUTIVEX_APP_URL: 'https://autivexai.com' }, fetchImpl },
+  );
+
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].url, /\/update-agent\/agent_old_123$/);
+  assert.equal(requests[0].method, 'PATCH');
+  assert.equal(requests[0].body.webhook_url, 'https://autivexai.com/api/retell/webhook');
+  assert.deepEqual(result, { updated: true });
+});
+
+test('skips syncing webhook_url when AUTIVEX_APP_URL is not a real https address', async () => {
+  const result = await syncRetellAgentWebhook(
+    { agentId: 'agent_old_123' },
+    { env: { RETELL_API_KEY: 'test-key', AUTIVEX_APP_URL: 'http://127.0.0.1:4184' }, fetchImpl: async () => { throw new Error('should not be called'); } },
+  );
+  assert.deepEqual(result, { updated: false });
+});
+
+test('rejects syncRetellAgentWebhook without an agentId', async () => {
+  await assert.rejects(
+    syncRetellAgentWebhook({}, { env: { RETELL_API_KEY: 'test-key' }, fetchImpl: async () => { throw new Error('should not be called'); } }),
+    /missing_retell_agent_id/,
   );
 });
 
