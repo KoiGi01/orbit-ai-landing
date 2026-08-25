@@ -5,6 +5,7 @@ import {
   getWorkspaceActivityForClient,
   getWorkspaceVoiceCatalog,
   saveProspectProfile,
+  saveWorkspaceAgentConfiguration,
   saveWorkspaceVoice,
 } from '../lib/server/clerk-control.js';
 import { createDatabase } from '../lib/server/database.js';
@@ -36,6 +37,10 @@ export default async function handler(req, res) {
       return;
     }
     if (req.method === 'PATCH') {
+      if (req.body?.action === 'update_agent_configuration') {
+        sendJson(res, 200, await saveWorkspaceAgentConfiguration(authorization, req.body?.agent));
+        return;
+      }
       if (req.body?.action !== 'update_voice') {
         sendJson(res, 400, { error: 'invalid_workspace_action' });
         return;

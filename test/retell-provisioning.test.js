@@ -7,6 +7,7 @@ import {
   listRetellMexicanVoices,
   notifyProvisioningStarted,
   RETELL_PROMPT_TEMPLATE_VERSION,
+  updateRetellAgentPrompt,
   updateRetellAgentVoice,
   updateRetellCalendarIntegration,
 } from '../lib/server/retell-provisioning.js';
@@ -32,6 +33,60 @@ test('builds a concise Mexican Spanish business prompt without private notes', (
   assert.match(prompt, /español mexicano natural/);
   assert.match(prompt, /Limpieza; Ortodoncia/);
   assert.doesNotMatch(prompt, /texto secreto/);
+});
+
+test('includes schedule exceptions in the prompt only when off days are set', () => {
+  const withoutOffDays = buildRetellBusinessPrompt({ clinicName: 'Clínica Centro' });
+  assert.doesNotMatch(withoutOffDays, /Excepciones de horario/);
+
+  const withOffDays = buildRetellBusinessPrompt({
+    clinicName: 'Clínica Centro',
+    offDays: ['25 de diciembre', 'Domingos'],
+  });
+  assert.match(withOffDays, /Excepciones de horario: 25 de diciembre; Domingos/);
+});
+
+test('pushes a regenerated prompt and greeting to an existing agent LLM', async () => {
+  const requests = [];
+  const fetchImpl = async (url, options = {}) => {
+    requests.push({ url, method: options.method, body: options.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/update-retell-llm/llm_existing_123')) return new Response(null, { status: 204 });
+    throw new Error(`unexpected_request:${url}`);
+  };
+
+  const result = await updateRetellAgentPrompt({
+    llmId: 'llm_existing_123',
+    profile: { clinicName: 'Clínica Nueva', city: 'Puebla', greeting: 'Buenas, aquí Clínica Nueva.' },
+  }, { env: { RETELL_API_KEY: 'test-key' }, fetchImpl });
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].method, 'PATCH');
+  assert.match(requests[0].body.general_prompt, /Clínica Nueva/);
+  assert.match(requests[0].body.general_prompt, /Puebla/);
+  assert.equal(requests[0].body.begin_message, 'Buenas, aquí Clínica Nueva.');
+  assert.deepEqual(result, { updated: true });
+});
+
+test('falls back to the default greeting template when no custom greeting is set', async () => {
+  const requests = [];
+  const fetchImpl = async (url, options = {}) => {
+    requests.push({ body: JSON.parse(options.body) });
+    return new Response(null, { status: 204 });
+  };
+
+  await updateRetellAgentPrompt({
+    llmId: 'llm_existing_123',
+    profile: { clinicName: 'Clínica Nueva' },
+  }, { env: { RETELL_API_KEY: 'test-key' }, fetchImpl });
+
+  assert.equal(requests[0].body.begin_message, 'Hola, gracias por llamar a Clínica Nueva. Soy Lucía, la asistente virtual. ¿En qué puedo ayudarle?');
+});
+
+test('rejects updateRetellAgentPrompt without an llmId', async () => {
+  await assert.rejects(
+    updateRetellAgentPrompt({ profile: {} }, { env: { RETELL_API_KEY: 'test-key' }, fetchImpl: async () => { throw new Error('should not be called'); } }),
+    /missing_retell_llm_id/,
+  );
 });
 
 test('creates an unpublished Retell draft from the configured template', async () => {

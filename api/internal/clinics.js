@@ -7,6 +7,7 @@ import {
   listClinics,
   manageClinicMember,
   overrideClinicStage,
+  saveClinicAgentConfiguration,
   saveProvisioning,
   saveClinicCalendar,
   startClinicConfiguration,
@@ -91,6 +92,8 @@ export default async function handler(req, res) {
       clinic = await overrideClinicStage(authorization, organizationId, req.body?.stage);
     } else if (action === 'save_calendar') {
       clinic = await withDatabase((database) => saveClinicCalendar(authorization, organizationId, req.body?.calendar, database));
+    } else if (action === 'update_agent_configuration') {
+      clinic = await saveClinicAgentConfiguration(authorization, organizationId, req.body?.agent);
     } else {
       clinic = await transitionClinic(authorization, organizationId, action, req.body?.confirmation);
     }

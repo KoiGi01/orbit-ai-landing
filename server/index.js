@@ -16,8 +16,10 @@ import {
   manageClinicMember,
   overrideClinicStage,
   saveProvisioning,
+  saveClinicAgentConfiguration,
   saveClinicCalendar,
   saveProspectProfile,
+  saveWorkspaceAgentConfiguration,
   saveWorkspaceVoice,
   startClinicConfiguration,
   transitionClinic,
@@ -256,6 +258,10 @@ async function handleWorkspace(req, res) {
     }
     if (req.method === 'PATCH') {
       const body = await readJson(req);
+      if (body.action === 'update_agent_configuration') {
+        sendJson(res, 200, await saveWorkspaceAgentConfiguration(req.headers.authorization, body.agent));
+        return;
+      }
       if (body.action !== 'update_voice') {
         sendJson(res, 400, { error: 'invalid_workspace_action' });
         return;
@@ -357,6 +363,8 @@ async function handleInternalClinics(req, res) {
       clinic = await bypassClinicLive(req.headers.authorization, body.organizationId, body.confirmation);
     } else if (body.action === 'override_stage') {
       clinic = await overrideClinicStage(req.headers.authorization, body.organizationId, body.stage);
+    } else if (body.action === 'update_agent_configuration') {
+      clinic = await saveClinicAgentConfiguration(req.headers.authorization, body.organizationId, body.agent);
     } else {
       clinic = await transitionClinic(
         req.headers.authorization,
