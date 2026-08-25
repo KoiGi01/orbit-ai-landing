@@ -3,9 +3,13 @@ import {
   errorResponse,
   getWorkspace,
   getWorkspaceActivityForClient,
+  getWorkspaceNotificationsForClient,
   getWorkspaceVoiceCatalog,
+  markAllWorkspaceNotificationsReadForClient,
+  markWorkspaceNotificationReadForClient,
   saveProspectProfile,
   saveWorkspaceAgentConfiguration,
+  saveWorkspaceCalendarConnection,
   saveWorkspaceVoice,
 } from '../lib/server/clerk-control.js';
 import { createDatabase } from '../lib/server/database.js';
@@ -36,9 +40,45 @@ export default async function handler(req, res) {
       }
       return;
     }
+    if (req.method === 'GET' && req.query?.resource === 'notifications') {
+      const database = createDatabase();
+      try {
+        sendJson(res, 200, await getWorkspaceNotificationsForClient(authorization, database));
+      } finally {
+        await database.close();
+      }
+      return;
+    }
     if (req.method === 'PATCH') {
       if (req.body?.action === 'update_agent_configuration') {
         sendJson(res, 200, await saveWorkspaceAgentConfiguration(authorization, req.body?.agent));
+        return;
+      }
+      if (req.body?.action === 'save_calendar') {
+        const database = createDatabase();
+        try {
+          sendJson(res, 200, await saveWorkspaceCalendarConnection(authorization, req.body?.calendar, database));
+        } finally {
+          await database.close();
+        }
+        return;
+      }
+      if (req.body?.action === 'mark_notification_read') {
+        const database = createDatabase();
+        try {
+          sendJson(res, 200, await markWorkspaceNotificationReadForClient(authorization, database, req.body?.notificationId));
+        } finally {
+          await database.close();
+        }
+        return;
+      }
+      if (req.body?.action === 'mark_all_notifications_read') {
+        const database = createDatabase();
+        try {
+          sendJson(res, 200, await markAllWorkspaceNotificationsReadForClient(authorization, database));
+        } finally {
+          await database.close();
+        }
         return;
       }
       if (req.body?.action !== 'update_voice') {

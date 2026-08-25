@@ -12,6 +12,9 @@ import {
   provisionVoiceAgentFoundation,
   provisionWorkspaceFoundation,
   getWorkspaceActivity,
+  listWorkspaceNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
   recordWebhookEvent,
   resolveWebhookWorkspace,
   upsertCallAnalyzed,
@@ -75,6 +78,7 @@ test('applies every migration repeatedly', async () => {
         'contacts',
         'integration_connections',
         'integration_providers',
+        'notifications',
         'tasks',
         'voice_agents',
         'webhook_events',
@@ -982,6 +986,97 @@ test('excludes completed tasks from the open activity feed', async () => {
     const activity = await getWorkspaceActivity(database, 'org_completed_task');
     assert.equal(activity.tasks.length, 0);
     assert.equal(activity.calls.length, 1);
+  } finally {
+    await client.close();
+  }
+});
+
+test('creates one notification per new task and none on redelivery', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    const foundation = await provisionMvpFoundation(database, {
+      clerkOrganizationId: 'org_notifications',
+      displayName: 'Notifications',
+      externalAgentId: 'agent_notifications_123',
+    });
+    await upsertCallStarted(database, {
+      workspaceId: foundation.workspace.id,
+      externalCallId: 'call_notif_1',
+      channel: 'phone',
+      direction: 'inbound',
+      fromPhone: '+525511110004',
+    });
+
+    const analyzeOnce = () => upsertCallAnalyzed(database, {
+      workspaceId: foundation.workspace.id,
+      externalCallId: 'call_notif_1',
+      summary: 'Pidió una cita para mañana.',
+      inVoicemail: false,
+      callSuccessful: true,
+      analysis: {},
+    });
+    await analyzeOnce();
+    await analyzeOnce(); // simulates Retell redelivering the same event
+
+    const { notifications, unreadCount } = await listWorkspaceNotifications(database, 'org_notifications');
+    assert.equal(notifications.length, 1);
+    assert.equal(unreadCount, 1);
+    assert.equal(notifications[0].kind, 'task_created');
+    assert.match(notifications[0].title, /Pidió una cita/);
+    assert.equal(notifications[0].readAt, null);
+    assert.ok(notifications[0].taskId);
+    assert.ok(notifications[0].callId);
+  } finally {
+    await client.close();
+  }
+});
+
+test('marks one notification read and all notifications read, tenant-scoped', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    const foundation = await provisionMvpFoundation(database, {
+      clerkOrganizationId: 'org_notif_read',
+      displayName: 'Notif Read',
+      externalAgentId: 'agent_notif_read_123',
+    });
+    const other = await provisionMvpFoundation(database, {
+      clerkOrganizationId: 'org_notif_other',
+      displayName: 'Notif Other',
+      externalAgentId: 'agent_notif_other_123',
+    });
+
+    for (const externalCallId of ['call_notif_read_1', 'call_notif_read_2']) {
+      await upsertCallStarted(database, { workspaceId: foundation.workspace.id, externalCallId, channel: 'web', direction: 'inbound' });
+      await upsertCallAnalyzed(database, { workspaceId: foundation.workspace.id, externalCallId, summary: 'Llamada de prueba.', inVoicemail: false, callSuccessful: true, analysis: {} });
+    }
+    await upsertCallStarted(database, { workspaceId: other.workspace.id, externalCallId: 'call_notif_other_1', channel: 'web', direction: 'inbound' });
+    await upsertCallAnalyzed(database, { workspaceId: other.workspace.id, externalCallId: 'call_notif_other_1', summary: 'Otro tenant.', inVoicemail: false, callSuccessful: true, analysis: {} });
+
+    const before = await listWorkspaceNotifications(database, 'org_notif_read');
+    assert.equal(before.notifications.length, 2);
+    assert.equal(before.unreadCount, 2);
+
+    const afterOne = await markNotificationRead(database, { clerkOrganizationId: 'org_notif_read', notificationId: before.notifications[0].id });
+    assert.equal(afterOne.unreadCount, 1);
+    assert.ok(afterOne.notifications.find((item) => item.id === before.notifications[0].id).readAt);
+
+    const afterAll = await markAllNotificationsRead(database, 'org_notif_read');
+    assert.equal(afterAll.unreadCount, 0);
+    assert.ok(afterAll.notifications.every((item) => item.readAt));
+
+    // The other tenant's notification must be untouched by any of the above.
+    const otherView = await listWorkspaceNotifications(database, 'org_notif_other');
+    assert.equal(otherView.unreadCount, 1);
+  } finally {
+    await client.close();
+  }
+});
+
+test('returns an empty notifications view for a workspace that does not exist yet', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    const view = await listWorkspaceNotifications(database, 'org_no_notifications_workspace');
+    assert.deepEqual(view, { notifications: [], unreadCount: 0 });
   } finally {
     await client.close();
   }

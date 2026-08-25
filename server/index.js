@@ -11,15 +11,19 @@ import {
   errorResponse as controlErrorResponse,
   getWorkspace,
   getWorkspaceActivityForClient,
+  getWorkspaceNotificationsForClient,
   getWorkspaceVoiceCatalog,
   listClinics,
   manageClinicMember,
+  markAllWorkspaceNotificationsReadForClient,
+  markWorkspaceNotificationReadForClient,
   overrideClinicStage,
   saveProvisioning,
   saveClinicAgentConfiguration,
   saveClinicCalendar,
   saveProspectProfile,
   saveWorkspaceAgentConfiguration,
+  saveWorkspaceCalendarConnection,
   saveWorkspaceVoice,
   startClinicConfiguration,
   transitionClinic,
@@ -256,10 +260,26 @@ async function handleWorkspace(req, res) {
       sendJson(res, 200, await getWorkspaceActivityForClient(req.headers.authorization, createDatabase()));
       return;
     }
+    if (resource === 'notifications') {
+      sendJson(res, 200, await getWorkspaceNotificationsForClient(req.headers.authorization, createDatabase()));
+      return;
+    }
     if (req.method === 'PATCH') {
       const body = await readJson(req);
       if (body.action === 'update_agent_configuration') {
         sendJson(res, 200, await saveWorkspaceAgentConfiguration(req.headers.authorization, body.agent));
+        return;
+      }
+      if (body.action === 'save_calendar') {
+        sendJson(res, 200, await saveWorkspaceCalendarConnection(req.headers.authorization, body.calendar, createDatabase()));
+        return;
+      }
+      if (body.action === 'mark_notification_read') {
+        sendJson(res, 200, await markWorkspaceNotificationReadForClient(req.headers.authorization, createDatabase(), body.notificationId));
+        return;
+      }
+      if (body.action === 'mark_all_notifications_read') {
+        sendJson(res, 200, await markAllWorkspaceNotificationsReadForClient(req.headers.authorization, createDatabase()));
         return;
       }
       if (body.action !== 'update_voice') {
