@@ -118,6 +118,31 @@ export function getWorkspaceActivity(getToken) {
   return controlRequest(getToken, '/api/workspace?resource=activity');
 }
 
+export function getWorkspaceNotifications(getToken) {
+  return controlRequest(getToken, '/api/workspace?resource=notifications');
+}
+
+export function markWorkspaceNotificationRead(getToken, notificationId) {
+  return controlRequest(getToken, '/api/workspace', {
+    method: 'PATCH',
+    body: JSON.stringify({ action: 'mark_notification_read', notificationId }),
+  });
+}
+
+export function markAllWorkspaceNotificationsRead(getToken) {
+  return controlRequest(getToken, '/api/workspace', {
+    method: 'PATCH',
+    body: JSON.stringify({ action: 'mark_all_notifications_read' }),
+  });
+}
+
+export function saveWorkspaceCalendar(getToken, calendarId) {
+  return controlRequest(getToken, '/api/workspace', {
+    method: 'PATCH',
+    body: JSON.stringify({ action: 'save_calendar', calendar: { calendarId } }),
+  });
+}
+
 export function updateWorkspaceVoice(getToken, voiceId) {
   return controlRequest(getToken, '/api/workspace', {
     method: 'PATCH',

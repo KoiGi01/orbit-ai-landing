@@ -4,40 +4,50 @@
  * same semantics at a calmer intensity so it remains comfortable to operate.
  */
 
+/*
+ * Premium dark pass (2026-08-25): the base moved from a light "paper"
+ * surface to a deep navy-black grounded in the brand's own --night value
+ * (previously used only for the sidebar/pulse panel). Coral and cyan stay
+ * exactly what they were -- accents, used sparingly -- everything else in
+ * this file below already references these tokens by name, so redefining
+ * them here is most of the work. The few rules that had hardcoded light
+ * colors instead of a token are fixed individually further down.
+ */
 :root {
-  --paper: #f6f8ff;
-  --paper-deep: #edf2ff;
-  --surface: #ffffff;
-  --surface-strong: #ffffff;
-  --surface-muted: #eef2ff;
-  --surface-hover: #f2f5ff;
-  --ink: #071631;
-  --ink-2: #122747;
-  --ink-soft: #50617a;
-  --ink-faint: #627087;
-  --line: #dbe3f1;
-  --line-strong: #c5d0e3;
-  --night: #071631;
-  --night-2: #0d2144;
-  --night-line: #263d61;
-  --on-night: #f6f8ff;
-  --on-night-muted: #a9b8d0;
-  --cobalt: #1859ff;
-  --cobalt-deep: #0b3fcc;
-  --cobalt-soft: #e9efff;
+  --paper: #050b16;
+  --paper-deep: #03060d;
+  --surface: #0e1727;
+  --surface-strong: #131f34;
+  --surface-muted: #0b1420;
+  --surface-hover: #16233a;
+  --ink: #f4f6fb;
+  --ink-2: #dbe2f0;
+  --ink-soft: #8891a8;
+  --ink-faint: #626d89;
+  --line: #1b2740;
+  --line-strong: #283a5c;
+  --night: #050b16;
+  --night-2: #0e1727;
+  --night-line: #1b2740;
+  --on-night: #f4f6fb;
+  --on-night-muted: #8891a8;
+  --cobalt: #5c8aff;
+  --cobalt-deep: #baccff;
+  --cobalt-soft: rgba(92, 138, 255, 0.16);
   --cyan: #47e6de;
-  --cyan-deep: #0c6b68;
-  --cyan-soft: #d9faf7;
+  --cyan-deep: #9df5f0;
+  --cyan-soft: rgba(71, 230, 222, 0.14);
   --coral: #ff7058;
-  --coral-deep: #a73529;
-  --coral-soft: #ffe8e3;
+  --coral-deep: #ffab9c;
+  --coral-soft: rgba(255, 112, 88, 0.16);
   --yellow: #ffd763;
-  --yellow-deep: #765000;
-  --yellow-soft: #fff3c4;
-  --green: #18764f;
-  --success: #18764f;
-  --success-soft: #e5f6ed;
-  --slate: #90a0ba;
+  --yellow-deep: #ffe9a8;
+  --yellow-soft: rgba(255, 215, 99, 0.14);
+  --green: #3ddb96;
+  --success: #3ddb96;
+  --success-soft: rgba(61, 219, 150, 0.14);
+  --slate: #4c5876;
+  --font-display: 'Syne Variable', 'Syne', 'Instrument Sans Variable', sans-serif;
 }
 
 html,
@@ -48,7 +58,8 @@ body {
 
 body {
   background:
-    radial-gradient(circle at 84% -12%, rgba(24, 89, 255, 0.08), transparent 32%),
+    radial-gradient(circle at 84% -18%, rgba(71, 230, 222, 0.09), transparent 34%),
+    radial-gradient(circle at -6% 108%, rgba(255, 112, 88, 0.07), transparent 38%),
     var(--paper);
 }
 
@@ -56,8 +67,25 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 [tabindex]:focus-visible {
-  outline-color: rgba(24, 89, 255, 0.42);
+  outline-color: rgba(71, 230, 222, 0.55);
 }
+
+/* Syne carries the page's voice: headlines, the big numbers on the KPI
+   strip and dark module cards, and the brand wordmark. Instrument Sans
+   stays underneath for everything meant to be read quickly. */
+.brand-name,
+h1,
+h2,
+h3,
+.dark-module-card strong,
+.connections-summary h2,
+.kpi-card strong,
+.pulse-kpi strong,
+.usage-reserve strong {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
 
 /* Navigation and persistent chrome */
 
@@ -164,8 +192,8 @@ select:focus-visible,
 
 .clinic-mark,
 .profile-avatar {
-  color: var(--night);
-  background: var(--surface-muted);
+  color: var(--ink);
+  background: var(--surface-strong);
 }
 
 .side-nav button {
@@ -206,15 +234,16 @@ select:focus-visible,
 }
 
 .topbar {
-  background: rgba(246, 248, 255, 0.9);
-  border-bottom-color: rgba(197, 208, 227, 0.82);
+  background: rgba(5, 11, 22, 0.86);
+  border-bottom-color: var(--line);
+  backdrop-filter: blur(10px);
 }
 
 .status-button,
 .search-button,
 .top-icon {
   color: var(--ink-soft);
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.04);
   border-color: var(--line);
 }
 
@@ -222,12 +251,133 @@ select:focus-visible,
 .search-button:hover,
 .top-icon:hover {
   background: var(--surface);
-  border-color: #aebbd2;
+  border-color: var(--line-strong);
 }
 
 .status-dot {
   background: #32a56f;
   box-shadow: 0 0 0 4px rgba(50, 165, 111, 0.14);
+}
+
+.status-dot.demo {
+  background: var(--coral);
+  box-shadow: 0 0 0 4px rgba(255, 112, 88, 0.18);
+}
+
+.status-button.demo {
+  color: var(--coral-deep);
+  background: var(--coral-soft);
+  border-color: rgba(255, 112, 88, 0.32);
+}
+
+/* Mi agente form fields and the Conexiones cards -- added this pass, so
+   they never had a light-mode-only hardcoded color to begin with, but
+   still need to be pulled onto the token system explicitly. */
+
+.voice-settings-fields select,
+.agent-settings-fields input,
+.agent-settings-fields textarea,
+.tag-list-add input,
+.connection-edit input {
+  color: var(--ink);
+  background: var(--surface-muted);
+  border-color: var(--line);
+}
+
+.tag-chip {
+  color: var(--ink);
+  background: var(--surface-muted);
+  border-color: var(--line);
+}
+
+.tag-chip button {
+  color: var(--ink-soft);
+  background: var(--surface-strong);
+}
+
+.tag-list-add button,
+.connection-edit button {
+  color: #ffffff;
+  background: var(--coral);
+  border-color: var(--coral);
+}
+
+.tag-list-add button:hover,
+.connection-edit button:hover {
+  background: var(--coral-deep);
+  border-color: var(--coral-deep);
+}
+
+.tag-list-add button:disabled,
+.connection-edit button:disabled {
+  color: var(--ink-faint);
+  background: var(--surface-strong);
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+.connection-card p {
+  color: var(--ink-soft);
+}
+
+.connection-card code {
+  color: var(--cobalt-deep);
+}
+
+.connection-card header i {
+  color: var(--yellow-deep);
+  background: var(--yellow-soft);
+}
+
+.connection-card header i.connected {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.connection-request {
+  margin-top: 4px;
+}
+
+/* KPI strip + notification popover */
+
+.kpi-card {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+.kpi-card:hover {
+  border-color: var(--line-strong);
+}
+
+.kpi-card-alert {
+  border-color: rgba(255, 112, 88, 0.4);
+}
+
+.kpi-card-alert strong {
+  color: var(--coral-deep);
+}
+
+.kpi-icon {
+  color: var(--cobalt-deep);
+  background: var(--cobalt-soft);
+}
+
+.kpi-card-alert .kpi-icon {
+  color: var(--coral-deep);
+  background: var(--coral-soft);
+}
+
+.kpi-label {
+  color: var(--ink-soft);
+}
+
+.notification-empty {
+  color: var(--ink-faint);
+}
+
+.notification-popover .popover-title button {
+  color: var(--cobalt-deep);
 }
 
 .search-button kbd,
@@ -258,7 +408,7 @@ select:focus-visible,
 }
 
 .period-control {
-  background: #e8edf7;
+  background: var(--surface-muted);
   border-color: var(--line);
 }
 
@@ -411,11 +561,19 @@ select:focus-visible,
 
 .conversion-summary > button:hover,
 .reception-identity > button:hover {
-  background: rgba(24, 89, 255, 0.18);
-  border-color: #557cff;
+  background: rgba(255, 112, 88, 0.16);
+  border-color: var(--coral);
 }
 
-/* Light operational surfaces */
+.capacity-panel > button:hover,
+.primary-action:hover {
+  background: var(--coral-deep);
+  border-color: var(--coral-deep);
+}
+
+/* Elevated dark surfaces -- these used to be the app's one light band of
+   content cards against a dark sidebar; the whole shell is dark now, so
+   they're just var(--surface) like everything else. */
 
 .attention-panel,
 .signal-strip,
@@ -431,9 +589,9 @@ select:focus-visible,
 .command-palette,
 .ava-panel,
 .mobile-more-sheet {
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--surface);
   border-color: var(--line);
-  box-shadow: 0 18px 48px rgba(7, 22, 49, 0.05);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
 }
 
 .attention-panel h2 span {
@@ -543,7 +701,7 @@ select:focus-visible,
 }
 
 .signal-strip {
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--surface);
 }
 
 .signal-note {
@@ -559,7 +717,7 @@ select:focus-visible,
 .analysis-disclosure > button {
   color: var(--cobalt-deep);
   background: var(--cobalt-soft);
-  border-color: #cbd8ff;
+  border-color: rgba(92, 138, 255, 0.32);
 }
 
 .analysis-facts {
@@ -639,15 +797,9 @@ select:focus-visible,
 .capacity-panel > button,
 .primary-action {
   color: #ffffff;
-  background: var(--cobalt);
-  border-color: var(--cobalt);
-  box-shadow: 0 10px 24px rgba(24, 89, 255, 0.2);
-}
-
-.capacity-panel > button:hover,
-.primary-action:hover {
-  background: var(--cobalt-deep);
-  border-color: var(--cobalt-deep);
+  background: var(--coral);
+  border-color: var(--coral);
+  box-shadow: 0 10px 24px rgba(255, 112, 88, 0.24);
 }
 
 .secondary-action {
@@ -734,7 +886,7 @@ select:focus-visible,
 .drawer-layer,
 .modal-layer,
 .mobile-more-layer {
-  background: rgba(7, 22, 49, 0.42);
+  background: rgba(0, 0, 0, 0.55);
 }
 
 .task-drawer,
@@ -762,7 +914,7 @@ select:focus-visible,
 }
 
 .drawer-audio > div {
-  background: #dfe6f3;
+  background: var(--surface-muted);
 }
 
 .command-palette kbd {

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { OrganizationSwitcher, UserButton } from '@clerk/react';
 import '@fontsource-variable/instrument-sans';
+import '@fontsource-variable/syne';
 import {
   Activity,
   ArrowRight,
@@ -37,7 +38,16 @@ import './styles.css';
 import './brand-theme.css';
 import DashboardAuth from './auth';
 import { CallExperience } from './workspace';
-import { getWorkspaceActivity, getWorkspaceVoices, updateWorkspaceAgentConfiguration, updateWorkspaceVoice } from './control-api';
+import {
+  getWorkspaceActivity,
+  getWorkspaceNotifications,
+  getWorkspaceVoices,
+  markAllWorkspaceNotificationsRead,
+  markWorkspaceNotificationRead,
+  saveWorkspaceCalendar,
+  updateWorkspaceAgentConfiguration,
+  updateWorkspaceVoice,
+} from './control-api';
 
 const primaryNav = [
   { label: 'Hoy', icon: LayoutDashboard },
@@ -51,215 +61,35 @@ const secondaryNav = [
   { label: 'Uso y plan', icon: Gauge },
 ];
 
-const followups = [
-  {
-    id: 1,
-    initials: 'CM',
-    name: 'Carlos Mendoza',
-    detail: 'Urgencia dental',
-    note: 'Dolor agudo desde anoche. Solicita una cita hoy.',
-    time: 'Hace 34 min',
-    priority: 'Urgente',
-    priorityTone: 'urgent',
-    action: 'Devolver llamada',
-    phone: '+52 55 4182 9034',
-    summary: 'Pidió atención hoy. La llamada terminó mientras se validaba un espacio de urgencia.',
-    events: ['Llamada recibida · 18:08', 'Urgencia detectada · 18:10', 'Transferencia sin respuesta · 18:12'],
-  },
-  {
-    id: 2,
-    initials: 'MR',
-    name: 'Mariana Ruiz',
-    detail: 'Evaluación de implante',
-    note: 'La transferencia al equipo no tuvo respuesta.',
-    time: 'Hace 2 h',
-    priority: 'Transferencia',
-    priorityTone: 'warning',
-    action: 'Revisar llamada',
-    phone: '+52 55 3017 1182',
-    summary: 'Tiene interés en un implante unitario y disponibilidad por las tardes.',
-    events: ['Llamada recibida · 16:21', 'Datos capturados · 16:24', 'Transferencia sin respuesta · 16:27'],
-  },
-  {
-    id: 3,
-    initials: 'SP',
-    name: 'Sofía Pérez',
-    detail: 'Primera cita de ortodoncia',
-    note: 'Eligió horario; falta confirmar disponibilidad.',
-    time: 'Ayer',
-    priority: 'Confirmar hoy',
-    priorityTone: 'today',
-    action: 'Confirmar cita',
-    phone: '+52 55 6821 4409',
-    summary: 'Prefiere el lunes a las 17:30. El calendario tardó en responder durante la llamada.',
-    events: ['Llamada recibida · ayer, 17:42', 'Horario elegido · 17:46', 'Confirmación pendiente · 17:47'],
-  },
-  {
-    id: 4,
-    initials: 'AT',
-    name: 'Andrea Torres',
-    detail: 'Cambio de cita',
-    note: 'Solicitó mover su cita del lunes al miércoles.',
-    time: 'Ayer',
-    priority: 'Seguimiento',
-    priorityTone: 'normal',
-    action: 'Ver solicitud',
-    phone: '+52 55 7740 2381',
-    summary: 'La cita original sigue reservada hasta que el equipo apruebe el cambio.',
-    events: ['Llamada recibida · ayer, 12:14', 'Cambio solicitado · 12:17', 'En espera del equipo · 12:18'],
-  },
-];
-
-const reasons = [
-  { name: 'Tratamiento nuevo', total: 42, booked: 24, handled: 12, transferred: 3, pending: 3 },
-  { name: 'Información general', total: 34, booked: 0, handled: 30, transferred: 2, pending: 2 },
-  { name: 'Cita existente', total: 18, booked: 0, handled: 15, transferred: 2, pending: 1 },
-  { name: 'Hablar con el equipo', total: 15, booked: 0, handled: 1, transferred: 11, pending: 3 },
-  { name: 'Otros motivos', total: 19, booked: 0, handled: 16, transferred: 2, pending: 1 },
-];
-
-const reasonsByPeriod = {
-  Hoy: reasons,
-  '7 días': [
-    { name: 'Tratamiento nuevo', total: 226, booked: 131, handled: 67, transferred: 14, pending: 14 },
-    { name: 'Información general', total: 181, booked: 0, handled: 165, transferred: 9, pending: 7 },
-    { name: 'Cita existente', total: 110, booked: 0, handled: 94, transferred: 11, pending: 5 },
-    { name: 'Hablar con el equipo', total: 89, booked: 0, handled: 10, transferred: 65, pending: 14 },
-    { name: 'Otros motivos', total: 78, booked: 0, handled: 69, transferred: 5, pending: 4 },
-  ],
-  '30 días': [
-    { name: 'Tratamiento nuevo', total: 894, booked: 507, handled: 281, transferred: 52, pending: 54 },
-    { name: 'Información general', total: 735, booked: 0, handled: 665, transferred: 38, pending: 32 },
-    { name: 'Cita existente', total: 451, booked: 0, handled: 391, transferred: 39, pending: 21 },
-    { name: 'Hablar con el equipo', total: 362, booked: 0, handled: 44, transferred: 264, pending: 54 },
-    { name: 'Otros motivos', total: 306, booked: 0, handled: 268, transferred: 22, pending: 16 },
-  ],
-};
-
-const analyticsByPeriod = {
-  Hoy: {
-    calls: 128,
-    inbound: 136,
-    noWait: '93%',
-    noWaitCount: 126,
-    noWaitTrend: '+3.2 pts',
-    booked: 24,
-    bookedTrend: '+8 vs. ayer',
-    intent: 42,
-    conversion: '57%',
-    duration: '6:18',
-    durationTrend: '−42 s',
-    comparison: '+12%',
-    comparisonLabel: 'vs. ayer',
-    rangeLabel: 'Hoy · 07:00–18:52',
-    chart: {
-      title: 'Actividad por hora',
-      caption: 'Conteo de llamadas completadas · 18:00 es parcial',
-      points: [
-        { label: '07:00', value: 4 }, { label: '08:00', value: 6 },
-        { label: '09:00', value: 8 }, { label: '10:00', value: 9 },
-        { label: '11:00', value: 11 }, { label: '12:00', value: 10 },
-        { label: '13:00', value: 9 }, { label: '14:00', value: 12 },
-        { label: '15:00', value: 14 }, { label: '16:00', value: 16 },
-        { label: '17:00', value: 17 },
-        { label: '18:00*', fullLabel: '18:00–18:52', value: 12, partial: true },
-      ],
-    },
-  },
-  '7 días': {
-    calls: 684,
-    inbound: 712,
-    noWait: '94%',
-    noWaitCount: 669,
-    noWaitTrend: '+1.8 pts',
-    booked: 131,
-    bookedTrend: '+19 vs. 7 días anteriores',
-    intent: 226,
-    conversion: '58%',
-    duration: '5:54',
-    durationTrend: '−31 s',
-    comparison: '+8%',
-    comparisonLabel: 'vs. 7 días anteriores',
-    rangeLabel: '25–31 de julio',
-    chart: {
-      title: 'Actividad por día',
-      caption: 'Conteo diario · Hoy incluye hasta las 18:52',
-      points: [
-        { label: 'Sáb 25', value: 85 }, { label: 'Dom 26', value: 91 },
-        { label: 'Lun 27', value: 88 }, { label: 'Mar 28', value: 104 },
-        { label: 'Mié 29', value: 97 }, { label: 'Jue 30', value: 112 },
-        { label: 'Hoy*', fullLabel: 'Vie 31 · hasta 18:52', value: 107, partial: true },
-      ],
-    },
-  },
-  '30 días': {
-    calls: 2748,
-    inbound: 2841,
-    noWait: '94%',
-    noWaitCount: 2671,
-    noWaitTrend: '+2.1 pts',
-    booked: 507,
-    bookedTrend: '+61 vs. 30 días anteriores',
-    intent: 894,
-    conversion: '57%',
-    duration: '5:47',
-    durationTrend: '−38 s',
-    comparison: '+14%',
-    comparisonLabel: 'vs. 30 días anteriores',
-    rangeLabel: '1–31 de julio',
-    chart: {
-      title: 'Actividad por semana',
-      caption: 'Bloques del mes · el último incluye hasta hoy a las 18:52',
-      points: [
-        { label: '1–6 jul', value: 512 }, { label: '7–12', value: 548 },
-        { label: '13–18', value: 566 }, { label: '19–24', value: 590 },
-        { label: '25–31*', fullLabel: '25–31 jul · hasta 18:52', value: 532, partial: true },
-      ],
-    },
-  },
-};
-
-const appointments = [
-  { time: '09:30', name: 'Lucía Hernández', service: 'Limpieza', state: 'Confirmada' },
-  { time: '11:00', name: 'Tomás Varela', service: 'Valoración', state: 'Confirmada' },
-  { time: '13:30', name: 'Elena Ríos', service: 'Implante', state: 'Por confirmar' },
-  { time: '16:00', name: 'Diego Lozano', service: 'Ortodoncia', state: 'Confirmada' },
-  { time: '17:30', name: 'Sofía Pérez', service: 'Primera cita', state: 'Pendiente' },
-];
-
-const recentCalls = [
-  { taskId: 1, name: 'Carlos Mendoza', time: '18:08', reason: 'Urgencia dental', duration: '4:16', result: 'Requiere atención', tone: 'urgent' },
-  { name: 'Paola Jiménez', time: '17:52', reason: 'Tratamiento nuevo', duration: '5:42', result: 'Cita creada', tone: 'success' },
-  { name: 'Mario Castillo', time: '17:31', reason: 'Información general', duration: '2:18', result: 'Resuelta', tone: 'neutral' },
-  { name: 'Laura Campos', time: '17:04', reason: 'Tratamiento nuevo', duration: '6:03', result: 'Cita creada', tone: 'success' },
-  { name: 'Fernanda Ortiz', time: '16:38', reason: 'Cita existente', duration: '3:29', result: 'Transferida', tone: 'info' },
-];
-
+// moduleCopy: short and functional on purpose. Every section used to open
+// with a line of ad copy ("Así atiende Lucía cuando suena el teléfono.") that
+// took up space without telling the reader anything - cut in favor of
+// getting to the actual data faster.
 const moduleCopy = {
   Conversaciones: {
     eyebrow: 'Bitácora',
-    title: 'Cada llamada, con todo su contexto.',
-    description: 'Busca, escucha y entiende qué decidió la recepcionista en cada conversación.',
+    title: 'Conversaciones',
+    description: 'Busca y escucha cualquier llamada que haya atendido tu recepcionista.',
   },
   Oportunidades: {
-    eyebrow: 'Seguimiento comercial',
-    title: 'Las conversaciones que pueden convertirse.',
-    description: 'Prospectos, citas y próximos pasos en un solo flujo de trabajo.',
+    eyebrow: 'Seguimiento',
+    title: 'Oportunidades',
+    description: 'Prospectos y citas que necesitan un siguiente paso.',
   },
   'Mi agente': {
-    eyebrow: 'Servicio administrado',
-    title: 'Así atiende Lucía cuando suena el teléfono.',
-    description: 'Disponibilidad, conocimiento y reglas de transferencia de tu recepcionista.',
+    eyebrow: 'Recepcionista',
+    title: 'Mi agente',
+    description: 'Voz, disponibilidad y datos del negocio que usa Lucía para atender.',
   },
   Conexiones: {
-    eyebrow: 'Sistemas conectados',
-    title: 'El recorrido de cada dato.',
-    description: 'Calendario, telefonía y mensajería trabajando como una sola operación.',
+    eyebrow: 'Integraciones',
+    title: 'Conexiones',
+    description: 'Los sistemas conectados a tu agente y qué función cumple cada uno.',
   },
   'Uso y plan': {
     eyebrow: 'Capacidad',
-    title: 'Uso predecible, sin sorpresas.',
-    description: 'Consumo actual, proyección mensual y margen disponible para crecer.',
+    title: 'Uso y plan',
+    description: 'Consumo del mes y margen disponible.',
   },
 };
 
@@ -452,7 +282,17 @@ function App({ account, workspace }) {
   const [active, setActive] = useState('Hoy');
   const [period, setPeriod] = useState('Hoy');
   const [tasks, setTasks] = useState([]);
-  const calls = useMemo(() => (activity?.calls || []).map(createRealCallListItem), [activity]);
+  const periodDays = period === '7 días' ? 7 : period === '30 días' ? 30 : 1;
+  // The old period selector didn't actually filter anything -- it toggled a
+  // hardcoded demo dataset. Now that calls are real, it filters them by
+  // startedAt for real.
+  const periodCalls = useMemo(() => {
+    const rawCalls = activity?.calls || [];
+    if (!rawCalls.length) return rawCalls;
+    const cutoff = Date.now() - periodDays * 24 * 60 * 60 * 1000;
+    return rawCalls.filter((call) => !call.startedAt || new Date(call.startedAt).getTime() >= cutoff);
+  }, [activity, periodDays]);
+  const calls = useMemo(() => periodCalls.map(createRealCallListItem), [periodCalls]);
   const [taskFilter, setTaskFilter] = useState('Todas');
   const [selectedTask, setSelectedTask] = useState(null);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -461,12 +301,28 @@ function App({ account, workspace }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [notice, setNotice] = useState(null);
   const [testCallOpen, setTestCallOpen] = useState(false);
+  const [notifications, setNotifications] = useState({ notifications: [], unreadCount: 0 });
+  const [notifOpen, setNotifOpen] = useState(false);
   const testProfile = workspace?.profile || { clinicName: identity.clinicName };
   const testScenario = {
     key: 'workspace_browser_test',
     label: 'Llamada libre de prueba',
     description: `Prueba privada del agente configurado para ${identity.clinicName}.`,
   };
+
+  // Real KPIs, computed from the same activity fetch the rest of the page
+  // already uses -- no separate endpoint needed for numbers this simple.
+  const kpis = useMemo(() => {
+    const completed = periodCalls.filter((call) => call.status !== 'ongoing');
+    const timed = completed.filter((call) => Number.isFinite(call.durationSeconds));
+    const needsAttention = periodCalls.filter((call) => call.followUpRequired).length;
+    return {
+      totalCalls: periodCalls.length,
+      avgDurationSeconds: timed.length ? Math.round(timed.reduce((sum, call) => sum + call.durationSeconds, 0) / timed.length) : null,
+      needsAttention,
+      resolved: Math.max(0, completed.length - needsAttention),
+    };
+  }, [periodCalls]);
 
   useEffect(() => {
     let cancelled = false;
@@ -481,6 +337,30 @@ function App({ account, workspace }) {
       });
     return () => { cancelled = true; };
   }, [account.getToken]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => getWorkspaceNotifications(account.getToken)
+      .then((data) => { if (!cancelled) setNotifications(data); })
+      .catch(() => {});
+    load();
+    const interval = window.setInterval(load, 45000);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, [account.getToken]);
+
+  const readNotification = async (notification) => {
+    if (notification.readAt) return;
+    setNotifications((current) => ({
+      unreadCount: Math.max(0, current.unreadCount - 1),
+      notifications: current.notifications.map((item) => item.id === notification.id ? { ...item, readAt: new Date().toISOString() } : item),
+    }));
+    try { setNotifications(await markWorkspaceNotificationRead(account.getToken, notification.id)); } catch { /* local state already updated */ }
+  };
+
+  const readAllNotifications = async () => {
+    setNotifications((current) => ({ unreadCount: 0, notifications: current.notifications.map((item) => ({ ...item, readAt: item.readAt || new Date().toISOString() })) }));
+    try { setNotifications(await markAllWorkspaceNotificationsRead(account.getToken)); } catch { /* local state already updated */ }
+  };
 
   const toast = (message, action = null) => {
     setNotice({ message, action });
@@ -497,13 +377,17 @@ function App({ account, workspace }) {
   };
 
   const resolveTask = (task) => {
+    const removedIndex = tasks.findIndex((item) => item.id === task.id);
     setTasks((current) => current.filter((item) => item.id !== task.id));
     setSelectedTask(null);
     toast(`Pendiente resuelto: ${task.name}`, {
       label: 'Deshacer',
       onClick: () => {
-        setTasks((current) => [...current.filter((item) => item.id !== task.id), task]
-          .sort((a, b) => followups.findIndex((item) => item.id === a.id) - followups.findIndex((item) => item.id === b.id)));
+        setTasks((current) => {
+          const next = current.filter((item) => item.id !== task.id);
+          next.splice(Math.min(removedIndex, next.length), 0, task);
+          return next;
+        });
         toast(`Pendiente restaurado: ${task.name}`);
       },
     });
@@ -532,6 +416,7 @@ function App({ account, workspace }) {
     setStatusOpen(false);
     setAssistantOpen(false);
     setMoreOpen(false);
+    setNotifOpen(false);
     setSelectedTask(task);
   };
 
@@ -539,7 +424,14 @@ function App({ account, workspace }) {
     if (document.querySelector('[aria-modal="true"]')) return;
     setStatusOpen(false);
     setAssistantOpen(false);
+    setNotifOpen(false);
     setCommandOpen(true);
+  };
+
+  const toggleNotifications = () => {
+    setStatusOpen(false);
+    setAssistantOpen(false);
+    setNotifOpen((value) => !value);
   };
 
   useEffect(() => {
@@ -559,6 +451,7 @@ function App({ account, workspace }) {
         else if (document.querySelector('.mobile-more-sheet')) setMoreOpen(false);
         else if (document.querySelector('.task-drawer')) setSelectedTask(null);
         else if (document.querySelector('.ava-panel')) setAssistantOpen(false);
+        else if (document.querySelector('.notification-popover')) setNotifOpen(false);
         else if (document.querySelector('.status-popover')) setStatusOpen(false);
       }
     };
@@ -590,9 +483,17 @@ function App({ account, workspace }) {
             clinicName={identity.clinicName}
             dataMode={dataMode}
             statusOpen={statusOpen}
-            onToggleStatus={() => setStatusOpen((value) => !value)}
+            onToggleStatus={() => { setNotifOpen(false); setStatusOpen((value) => !value); }}
             onSearch={openCommand}
             onAction={toast}
+            notifications={notifications}
+            notifOpen={notifOpen}
+            onToggleNotifications={toggleNotifications}
+            onReadNotification={readNotification}
+            onReadAllNotifications={readAllNotifications}
+            onNavigate={navigate}
+            onSelectTask={selectTask}
+            tasks={tasks}
           />
           {active === 'Hoy' ? (
             <Dashboard
@@ -601,6 +502,7 @@ function App({ account, workspace }) {
               taskFilter={taskFilter}
               tasks={tasks}
               calls={calls}
+              kpis={kpis}
               onTaskFilter={setTaskFilter}
               onSelectTask={selectTask}
               onNavigate={navigate}
@@ -712,7 +614,11 @@ function Sidebar({ active, taskCount, identity, dataMode, onNavigate }) {
   );
 }
 
-function Topbar({ active, clinicName, dataMode, statusOpen, onToggleStatus, onSearch, onAction }) {
+function Topbar({
+  active, clinicName, dataMode, statusOpen, onToggleStatus, onSearch, onAction,
+  notifications, notifOpen, onToggleNotifications, onReadNotification, onReadAllNotifications, onNavigate, onSelectTask, tasks,
+}) {
+  const unreadCount = notifications.unreadCount;
   return (
     <header className="topbar">
       <div className="mobile-wordmark" aria-label="AutiveX Control">
@@ -732,14 +638,55 @@ function Topbar({ active, clinicName, dataMode, statusOpen, onToggleStatus, onSe
         <button className="search-button" type="button" onClick={onSearch} aria-label="Buscar en AutiveX">
           <Search size={17} aria-hidden="true" /><span>Buscar</span><kbd><Command size={11} /> K</kbd>
         </button>
-        <button className="top-icon" type="button" aria-label="Notificaciones" onClick={() => onAction('No tienes notificaciones nuevas')}>
-          <Bell size={18} aria-hidden="true" /><i />
-        </button>
+        <div className="status-wrap">
+          <button className="top-icon" type="button" aria-expanded={notifOpen} aria-label={unreadCount > 0 ? `Notificaciones, ${unreadCount} sin leer` : 'Notificaciones'} onClick={onToggleNotifications}>
+            <Bell size={18} aria-hidden="true" />
+            {unreadCount > 0 && <i>{unreadCount > 9 ? '9+' : unreadCount}</i>}
+          </button>
+          {notifOpen && (
+            <NotificationPopover
+              notifications={notifications.notifications}
+              onRead={onReadNotification}
+              onReadAll={onReadAllNotifications}
+              onOpenTask={(notification) => {
+                const task = tasks.find((item) => item.id === `task-${notification.taskId}`);
+                if (task) { onSelectTask(task); return; }
+                onNavigate(notification.taskId ? 'Oportunidades' : 'Conversaciones');
+              }}
+            />
+          )}
+        </div>
         <button className="top-icon help-icon" type="button" aria-label="Centro de ayuda" onClick={() => onAction('Centro de ayuda abierto')}>
           <CircleHelp size={18} aria-hidden="true" />
         </button>
       </div>
     </header>
+  );
+}
+
+function NotificationPopover({ notifications, onRead, onReadAll, onOpenTask }) {
+  const hasUnread = notifications.some((item) => !item.readAt);
+  return (
+    <div className="status-popover notification-popover">
+      <div className="popover-title">
+        <div><strong>Notificaciones</strong><small>Lo que Lucía registró recientemente</small></div>
+        {hasUnread && <button type="button" className="text-link" onClick={onReadAll}>Marcar todas leídas</button>}
+      </div>
+      <div className="notification-list">
+        {notifications.length === 0 && <div className="notification-empty"><Bell size={18} /><span>Sin notificaciones todavía.</span></div>}
+        {notifications.map((notification) => (
+          <button
+            type="button"
+            key={notification.id}
+            className={`notification-row ${notification.readAt ? '' : 'unread'}`}
+            onClick={() => { onRead(notification); if (notification.taskId || notification.callId) onOpenTask(notification); }}
+          >
+            <span className="notification-dot" aria-hidden="true" />
+            <span className="notification-body"><strong>{notification.title}</strong><small>{notification.body}</small><time>{relativeTimeFrom(notification.createdAt)}</time></span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -771,7 +718,34 @@ function StatusPopover({ dataMode }) {
   );
 }
 
-function Dashboard({ period, onPeriod, tasks, calls, taskFilter, onTaskFilter, onSelectTask, onNavigate, onAction, firstName, isAdmin, dataMode }) {
+function formatKpiDuration(seconds) {
+  if (!Number.isFinite(seconds)) return '—';
+  const minutes = Math.floor(seconds / 60);
+  const remaining = Math.floor(seconds % 60);
+  return `${minutes}:${String(remaining).padStart(2, '0')}`;
+}
+
+function KpiStrip({ kpis, isDemoData }) {
+  const cards = [
+    { label: 'Llamadas registradas', value: kpis.totalCalls.toLocaleString('es-MX'), icon: PhoneCall },
+    { label: 'Resueltas sin intervención', value: kpis.resolved.toLocaleString('es-MX'), icon: CheckCircle2 },
+    { label: 'Necesitan atención', value: kpis.needsAttention.toLocaleString('es-MX'), icon: ShieldCheck, alert: kpis.needsAttention > 0 },
+    { label: 'Duración promedio', value: formatKpiDuration(kpis.avgDurationSeconds), icon: Clock3 },
+  ];
+  return (
+    <section className="kpi-strip" aria-label="Indicadores de actividad">
+      {cards.map(({ label, value, icon: Icon, alert }, index) => (
+        <article className={`kpi-card ${alert ? 'kpi-card-alert' : ''}`} key={label} style={{ '--stagger': index }}>
+          <span className="kpi-icon"><Icon size={17} /></span>
+          <strong>{isDemoData ? '—' : value}</strong>
+          <span className="kpi-label">{label}</span>
+        </article>
+      ))}
+    </section>
+  );
+}
+
+function Dashboard({ period, onPeriod, tasks, calls, kpis, taskFilter, onTaskFilter, onSelectTask, onNavigate, onAction, firstName, isAdmin, dataMode }) {
   const [analysisOpen, setAnalysisOpen] = useState(false);
   const firstTask = tasks[0];
   return (
@@ -788,6 +762,8 @@ function Dashboard({ period, onPeriod, tasks, calls, taskFilter, onTaskFilter, o
           ))}
         </div>
       </section>
+
+      <KpiStrip kpis={kpis} isDemoData={dataMode.isDemo} />
 
       <section className="hero-grid">
         <AttentionPanel tasks={tasks} isDemoData={dataMode.isDemo} filter={taskFilter} onFilter={onTaskFilter} onSelect={onSelectTask} onNavigate={onNavigate} />
@@ -828,89 +804,6 @@ function PulsePlaceholder({ onNavigate }) {
   );
 }
 
-function PulsePanel({ data, isDemoData, onNavigate }) {
-  const peak = data.chart.points.reduce((highest, point) => point.value > highest.value ? point : highest);
-  const intentRate = Math.round((data.intent / data.calls) * 100);
-  return (
-    <article className="pulse-panel">
-      <header className="pulse-header">
-        <div className="pulse-kpi">
-          <span>{isDemoData ? 'Llamadas registradas' : 'Llamadas atendidas'}</span>
-          <div className="pulse-value-row"><strong>{data.calls.toLocaleString('es-MX')}</strong><small>{data.rangeLabel}</small></div>
-          <p>{data.inbound.toLocaleString('es-MX')} entrantes <i /> {data.noWait} sin espera</p>
-        </div>
-        <div className="comparison"><strong><ArrowUpRight size={15} />{data.comparison}</strong><span>{data.comparisonLabel}</span></div>
-      </header>
-
-      <section className="volume-section">
-        <header className="volume-head">
-          <div><h3>{data.chart.title}</h3><p>{data.chart.caption}</p></div>
-          <div className="peak-metric"><span>Pico</span><strong>{peak.fullLabel || peak.label}</strong><small>{peak.value.toLocaleString('es-MX')} llamadas</small></div>
-        </header>
-        <VolumeChart points={data.chart.points} total={data.calls} title={data.chart.title} peakValue={peak.value} />
-      </section>
-
-      <footer className="conversion-summary">
-        <div className="conversion-flow">
-          <span className="conversion-kicker">Ruta a cita</span>
-          <div className="conversion-steps">
-            <div><strong>{data.intent.toLocaleString('es-MX')}</strong><span>con intención</span><small>{intentRate}% de atendidas</small></div>
-            <ArrowRight size={18} aria-hidden="true" />
-            <div><strong>{data.booked.toLocaleString('es-MX')}</strong><span>citas creadas</span><small>en el periodo</small></div>
-          </div>
-        </div>
-        <div className="conversion-score">
-          <span>Conversión a cita</span><strong>{data.conversion}</strong><small>{data.booked.toLocaleString('es-MX')} de {data.intent.toLocaleString('es-MX')} agendaron</small>
-          <div className="conversion-progress" aria-hidden="true"><i style={{ width: data.conversion }} /></div>
-        </div>
-        <button type="button" onClick={() => onNavigate('Conversaciones')}>Abrir bitácora <ArrowUpRight size={15} /></button>
-      </footer>
-    </article>
-  );
-}
-
-function getChartMaximum(value) {
-  if (value <= 25) return Math.ceil(value / 5) * 5;
-  if (value <= 150) return Math.ceil(value / 20) * 20;
-  if (value <= 700) return Math.ceil(value / 100) * 100;
-  return Math.ceil(value / 500) * 500;
-}
-
-function VolumeChart({ points, total, title, peakValue }) {
-  const chartMaximum = getChartMaximum(Math.max(...points.map((point) => point.value)));
-  const ticks = [chartMaximum, chartMaximum * 0.75, chartMaximum * 0.5, chartMaximum * 0.25, 0];
-  const labelEvery = points.length >= 10 ? 3 : points.length >= 8 ? 2 : 1;
-  const summary = `${total.toLocaleString('es-MX')} llamadas en total. ${points.map((point) => `${point.fullLabel || point.label}: ${point.value}`).join('; ')}.`;
-  return (
-    <figure className="volume-chart">
-      <figcaption className="sr-only">{title}. {summary}</figcaption>
-      <div className="volume-chart-visual" aria-hidden="true">
-        <div className="volume-y-axis">{ticks.map((tick) => <span key={tick}>{tick.toLocaleString('es-MX')}</span>)}</div>
-        <div className="volume-plot">
-          <div className="volume-grid">{ticks.map((tick) => <i key={tick} />)}</div>
-          <div className="volume-bars">
-            {points.map((point, index) => {
-              const showLabel = index % labelEvery === 0 || index === points.length - 1;
-              const share = Math.round((point.value / total) * 100);
-              const edgeClass = index === 0 ? 'edge-start' : index === points.length - 1 ? 'edge-end' : '';
-              return (
-                <div className={`volume-column ${edgeClass}`} key={`${point.label}-${point.value}`}>
-                  <div className="volume-bar-track">
-                    <span className={`volume-bar ${point.value === peakValue ? 'peak' : ''} ${point.partial ? 'partial' : ''}`} style={{ height: `${(point.value / chartMaximum) * 100}%` }}>
-                      <span className="volume-tooltip"><strong>{point.value.toLocaleString('es-MX')}</strong><small>llamadas · {share}%</small></span>
-                    </span>
-                  </div>
-                  <span className={`volume-x-label ${showLabel ? '' : 'hidden'}`}>{point.label}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    </figure>
-  );
-}
-
 function AttentionPanel({ tasks, isDemoData, filter, onFilter, onSelect, onNavigate }) {
   const filtered = useMemo(() => {
     if (filter === 'Urgentes') return tasks.filter((item) => item.priorityTone === 'urgent' || item.priorityTone === 'warning');
@@ -940,15 +833,6 @@ function AttentionPanel({ tasks, isDemoData, filter, onFilter, onSelect, onNavig
       </div>
       <button type="button" className="text-link" onClick={() => onNavigate('Oportunidades')}>Ver toda la cola <ArrowRight size={15} /></button>
     </aside>
-  );
-}
-
-function SignalMetric({ value, label, meta, trend }) {
-  return (
-    <div className="signal-metric">
-      <div><strong>{value}</strong><span>{label}</span></div>
-      <footer><span>{meta}</span><b>{trend}</b></footer>
-    </div>
   );
 }
 
@@ -1030,12 +914,12 @@ function ModulePage({ title, tasks, calls, clinicName, dataMode, profile, connec
     <main className="module-page">
       <section className="module-heading">
         <div><p className="eyebrow">{copy.eyebrow}</p><h1>{copy.title}</h1><span>{dataMode.isDemo ? pendingDescriptions[title] : copy.description}</span></div>
-        <button type="button" className="primary-action" onClick={() => onAction(`Nueva acción en ${title}`)}>Nueva acción <ArrowUpRight size={16} /></button>
+        {!['Conexiones', 'Uso y plan'].includes(title) && <button type="button" className="primary-action" onClick={() => onAction(`Nueva acción en ${title}`)}>Nueva acción <ArrowUpRight size={16} /></button>}
       </section>
       {title === 'Conversaciones' && <ConversationsModule tasks={tasks} calls={calls} isDemoData={dataMode.isDemo} onSelectTask={onSelectTask} />}
       {title === 'Oportunidades' && <OpportunitiesModule tasks={tasks} onSelectTask={onSelectTask} />}
       {title === 'Mi agente' && <ReceptionistModule clinicName={clinicName} isDemoData={dataMode.isDemo} profile={profile} getToken={getToken} isAdmin={isAdmin} onAction={onAction} onTestAgent={onTestAgent} />}
-      {title === 'Conexiones' && <ConnectionsModule connections={connections} />}
+      {title === 'Conexiones' && <ConnectionsModule connections={connections} getToken={getToken} isAdmin={isAdmin} onAction={onAction} />}
       {title === 'Uso y plan' && <UsageModule />}
     </main>
   );
@@ -1247,18 +1131,81 @@ function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin
   );
 }
 
-function ConnectionsModule({ connections = {} }) {
-  const calendar = connections.googleCalendar || { status: 'not_connected' };
+function CalendarConnectionCard({ calendar, getToken, isAdmin, onAction, onConnected }) {
+  const isConnected = calendar.status === 'connected';
+  const [draft, setDraft] = useState('');
+  const [status, setStatus] = useState('idle');
+  const [error, setError] = useState('');
+
+  const save = async () => {
+    const calendarId = draft.trim();
+    if (!calendarId) return;
+    setStatus('saving'); setError('');
+    try {
+      const result = await saveWorkspaceCalendar(getToken, calendarId);
+      onConnected(result.connections?.googleCalendar || { status: 'connected' });
+      setDraft('');
+      setStatus('idle');
+      onAction('Calendario conectado');
+    } catch (saveError) { setError(saveError.message); setStatus('error'); }
+  };
+
+  return (
+    <article className="connection-card surface-panel connection-card-editable">
+      <header><span className="connection-icon"><CalendarCheck2 size={21} /></span><i className={isConnected ? 'connected' : 'review'}>{isConnected ? 'Conectado' : 'No conectado'}</i></header>
+      <h3>Google Calendar</h3>
+      <p>{isConnected ? `${calendar.displayName} · ${calendar.capabilities?.join(', ')}` : 'Escribe el ID del calendario de Google para que Lucía pueda consultar disponibilidad y crear citas.'}</p>
+      {isConnected && calendar.calendarIdMasked && <code>{calendar.calendarIdMasked}</code>}
+      {isAdmin ? (
+        <div className="connection-edit">
+          <input
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); save(); } }}
+            placeholder="negocio@group.calendar.google.com"
+            aria-label="ID del calendario de Google"
+            disabled={status === 'saving'}
+          />
+          <button type="button" onClick={save} disabled={!draft.trim() || status === 'saving'}>{status === 'saving' ? 'Guardando…' : isConnected ? 'Cambiar' : 'Conectar'}</button>
+        </div>
+      ) : <small>Solo un administrador puede conectar el calendario.</small>}
+      {error && <p className="voice-error">{error}</p>}
+    </article>
+  );
+}
+
+function ConnectionsModule({ connections = {}, getToken, isAdmin, onAction }) {
+  const [calendar, setCalendar] = useState(connections.googleCalendar || { status: 'not_connected' });
   const retell = connections.retell || { status: 'configuring' };
+  const requestConnection = (name) => onAction(`Solicitud enviada: te contactaremos para activar ${name}.`);
   const items = [
-    { name: 'Google Calendar', detail: calendar.status === 'connected' ? `${calendar.displayName} · ${calendar.capabilities?.join(', ')}` : 'Nuestro equipo puede conectarlo para consultar disponibilidad y administrar citas.', state: calendar.status === 'connected' ? 'Conectado' : 'Solicitar conexión', meta: calendar.calendarIdMasked, Icon: CalendarCheck2 },
     { name: 'Telefonía y agente de voz', detail: 'Atiende llamadas, conserva contexto y ejecuta las reglas configuradas.', state: retell.status === 'connected' ? 'Conectado' : 'En configuración', Icon: PhoneCall },
     { name: 'CRM AutiveX', detail: 'Organiza contactos, conversaciones, resultados y siguientes acciones.', state: 'Activo', Icon: Users },
-    { name: 'WhatsApp Business', detail: 'Confirmaciones, recordatorios y seguimiento después de cada conversación.', state: 'Disponible como add-on', Icon: MessageSquareText },
-    { name: 'Correo y notificaciones', detail: 'Resúmenes de llamadas, alertas y tareas para el equipo.', state: 'Próximamente', Icon: Bell },
-    { name: 'Webhooks y automatización', detail: 'Entrega eventos a sistemas externos bajo configuración administrada.', state: 'Administrado por AutiveX', Icon: PlugZap },
+    { name: 'WhatsApp Business', detail: 'Confirmaciones, recordatorios y seguimiento después de cada conversación.', state: 'Disponible como add-on', Icon: MessageSquareText, requestable: true },
+    { name: 'Correo y notificaciones', detail: 'Resúmenes de llamadas, alertas y tareas para el equipo.', state: 'Próximamente', Icon: Bell, requestable: true },
+    { name: 'Webhooks y automatización', detail: 'Entrega eventos a sistemas externos bajo configuración administrada.', state: 'Administrado por AutiveX', Icon: PlugZap, requestable: true },
   ];
-  return <section className="connections-workspace"><article className="connections-summary dark-module-card"><p className="dark-eyebrow">Infraestructura administrada</p><h2>{items.filter((item) => ['Conectado', 'Activo'].includes(item.state)).length} sistemas operativos</h2><span>Las credenciales y cambios sensibles son gestionados por AutiveX. Tu equipo siempre puede ver qué está conectado y qué función cumple.</span></article><div className="connection-grid">{items.map(({ name, detail, state, meta, Icon }) => <article className="connection-card surface-panel" key={name}><header><span className="connection-icon"><Icon size={21} /></span><i className={['Conectado', 'Activo'].includes(state) ? 'connected' : 'review'}>{state}</i></header><h3>{name}</h3><p>{detail}</p>{meta && <code>{meta}</code>}</article>)}</div></section>;
+  const connectedCount = items.filter((item) => ['Conectado', 'Activo'].includes(item.state)).length + (calendar.status === 'connected' ? 1 : 0);
+  return (
+    <section className="connections-workspace">
+      <article className="connections-summary dark-module-card">
+        <p className="dark-eyebrow">Infraestructura administrada</p>
+        <h2>{connectedCount} sistemas operativos</h2>
+        <span>Las credenciales y cambios sensibles son gestionados por AutiveX. Tu equipo siempre puede ver qué está conectado y qué función cumple.</span>
+      </article>
+      <div className="connection-grid">
+        <CalendarConnectionCard calendar={calendar} getToken={getToken} isAdmin={isAdmin} onAction={onAction} onConnected={setCalendar} />
+        {items.map(({ name, detail, state, Icon, requestable }) => (
+          <article className="connection-card surface-panel" key={name}>
+            <header><span className="connection-icon"><Icon size={21} /></span><i className={['Conectado', 'Activo'].includes(state) ? 'connected' : 'review'}>{state}</i></header>
+            <h3>{name}</h3>
+            <p>{detail}</p>
+            {requestable && <button type="button" className="text-link connection-request" onClick={() => requestConnection(name)}>Solicitar conexión<ArrowUpRight size={14} /></button>}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function UsageModule() {
