@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import test from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
@@ -21,8 +21,15 @@ import {
 import { databaseConfig } from '../lib/server/database.js';
 import { inspectDatabaseHealth } from '../lib/server/database-health.js';
 
-const MIGRATION_PATH = resolve('supabase/migrations/20260804000000_crm_and_integrations.sql');
-const MIGRATION = await readFile(MIGRATION_PATH, 'utf8');
+const MIGRATIONS_DIR = resolve('supabase/migrations');
+const MIGRATION_FILES = (await readdir(MIGRATIONS_DIR)).filter((name) => name.endsWith('.sql')).sort();
+const MIGRATIONS = await Promise.all(
+  MIGRATION_FILES.map((name) => readFile(resolve(MIGRATIONS_DIR, name), 'utf8')),
+);
+
+async function applyMigrations(client) {
+  for (const sql of MIGRATIONS) await client.exec(sql);
+}
 
 function pgliteAdapter(client) {
   const adapter = {
@@ -45,14 +52,14 @@ function pgliteAdapter(client) {
 
 async function migratedDatabase() {
   const client = new PGlite();
-  await client.exec(MIGRATION);
+  await applyMigrations(client);
   return { client, database: pgliteAdapter(client) };
 }
 
-test('applies the CRM and integrations migration repeatedly', async () => {
+test('applies every migration repeatedly', async () => {
   const { client } = await migratedDatabase();
   try {
-    await client.exec(MIGRATION);
+    await applyMigrations(client);
     const tables = await client.query(`
       select table_name
       from information_schema.tables
@@ -66,7 +73,6 @@ test('applies the CRM and integrations migration repeatedly', async () => {
         'calls',
         'contacts',
         'integration_connections',
-        'integration_oauth_states',
         'integration_providers',
         'tasks',
         'voice_agents',
@@ -360,10 +366,8 @@ test('keeps integration credentials server-side and requires complete connected 
     assert.equal('credentialRef' in view.integrations[0], false);
 
     const catalog = await listIntegrationCatalog(database);
-    assert.deepEqual(
-      catalog.map((provider) => provider.key).sort(),
-      ['calendly', 'custom_webhook', 'google_calendar', 'whatsapp_business'],
-    );
+    assert.deepEqual(catalog.map((provider) => provider.key), ['google_calendar']);
+    assert.equal(catalog[0].authStrategy, 'manual');
   } finally {
     await client.close();
   }

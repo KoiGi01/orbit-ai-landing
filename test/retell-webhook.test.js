@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import test from 'node:test';
@@ -8,8 +8,11 @@ import { PGlite } from '@electric-sql/pglite';
 import { provisionMvpFoundation } from '../lib/server/crm-foundation.js';
 import { handleRetellWebhookRequest, readRawBody, verifyRetellWebhookSignature } from '../lib/server/retell-webhook.js';
 
-const MIGRATION_PATH = resolve('supabase/migrations/20260804000000_crm_and_integrations.sql');
-const MIGRATION = await readFile(MIGRATION_PATH, 'utf8');
+const MIGRATIONS_DIR = resolve('supabase/migrations');
+const MIGRATION_FILES = (await readdir(MIGRATIONS_DIR)).filter((name) => name.endsWith('.sql')).sort();
+const MIGRATIONS = await Promise.all(
+  MIGRATION_FILES.map((name) => readFile(resolve(MIGRATIONS_DIR, name), 'utf8')),
+);
 
 function pgliteAdapter(client) {
   const adapter = {
@@ -32,7 +35,7 @@ function pgliteAdapter(client) {
 
 async function migratedDatabase() {
   const client = new PGlite();
-  await client.exec(MIGRATION);
+  for (const sql of MIGRATIONS) await client.exec(sql);
   return { client, database: pgliteAdapter(client) };
 }
 
