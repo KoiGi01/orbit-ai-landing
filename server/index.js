@@ -311,7 +311,7 @@ async function handleInternalClinics(req, res) {
     }
 
     let clinic;
-    if (['confirm_payment', 'save_provisioning', 'start_configuration'].includes(body.action)) {
+    if (['confirm_payment', 'save_provisioning', 'start_configuration', 'save_calendar'].includes(body.action)) {
       const database = createDatabase();
       try {
         clinic = body.action === 'confirm_payment'
@@ -328,11 +328,18 @@ async function handleInternalClinics(req, res) {
               body.provisioning,
               database,
             )
-            : await startClinicConfiguration(
-              req.headers.authorization,
-              body.organizationId,
-              database,
-            );
+            : body.action === 'start_configuration'
+              ? await startClinicConfiguration(
+                req.headers.authorization,
+                body.organizationId,
+                database,
+              )
+              : await saveClinicCalendar(
+                req.headers.authorization,
+                body.organizationId,
+                body.calendar,
+                database,
+              );
       } finally {
         await database.close();
       }
@@ -344,8 +351,6 @@ async function handleInternalClinics(req, res) {
       clinic = await bypassClinicLive(req.headers.authorization, body.organizationId, body.confirmation);
     } else if (body.action === 'override_stage') {
       clinic = await overrideClinicStage(req.headers.authorization, body.organizationId, body.stage);
-    } else if (body.action === 'save_calendar') {
-      clinic = await saveClinicCalendar(req.headers.authorization, body.organizationId, body.calendar);
     } else {
       clinic = await transitionClinic(
         req.headers.authorization,

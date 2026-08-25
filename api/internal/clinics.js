@@ -90,7 +90,7 @@ export default async function handler(req, res) {
     } else if (action === 'override_stage') {
       clinic = await overrideClinicStage(authorization, organizationId, req.body?.stage);
     } else if (action === 'save_calendar') {
-      clinic = await saveClinicCalendar(authorization, organizationId, req.body?.calendar);
+      clinic = await withDatabase((database) => saveClinicCalendar(authorization, organizationId, req.body?.calendar, database));
     } else {
       clinic = await transitionClinic(authorization, organizationId, action, req.body?.confirmation);
     }

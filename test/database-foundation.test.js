@@ -16,6 +16,7 @@ import {
   upsertCallAnalyzed,
   upsertCallEnded,
   upsertCallStarted,
+  upsertGoogleCalendarConnection,
 } from '../lib/server/crm-foundation.js';
 import { databaseConfig } from '../lib/server/database.js';
 import { inspectDatabaseHealth } from '../lib/server/database-health.js';
@@ -774,6 +775,72 @@ test('escalates urgency and task priority for a voicemail', async () => {
     const task = await client.query('select kind, priority from app.tasks where call_id = $1', [callId]);
     assert.equal(task.rows[0].kind, 'urgent_callback');
     assert.equal(task.rows[0].priority, 'urgent');
+  } finally {
+    await client.close();
+  }
+});
+
+test('saves and re-saves a Google Calendar connection for a workspace', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    const foundation = await provisionMvpFoundation(database, {
+      clerkOrganizationId: 'org_calendar_connection',
+      displayName: 'Calendar Connection',
+      externalAgentId: 'agent_calendar_connection_123',
+    });
+
+    const first = await upsertGoogleCalendarConnection(database, {
+      clerkOrganizationId: 'org_calendar_connection',
+      calendarId: 'clinic@group.calendar.google.com',
+      displayName: 'Agenda principal',
+      connectedByClerkUserId: 'user_admin',
+    });
+    assert.equal(first.calendarId, 'clinic@group.calendar.google.com');
+    assert.equal(first.displayName, 'Agenda principal');
+    assert.equal(first.status, 'connected');
+    assert.ok(first.connectedAt);
+
+    const row = await client.query(
+      `select provider_key, connection_key, external_account_id, credential_ref, status from app.integration_connections where workspace_id = $1`,
+      [foundation.workspace.id],
+    );
+    assert.equal(row.rows.length, 1);
+    assert.equal(row.rows[0].provider_key, 'google_calendar');
+    assert.equal(row.rows[0].connection_key, 'primary');
+    assert.equal(row.rows[0].external_account_id, 'clinic@group.calendar.google.com');
+    assert.ok(row.rows[0].credential_ref);
+
+    const second = await upsertGoogleCalendarConnection(database, {
+      clerkOrganizationId: 'org_calendar_connection',
+      calendarId: 'updated@group.calendar.google.com',
+      displayName: 'Agenda actualizada',
+      connectedByClerkUserId: 'user_admin',
+    });
+    assert.equal(second.id, first.id);
+    assert.equal(second.calendarId, 'updated@group.calendar.google.com');
+
+    const rowsAfterUpdate = await client.query(
+      `select count(*)::int as count from app.integration_connections where workspace_id = $1`,
+      [foundation.workspace.id],
+    );
+    assert.equal(rowsAfterUpdate.rows[0].count, 1);
+  } finally {
+    await client.close();
+  }
+});
+
+test('rejects a calendar connection for a workspace that does not exist yet', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    await assert.rejects(
+      upsertGoogleCalendarConnection(database, {
+        clerkOrganizationId: 'org_missing_workspace',
+        calendarId: 'clinic@group.calendar.google.com',
+        displayName: 'Agenda principal',
+        connectedByClerkUserId: 'user_admin',
+      }),
+      /workspace_not_provisioned/,
+    );
   } finally {
     await client.close();
   }
