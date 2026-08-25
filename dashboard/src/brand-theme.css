@@ -380,6 +380,17 @@ h3,
   color: var(--cobalt-deep);
 }
 
+.pulse-placeholder-action {
+  color: var(--cobalt-deep);
+  background: var(--cobalt-soft);
+  border-color: rgba(92, 138, 255, 0.32);
+}
+
+.pulse-placeholder-action:hover {
+  background: rgba(92, 138, 255, 0.24);
+  border-color: var(--cobalt);
+}
+
 .search-button kbd,
 .status-popover > button {
   color: var(--ink-soft);
@@ -744,6 +755,11 @@ h3,
 .result-bar i.attention,
 .result-legend i.attention {
   background: var(--coral);
+}
+
+.text-link,
+.section-head > button:not(.calendar-button) {
+  color: var(--ink-soft);
 }
 
 .booked-count,

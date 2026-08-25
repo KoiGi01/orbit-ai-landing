@@ -799,7 +799,7 @@ function PulsePlaceholder({ onNavigate }) {
           <p>Vamos a mostrar aquí el volumen y la duración de llamadas en cuanto tengamos suficiente historial.</p>
         </div>
       </header>
-      <button type="button" onClick={() => onNavigate('Conversaciones')}>Ver conversaciones recientes <ArrowUpRight size={15} /></button>
+      <button type="button" className="pulse-placeholder-action" onClick={() => onNavigate('Conversaciones')}>Ver conversaciones recientes <ArrowUpRight size={15} /></button>
     </article>
   );
 }

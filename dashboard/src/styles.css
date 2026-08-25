@@ -55,8 +55,18 @@ select {
   font: inherit;
 }
 
+/* Every real button in this app is explicitly styled by its own class --
+   nothing here should intentionally look like native OS button chrome.
+   Reset it at the base so a button added without a class degrades to
+   plain inherited-color text (readable) instead of native light-gray
+   chrome, which silently broke once the theme went dark (see
+   PulsePlaceholder's CTA). */
 button {
   color: inherit;
+  background: none;
+  border: 0;
+  appearance: none;
+  cursor: pointer;
 }
 
 button,
@@ -3997,6 +4007,19 @@ select:focus-visible,
   background: #47e6de;
   font-size: 10px;
   font-weight: 800;
+}
+
+.pulse-placeholder-action {
+  margin: auto 0 28px;
+  padding: 13px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid;
+  border-radius: 12px;
+  font-size: 12.5px;
+  font-weight: 650;
 }
 
 /* KPI strip -- real numbers computed from app.calls/app.tasks, replacing
