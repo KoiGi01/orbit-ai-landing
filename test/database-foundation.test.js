@@ -11,6 +11,7 @@ import {
   provisionVoiceAgentDraft,
   provisionVoiceAgentFoundation,
   provisionWorkspaceFoundation,
+  getWorkspaceActivity,
   recordWebhookEvent,
   resolveWebhookWorkspace,
   upsertCallAnalyzed,
@@ -845,6 +846,142 @@ test('rejects a calendar connection for a workspace that does not exist yet', as
       }),
       /workspace_not_provisioned/,
     );
+  } finally {
+    await client.close();
+  }
+});
+
+test('returns an honest empty state for a workspace that has not been provisioned yet', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    const activity = await getWorkspaceActivity(database, 'org_not_provisioned');
+    assert.deepEqual(activity, { hasVoiceAgent: false, calls: [], tasks: [] });
+  } finally {
+    await client.close();
+  }
+});
+
+test('returns an honest empty state for a provisioned workspace with zero calls', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    await provisionMvpFoundation(database, {
+      clerkOrganizationId: 'org_no_activity_yet',
+      displayName: 'No Activity Yet',
+      externalAgentId: 'agent_no_activity_yet_123',
+    });
+
+    const activity = await getWorkspaceActivity(database, 'org_no_activity_yet');
+    assert.deepEqual(activity, { hasVoiceAgent: true, calls: [], tasks: [] });
+  } finally {
+    await client.close();
+  }
+});
+
+test('returns real calls and open tasks for a workspace, newest first, tenant-scoped', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    const foundation = await provisionMvpFoundation(database, {
+      clerkOrganizationId: 'org_real_activity',
+      displayName: 'Real Activity',
+      externalAgentId: 'agent_real_activity_123',
+    });
+    const other = await provisionMvpFoundation(database, {
+      clerkOrganizationId: 'org_other_tenant',
+      displayName: 'Other Tenant',
+      externalAgentId: 'agent_other_tenant_123',
+    });
+
+    await upsertCallStarted(database, {
+      workspaceId: foundation.workspace.id,
+      externalCallId: 'call_activity_1',
+      channel: 'phone',
+      direction: 'inbound',
+      fromPhone: '+525511110001',
+      startedAt: '2026-08-25T10:00:00.000Z',
+    });
+    await upsertCallAnalyzed(database, {
+      workspaceId: foundation.workspace.id,
+      externalCallId: 'call_activity_1',
+      summary: 'Cliente pidió una cita.',
+      inVoicemail: false,
+      callSuccessful: true,
+      analysis: {},
+    });
+
+    await upsertCallStarted(database, {
+      workspaceId: foundation.workspace.id,
+      externalCallId: 'call_activity_2',
+      channel: 'phone',
+      direction: 'inbound',
+      fromPhone: '+525511110002',
+      startedAt: '2026-08-25T11:00:00.000Z',
+    });
+
+    // Noise from a different tenant must never leak into this workspace's activity.
+    await upsertCallStarted(database, {
+      workspaceId: other.workspace.id,
+      externalCallId: 'call_other_tenant_1',
+      channel: 'phone',
+      direction: 'inbound',
+      fromPhone: '+525511119999',
+      startedAt: '2026-08-25T09:00:00.000Z',
+    });
+
+    const activity = await getWorkspaceActivity(database, 'org_real_activity');
+    assert.equal(activity.hasVoiceAgent, true);
+    assert.equal(activity.calls.length, 2);
+    // Newest first.
+    assert.equal(activity.calls[0].externalCallId, 'call_activity_2');
+    assert.equal(activity.calls[0].status, 'ongoing');
+    assert.equal(activity.calls[0].contactPhone, '+525511110002');
+    assert.equal(activity.calls[1].externalCallId, 'call_activity_1');
+    assert.equal(activity.calls[1].status, 'analyzed');
+    assert.equal(activity.calls[1].summary, 'Cliente pidió una cita.');
+
+    assert.equal(activity.tasks.length, 1);
+    assert.equal(activity.tasks[0].kind, 'review_call');
+    assert.equal(activity.tasks[0].status, 'open');
+    assert.equal(activity.tasks[0].contactPhone, '+525511110001');
+
+    const otherActivity = await getWorkspaceActivity(database, 'org_other_tenant');
+    assert.equal(otherActivity.calls.length, 1);
+    assert.equal(otherActivity.calls[0].externalCallId, 'call_other_tenant_1');
+  } finally {
+    await client.close();
+  }
+});
+
+test('excludes completed tasks from the open activity feed', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    const foundation = await provisionMvpFoundation(database, {
+      clerkOrganizationId: 'org_completed_task',
+      displayName: 'Completed Task',
+      externalAgentId: 'agent_completed_task_123',
+    });
+    await upsertCallStarted(database, {
+      workspaceId: foundation.workspace.id,
+      externalCallId: 'call_completed_task_1',
+      channel: 'phone',
+      direction: 'inbound',
+      fromPhone: '+525511110003',
+    });
+    const { callId } = await upsertCallAnalyzed(database, {
+      workspaceId: foundation.workspace.id,
+      externalCallId: 'call_completed_task_1',
+      summary: 'Resuelto.',
+      inVoicemail: false,
+      callSuccessful: true,
+      analysis: {},
+    });
+    await client.query(
+      `update app.tasks set status = 'done', completed_at = now() where call_id = $1`,
+      [callId],
+    );
+
+    const activity = await getWorkspaceActivity(database, 'org_completed_task');
+    assert.equal(activity.tasks.length, 0);
+    assert.equal(activity.calls.length, 1);
   } finally {
     await client.close();
   }

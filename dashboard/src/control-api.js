@@ -114,6 +114,10 @@ export function getWorkspaceVoices(getToken) {
   return controlRequest(getToken, '/api/workspace?resource=voices');
 }
 
+export function getWorkspaceActivity(getToken) {
+  return controlRequest(getToken, '/api/workspace?resource=activity');
+}
+
 export function updateWorkspaceVoice(getToken, voiceId) {
   return controlRequest(getToken, '/api/workspace', {
     method: 'PATCH',

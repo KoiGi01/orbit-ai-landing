@@ -2,6 +2,7 @@ import {
   createWorkspaceTestCall,
   errorResponse,
   getWorkspace,
+  getWorkspaceActivityForClient,
   getWorkspaceVoiceCatalog,
   saveProspectProfile,
   saveWorkspaceVoice,
@@ -23,6 +24,15 @@ export default async function handler(req, res) {
     const authorization = req.headers.authorization;
     if (req.method === 'GET' && req.query?.resource === 'voices') {
       sendJson(res, 200, await getWorkspaceVoiceCatalog(authorization));
+      return;
+    }
+    if (req.method === 'GET' && req.query?.resource === 'activity') {
+      const database = createDatabase();
+      try {
+        sendJson(res, 200, await getWorkspaceActivityForClient(authorization, database));
+      } finally {
+        await database.close();
+      }
       return;
     }
     if (req.method === 'PATCH') {

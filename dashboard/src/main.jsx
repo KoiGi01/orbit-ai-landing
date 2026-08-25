@@ -37,7 +37,7 @@ import './styles.css';
 import './brand-theme.css';
 import DashboardAuth from './auth';
 import { CallExperience } from './workspace';
-import { getWorkspaceVoices, updateWorkspaceVoice } from './control-api';
+import { getWorkspaceActivity, getWorkspaceVoices, updateWorkspaceVoice } from './control-api';
 
 const primaryNav = [
   { label: 'Hoy', icon: LayoutDashboard },
@@ -318,6 +318,98 @@ function createCallRecord(call) {
   };
 }
 
+function initialsFromName(name) {
+  const initials = (name || '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
+  return initials || '·';
+}
+
+function relativeTimeFrom(isoString) {
+  if (!isoString) return 'Pendiente';
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(isoString).getTime()) / 60000));
+  if (minutes < 1) return 'Justo ahora';
+  if (minutes < 60) return `Hace ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `Hace ${hours} h`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? 'Ayer' : `Hace ${days} días`;
+}
+
+function priorityCopyForTask(task) {
+  if (task.priority === 'urgent') return { label: 'Urgente', tone: 'urgent' };
+  if (task.priority === 'high') return { label: 'Prioridad alta', tone: 'warning' };
+  return { label: 'Seguimiento', tone: 'normal' };
+}
+
+function actionLabelForTaskKind(kind) {
+  if (kind === 'urgent_callback') return 'Devolver llamada';
+  if (kind === 'appointment') return 'Confirmar cita';
+  return 'Revisar llamada';
+}
+
+// Maps a real app.tasks row (see lib/server/crm-foundation.js:serializeActivityTask)
+// into the same shape the UI already knows how to render for a pending item.
+// There is no real per-task event timeline yet, so `events` stays empty rather
+// than inventing one.
+function createRealTaskRecord(task) {
+  const { label, tone } = priorityCopyForTask(task);
+  const name = task.contactName || task.contactPhone || 'Contacto sin nombre';
+  return {
+    id: `task-${task.id}`,
+    initials: initialsFromName(name),
+    name,
+    detail: task.title,
+    note: task.description || 'Sin detalles adicionales.',
+    time: relativeTimeFrom(task.dueAt),
+    priority: label,
+    priorityTone: tone,
+    action: actionLabelForTaskKind(task.kind),
+    phone: task.contactPhone || 'Sin teléfono registrado',
+    summary: task.description || 'Sin resumen disponible todavía.',
+    events: [],
+  };
+}
+
+function formatCallDuration(seconds) {
+  if (!Number.isFinite(seconds)) return '—';
+  const minutes = Math.floor(seconds / 60);
+  const remaining = Math.floor(seconds % 60);
+  return `${minutes}:${String(remaining).padStart(2, '0')}`;
+}
+
+function resultCopyForCall(call) {
+  if (call.status === 'ongoing') return { result: 'En curso', tone: 'info' };
+  if (call.followUpRequired) return { result: 'Requiere atención', tone: 'urgent' };
+  if (call.status === 'analyzed') return { result: 'Resuelta', tone: 'success' };
+  return { result: 'Registrada', tone: 'neutral' };
+}
+
+// Maps a real app.calls row (see lib/server/crm-foundation.js:serializeActivityCall)
+// into the same shape the call log already renders, so createCallRecord() and the
+// existing "call-row" markup work unchanged for real data.
+function createRealCallListItem(call) {
+  const { result, tone } = resultCopyForCall(call);
+  const name = call.contactName
+    || call.contactPhone
+    || (call.channel === 'web' ? 'Llamada de prueba' : 'Número desconocido');
+  const time = call.startedAt
+    ? new Date(call.startedAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+    : '—';
+  return {
+    name,
+    time,
+    reason: call.summary ? call.summary.slice(0, 60) : (call.status === 'ongoing' ? 'Llamada en curso' : 'Sin resumen todavía'),
+    duration: formatCallDuration(call.durationSeconds),
+    result,
+    tone,
+  };
+}
+
 function getAccountIdentity(account) {
   const user = account?.user;
   const organization = account?.organization;
@@ -337,15 +429,16 @@ function getAccountIdentity(account) {
   return { fullName, firstName, clinicName, clinicType, initials, clinicInitials, role, isAdmin, isPreview };
 }
 
-function getDashboardDataMode(workspace) {
+function getDashboardDataMode(workspace, hasRealActivity) {
   const serviceIsLive = workspace?.view === 'live'
     || workspace?.state?.serviceStatus === 'live';
 
-  // This dashboard still renders the local showcase dataset below. A live
-  // service state is intentionally not treated as proof that analytics are
-  // connected; that requires a separate, explicit data-source contract.
+  // isDemo now reflects whether app.calls/app.tasks actually returned
+  // anything for this workspace (see App's activity fetch), not a hardcoded
+  // placeholder. A workspace with no calls yet still reads as "demo" so it
+  // gets the honest waiting-for-activity copy instead of an error state.
   return {
-    isDemo: true,
+    isDemo: !hasRealActivity,
     serviceIsLive,
     serviceStatus: workspace?.state?.serviceStatus || 'unknown',
   };
@@ -353,10 +446,13 @@ function getDashboardDataMode(workspace) {
 
 function App({ account, workspace }) {
   const identity = getAccountIdentity(account);
-  const dataMode = useMemo(() => getDashboardDataMode(workspace), [workspace]);
+  const [activity, setActivity] = useState(null);
+  const hasRealActivity = Boolean(activity && (activity.calls.length > 0 || activity.tasks.length > 0));
+  const dataMode = useMemo(() => getDashboardDataMode(workspace, hasRealActivity), [workspace, hasRealActivity]);
   const [active, setActive] = useState('Hoy');
   const [period, setPeriod] = useState('Hoy');
-  const [tasks, setTasks] = useState(followups);
+  const [tasks, setTasks] = useState([]);
+  const calls = useMemo(() => (activity?.calls || []).map(createRealCallListItem), [activity]);
   const [taskFilter, setTaskFilter] = useState('Todas');
   const [selectedTask, setSelectedTask] = useState(null);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -371,6 +467,20 @@ function App({ account, workspace }) {
     label: 'Llamada libre de prueba',
     description: `Prueba privada del agente configurado para ${identity.clinicName}.`,
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    getWorkspaceActivity(account.getToken)
+      .then((data) => {
+        if (cancelled) return;
+        setActivity(data);
+        setTasks(data.tasks.map(createRealTaskRecord));
+      })
+      .catch(() => {
+        if (!cancelled) setActivity({ hasVoiceAgent: false, calls: [], tasks: [] });
+      });
+    return () => { cancelled = true; };
+  }, [account.getToken]);
 
   const toast = (message, action = null) => {
     setNotice({ message, action });
@@ -490,6 +600,7 @@ function App({ account, workspace }) {
               onPeriod={setPeriod}
               taskFilter={taskFilter}
               tasks={tasks}
+              calls={calls}
               onTaskFilter={setTaskFilter}
               onSelectTask={selectTask}
               onNavigate={navigate}
@@ -499,7 +610,7 @@ function App({ account, workspace }) {
               dataMode={dataMode}
             />
           ) : (
-            <ModulePage title={active} tasks={tasks} clinicName={identity.clinicName} dataMode={dataMode} profile={workspace?.profile} connections={workspace?.connections} getToken={account.getToken} isAdmin={identity.isAdmin} onSelectTask={selectTask} onAction={toast} onTestAgent={() => setTestCallOpen(true)} />
+            <ModulePage title={active} tasks={tasks} calls={calls} clinicName={identity.clinicName} dataMode={dataMode} profile={workspace?.profile} connections={workspace?.connections} getToken={account.getToken} isAdmin={identity.isAdmin} onSelectTask={selectTask} onAction={toast} onTestAgent={() => setTestCallOpen(true)} />
           )}
         </div>
 
@@ -660,18 +771,16 @@ function StatusPopover({ dataMode }) {
   );
 }
 
-function Dashboard({ period, onPeriod, tasks, taskFilter, onTaskFilter, onSelectTask, onNavigate, onAction, firstName, isAdmin, dataMode }) {
+function Dashboard({ period, onPeriod, tasks, calls, taskFilter, onTaskFilter, onSelectTask, onNavigate, onAction, firstName, isAdmin, dataMode }) {
   const [analysisOpen, setAnalysisOpen] = useState(false);
-  const data = analyticsByPeriod[period];
   const firstTask = tasks[0];
-  const periodContext = period === 'Hoy' ? 'hoy' : `en los últimos ${period}`;
   return (
     <main className="dashboard">
       <section className="page-heading">
         <div>
-          <p className="eyebrow">{dataMode.isDemo ? 'Centro de operaciones' : 'Viernes, 31 de julio'}</p>
+          <p className="eyebrow">{dataMode.isDemo ? 'Centro de operaciones' : 'Actividad reciente'}</p>
           <h1>{dataMode.isDemo ? `Todo listo para empezar, ${firstName}.` : (tasks.length ? `Hay ${tasks.length} ${tasks.length === 1 ? 'decisión' : 'decisiones'} para hoy, ${firstName}.` : `La cola está resuelta, ${firstName}.`)}</h1>
-          <p className="heading-copy">{dataMode.isDemo ? <>La actividad aparecerá aquí cuando tu agente comience a recibir conversaciones.</> : <>Lucía atendió {data.calls.toLocaleString('es-MX')} llamadas {periodContext} y mantiene la operación estable. {firstTask ? <strong>Empieza por {firstTask.name}.</strong> : <strong>No quedan acciones pendientes.</strong>}</>}</p>
+          <p className="heading-copy">{dataMode.isDemo ? <>La actividad aparecerá aquí cuando tu agente comience a recibir conversaciones.</> : <>Lucía registró {calls.length.toLocaleString('es-MX')} {calls.length === 1 ? 'llamada reciente' : 'llamadas recientes'}. {firstTask ? <strong>Empieza por {firstTask.name}.</strong> : <strong>No quedan acciones pendientes.</strong>}</>}</p>
         </div>
         <div className="period-control" aria-label="Periodo de actividad">
           {['Hoy', '7 días', '30 días'].map((item) => (
@@ -682,29 +791,40 @@ function Dashboard({ period, onPeriod, tasks, taskFilter, onTaskFilter, onSelect
 
       <section className="hero-grid">
         <AttentionPanel tasks={tasks} isDemoData={dataMode.isDemo} filter={taskFilter} onFilter={onTaskFilter} onSelect={onSelectTask} onNavigate={onNavigate} />
-        <PulsePanel data={data} isDemoData={dataMode.isDemo} onNavigate={onNavigate} />
-      </section>
-
-      <section className="signal-strip" aria-label="Indicadores clave">
-        <SignalMetric value={data.noWait} label="atendidas sin espera" meta={`${data.noWaitCount.toLocaleString('es-MX')} de ${data.inbound.toLocaleString('es-MX')} entrantes`} trend={data.noWaitTrend} />
-        <SignalMetric value={data.booked.toLocaleString('es-MX')} label="citas creadas" meta={`de ${data.intent.toLocaleString('es-MX')} con intención`} trend={data.bookedTrend} />
-        <SignalMetric value={data.duration} label="duración promedio" meta="minutos por conversación" trend={data.durationTrend} />
-        <div className="signal-note"><ShieldCheck size={18} /><span><strong>{dataMode.isDemo ? 'Cobertura pendiente' : 'Sin llamadas perdidas'}</strong><small>{dataMode.isDemo ? 'Esperando actividad del agente' : (period === 'Hoy' ? 'en las últimas 3 h 20 min' : `en los últimos ${period}`)}</small></span></div>
+        <PulsePlaceholder onNavigate={onNavigate} />
       </section>
 
       <section className="analysis-disclosure">
         <div><p className="eyebrow">Más contexto</p><h2>Agenda, resultados y capacidad</h2><span>Lo esencial ya está arriba. Abre el detalle cuando necesites investigar el rendimiento.</span></div>
-        <div className="analysis-facts"><span><small>Agenda hoy</small><strong>{dataMode.isDemo ? 'Sin citas registradas' : `${appointments.length} citas · ${appointments.filter((item) => item.state !== 'Confirmada').length} por atender`}</strong></span><span><small>Capacidad</small><strong>{dataMode.isDemo ? 'Sin consumo registrado' : '823 / 1,000 min'}</strong></span></div>
+        <div className="analysis-facts"><span><small>Agenda hoy</small><strong>Sin citas registradas</strong></span><span><small>Capacidad</small><strong>Sin consumo registrado</strong></span></div>
         <button type="button" aria-expanded={analysisOpen} aria-controls="dashboard-analysis" onClick={() => setAnalysisOpen((value) => !value)}>{analysisOpen ? 'Ocultar análisis' : 'Ver análisis'}<ChevronDown size={16} className={analysisOpen ? 'rotated' : ''} /></button>
       </section>
       {analysisOpen && <div className="analysis-details" id="dashboard-analysis">
         <section className="insight-grid">
-          <OutcomePanel reasonsData={reasonsByPeriod[period]} isDemoData={dataMode.isDemo} onNavigate={onNavigate} />
-          <AgendaPanel isDemoData={dataMode.isDemo} onAction={onAction} />
+          <OutcomePanel reasonsData={[]} isDemoData onNavigate={onNavigate} />
+          <AgendaPanel onAction={onAction} />
         </section>
-        <CapacityPanel isAdmin={isAdmin} isDemoData={dataMode.isDemo} onNavigate={onNavigate} />
+        <CapacityPanel isAdmin={isAdmin} onNavigate={onNavigate} />
       </div>}
     </main>
+  );
+}
+
+// Call-volume trends (charts, conversion funnel, no-wait rate) need
+// aggregated historical data no endpoint computes yet. Rather than fabricate
+// numbers, this stays an honest placeholder; app.calls already has enough
+// rows to see individual conversations in Conversaciones.
+function PulsePlaceholder({ onNavigate }) {
+  return (
+    <article className="pulse-panel pulse-panel-empty">
+      <header className="pulse-header">
+        <div className="pulse-kpi">
+          <span>Tendencias de llamadas</span>
+          <p>Vamos a mostrar aquí el volumen y la duración de llamadas en cuanto tengamos suficiente historial.</p>
+        </div>
+      </header>
+      <button type="button" onClick={() => onNavigate('Conversaciones')}>Ver conversaciones recientes <ArrowUpRight size={15} /></button>
+    </article>
   );
 }
 
@@ -864,43 +984,40 @@ function OutcomePanel({ reasonsData, isDemoData, onNavigate }) {
   );
 }
 
-function AgendaPanel({ isDemoData, onAction }) {
+function AgendaPanel({ onAction }) {
+  // Google Calendar connection is not wired to this dashboard yet (see
+  // saveClinicCalendar in lib/server/clerk-control.js), so there is no real
+  // appointment source. This stays an honest empty state instead of the
+  // previous hardcoded list of 5 fake appointments.
   return (
     <article className="agenda-panel surface-panel">
       <header className="section-head">
-        <div><p className="eyebrow">Agenda de hoy</p><h2>{isDemoData ? 'Sin citas registradas' : '5 citas programadas'}</h2></div>
+        <div><p className="eyebrow">Agenda de hoy</p><h2>Sin citas registradas</h2></div>
         <button type="button" className="calendar-button" aria-label="Abrir calendario" onClick={() => onAction('Calendario abierto')}><CalendarCheck2 size={18} /></button>
       </header>
-      <div className="agenda-list">
-        {appointments.map((appointment) => (
-          <button type="button" className="appointment-row" key={`${appointment.time}-${appointment.name}`} onClick={() => onAction(`Cita de ${appointment.name}`)}>
-            <time>{appointment.time}</time>
-            <span className="agenda-line"><i className={appointment.state === 'Confirmada' ? 'past' : 'pending'} /></span>
-            <span className="appointment-copy"><strong>{appointment.name}</strong><small>{appointment.service}</small></span>
-            <span className={`appointment-state ${appointment.state !== 'Confirmada' ? 'pending' : ''}`}>{appointment.state}</span>
-          </button>
-        ))}
+      <div className="agenda-list agenda-empty">
+        <CalendarCheck2 size={20} /><span>Conecta el calendario del negocio para ver la agenda aquí.</span>
       </div>
-      <div className="agenda-foot"><Clock3 size={15} /><span>{isDemoData ? 'Conecta Google Calendar para consultar espacios' : 'Próximo espacio libre'}</span>{!isDemoData && <strong>Lun 3 · 09:00</strong>}</div>
+      <div className="agenda-foot"><Clock3 size={15} /><span>Conecta Google Calendar para consultar espacios</span></div>
     </article>
   );
 }
 
-function CapacityPanel({ isAdmin, isDemoData, onNavigate }) {
+function CapacityPanel({ isAdmin, onNavigate }) {
+  // No plan/minutes-limit concept exists in app.calls yet — this stays an
+  // honest empty state rather than the previous hardcoded 823/1,000 min.
   return (
     <section className="capacity-panel">
-      <div className="capacity-copy"><p className="eyebrow">Reserva mensual</p><div><strong>{isDemoData ? '—' : '823'}</strong><span>{isDemoData ? 'Sin consumo registrado' : 'de 1,000 minutos incluidos'}</span></div></div>
+      <div className="capacity-copy"><p className="eyebrow">Reserva mensual</p><div><strong>—</strong><span>Sin consumo registrado</span></div></div>
       <div className="capacity-visual">
-        <div className="capacity-labels"><span>Incluido</span><span>Proyección · 1,140</span><span>Límite · 1,500</span></div>
-        <div className="capacity-track"><i className="used" /><i className="projection" /><i className="limit" /></div>
-        <span>{isDemoData ? 'El consumo aparecerá cuando tu agente comience a operar.' : 'Quedan 8 días. Tu servicio tiene margen suficiente para la proyección actual.'}</span>
+        <span>El consumo aparecerá cuando definamos un plan y empecemos a medir minutos por llamada.</span>
       </div>
       {isAdmin && <button type="button" onClick={() => onNavigate('Uso y plan')}>Uso y plan <ArrowUpRight size={15} /></button>}
     </section>
   );
 }
 
-function ModulePage({ title, tasks, clinicName, dataMode, profile, connections, getToken, isAdmin, onSelectTask, onAction, onTestAgent }) {
+function ModulePage({ title, tasks, calls, clinicName, dataMode, profile, connections, getToken, isAdmin, onSelectTask, onAction, onTestAgent }) {
   const copy = moduleCopy[title];
   const pendingDescriptions = {
     Conversaciones: 'El historial aparecerá cuando tu agente comience a atender llamadas.',
@@ -915,28 +1032,29 @@ function ModulePage({ title, tasks, clinicName, dataMode, profile, connections, 
         <div><p className="eyebrow">{copy.eyebrow}</p><h1>{copy.title}</h1><span>{dataMode.isDemo ? pendingDescriptions[title] : copy.description}</span></div>
         <button type="button" className="primary-action" onClick={() => onAction(`Nueva acción en ${title}`)}>Nueva acción <ArrowUpRight size={16} /></button>
       </section>
-      {title === 'Conversaciones' && <ConversationsModule tasks={tasks} isDemoData={dataMode.isDemo} onSelectTask={onSelectTask} />}
+      {title === 'Conversaciones' && <ConversationsModule tasks={tasks} calls={calls} isDemoData={dataMode.isDemo} onSelectTask={onSelectTask} />}
       {title === 'Oportunidades' && <OpportunitiesModule tasks={tasks} onSelectTask={onSelectTask} />}
       {title === 'Mi recepcionista' && <ReceptionistModule clinicName={clinicName} isDemoData={dataMode.isDemo} profile={profile} getToken={getToken} isAdmin={isAdmin} onAction={onAction} onTestAgent={onTestAgent} />}
       {title === 'Conexiones' && <ConnectionsModule connections={connections} />}
-      {title === 'Uso y plan' && <UsageModule isDemoData={dataMode.isDemo} />}
+      {title === 'Uso y plan' && <UsageModule />}
     </main>
   );
 }
 
-function ConversationsModule({ tasks, isDemoData, onSelectTask }) {
+function ConversationsModule({ tasks, calls, isDemoData, onSelectTask }) {
   const [query, setQuery] = useState('');
   const [resultFilter, setResultFilter] = useState('Todas');
   const [sortOrder, setSortOrder] = useState('Recientes');
   const filteredCalls = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase('es-MX');
-    const matches = recentCalls.filter((call) => {
+    const matches = calls.filter((call) => {
       const matchesQuery = !normalizedQuery || `${call.name} ${call.reason} ${call.result}`.toLocaleLowerCase('es-MX').includes(normalizedQuery);
       const matchesResult = resultFilter === 'Todas' || call.result === resultFilter;
       return matchesQuery && matchesResult;
     });
     return sortOrder === 'Antiguas' ? [...matches].reverse() : matches;
-  }, [query, resultFilter, sortOrder]);
+  }, [calls, query, resultFilter, sortOrder]);
+  const answeredCalls = calls.filter((call) => call.result !== 'En curso').length;
 
   return (
     <section className="records-layout">
@@ -959,7 +1077,7 @@ function ConversationsModule({ tasks, isDemoData, onSelectTask }) {
           {filteredCalls.length === 0 && <div className="records-empty"><Search size={20} /><strong>Sin resultados</strong><span>Prueba otro nombre, motivo o resultado.</span></div>}
         </div>
       </article>
-      <aside className="module-aside dark-module-card"><p className="dark-eyebrow">Hoy</p><strong>{isDemoData ? 0 : 136}</strong><span>llamadas entrantes</span><dl><div><dt>Atendidas</dt><dd>{isDemoData ? 0 : 128}</dd></div><div><dt>Sin respuesta</dt><dd>0</dd></div><div><dt>Fuera de horario</dt><dd>{isDemoData ? 0 : 8}</dd></div></dl></aside>
+      <aside className="module-aside dark-module-card"><p className="dark-eyebrow">Recientes</p><strong>{calls.length}</strong><span>llamadas registradas</span><dl><div><dt>Atendidas</dt><dd>{answeredCalls}</dd></div><div><dt>Sin respuesta</dt><dd>—</dd></div><div><dt>Fuera de horario</dt><dd>—</dd></div></dl></aside>
     </section>
   );
 }
@@ -1067,11 +1185,13 @@ function ConnectionsModule({ connections = {} }) {
   return <section className="connections-workspace"><article className="connections-summary dark-module-card"><p className="dark-eyebrow">Infraestructura administrada</p><h2>{items.filter((item) => ['Conectado', 'Activo'].includes(item.state)).length} sistemas operativos</h2><span>Las credenciales y cambios sensibles son gestionados por AutiveX. Tu equipo siempre puede ver qué está conectado y qué función cumple.</span></article><div className="connection-grid">{items.map(({ name, detail, state, meta, Icon }) => <article className="connection-card surface-panel" key={name}><header><span className="connection-icon"><Icon size={21} /></span><i className={['Conectado', 'Activo'].includes(state) ? 'connected' : 'review'}>{state}</i></header><h3>{name}</h3><p>{detail}</p>{meta && <code>{meta}</code>}</article>)}</div></section>;
 }
 
-function UsageModule({ isDemoData }) {
+function UsageModule() {
+  // No plan/minutes-limit concept exists yet — honest empty state rather
+  // than the previous hardcoded 823/1,000/1,500 min figures.
   return (
     <section className="usage-layout">
-      <article className="usage-reserve dark-module-card"><p className="dark-eyebrow">Consumo mensual</p><strong>{isDemoData ? '—' : '823'}</strong><span>{isDemoData ? 'Sin minutos registrados' : 'minutos usados de 1,000'}</span><div className="usage-ring" style={{ '--progress': isDemoData ? '0%' : '82.3%' }}><i /></div><footer><span>Proyección</span><b>{isDemoData ? 'Pendiente' : '1,140 min'}</b></footer></article>
-      <article className="usage-detail surface-panel"><h2>Tu capacidad este mes</h2><p>{isDemoData ? 'El consumo aparecerá automáticamente cuando tu agente comience a atender llamadas.' : 'El excedente proyectado está cubierto por tu plan. El servicio no está en riesgo de interrupción.'}</p><dl><div><dt>Incluidos</dt><dd>1,000 min</dd></div><div><dt>Consumidos</dt><dd>{isDemoData ? '—' : '823 min'}</dd></div><div><dt>Límite de seguridad</dt><dd>1,500 min</dd></div><div><dt>Estado</dt><dd>{isDemoData ? 'Sin actividad' : 'Operando'}</dd></div></dl></article>
+      <article className="usage-reserve dark-module-card"><p className="dark-eyebrow">Consumo mensual</p><strong>—</strong><span>Sin minutos registrados</span><div className="usage-ring" style={{ '--progress': '0%' }}><i /></div><footer><span>Proyección</span><b>Pendiente</b></footer></article>
+      <article className="usage-detail surface-panel"><h2>Tu capacidad este mes</h2><p>El consumo aparecerá automáticamente cuando definamos un plan y empecemos a medir minutos por llamada.</p><dl><div><dt>Incluidos</dt><dd>Pendiente</dd></div><div><dt>Consumidos</dt><dd>—</dd></div><div><dt>Límite de seguridad</dt><dd>Pendiente</dd></div><div><dt>Estado</dt><dd>Sin actividad</dd></div></dl></article>
     </section>
   );
 }

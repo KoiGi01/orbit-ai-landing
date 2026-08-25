@@ -10,6 +10,7 @@ import {
   deleteClinicRecord,
   errorResponse as controlErrorResponse,
   getWorkspace,
+  getWorkspaceActivityForClient,
   getWorkspaceVoiceCatalog,
   listClinics,
   manageClinicMember,
@@ -244,8 +245,13 @@ async function handleWorkspace(req, res) {
   }
 
   try {
-    if (req.method === 'GET' && new URL(req.url, 'http://localhost').searchParams.get('resource') === 'voices') {
+    const resource = req.method === 'GET' ? new URL(req.url, 'http://localhost').searchParams.get('resource') : null;
+    if (resource === 'voices') {
       sendJson(res, 200, await getWorkspaceVoiceCatalog(req.headers.authorization));
+      return;
+    }
+    if (resource === 'activity') {
+      sendJson(res, 200, await getWorkspaceActivityForClient(req.headers.authorization, createDatabase()));
       return;
     }
     if (req.method === 'PATCH') {
