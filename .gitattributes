@@ -1,0 +1,6 @@
+# Migration checksums (scripts/db/migrate.js) are computed over the raw file
+# bytes. Force LF regardless of the checking-out OS so the checksum recorded
+# in app.schema_migrations at apply time never drifts from what a later
+# checkout produces (see 20260804000000_crm_and_integrations.sql's
+# migration_checksum_mismatch on Windows checkouts for why this matters).
+supabase/migrations/*.sql text eol=lf
