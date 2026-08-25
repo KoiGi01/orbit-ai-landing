@@ -433,13 +433,25 @@ function NextAction({ clinic, busy, error, onAction }) {
   );
 }
 
-function LocationManagement({ clinic, clinics, busy, onEdit, onMember, onCalendar, onStage, onBypass, onDelete }) {
+function LocationManagement({ clinic, clinics, busy, onEdit, onMember, onCalendar, onAgentConfig, onStage, onBypass, onDelete }) {
   const [edit, setEdit] = useState({ name: clinic.name, city: clinic.profile?.city || '', industry: clinic.profile?.industry || '' });
   const [member, setMember] = useState({ email: '', role: 'org:member', operation: 'add', targetOrganizationId: '' });
   const [confirmation, setConfirmation] = useState('');
   const [stage, setStage] = useState('configuring');
   const [calendar, setCalendar] = useState({ displayName: clinic.profile?.calendarDisplayName || 'Agenda principal', calendarId: clinic.profile?.calendarId || '' });
+  const [agent, setAgent] = useState({
+    clinicName: clinic.profile?.clinicName || clinic.name,
+    industry: clinic.profile?.industry || '',
+    city: clinic.profile?.city || '',
+    description: clinic.profile?.description || '',
+    businessHours: clinic.profile?.businessHours || '',
+    greeting: clinic.profile?.greeting || '',
+    services: (clinic.profile?.services || []).join(', '),
+    offDays: (clinic.profile?.offDays || []).join(', '),
+  });
   useEffect(() => setEdit({ name: clinic.name, city: clinic.profile?.city || '', industry: clinic.profile?.industry || '' }), [clinic.id, clinic.name]);
+  const splitList = (value) => value.split(',').map((item) => item.trim()).filter(Boolean);
+  const saveAgent = () => onAgentConfig({ ...agent, services: splitList(agent.services), offDays: splitList(agent.offDays) });
   return <section className="ops-record-section location-management">
     <header><Settings2 size={19} /><h3>Administrar Location</h3><span>Cambios reales en Clerk</span></header>
     <form className="ops-management-grid" onSubmit={(event) => { event.preventDefault(); onEdit(edit); }}>
@@ -459,6 +471,20 @@ function LocationManagement({ clinic, clinics, busy, onEdit, onMember, onCalenda
       </div>
     </div>
     <div className="ops-calendar-manager"><div><strong>Google Calendar</strong><span>Asignación manual mediante la credencial administrada de n8n.</span></div><label><span>Nombre visible</span><input value={calendar.displayName} onChange={(event) => setCalendar({ ...calendar, displayName: event.target.value })} placeholder="Agenda principal" /></label><label><span>Calendar ID</span><input value={calendar.calendarId} onChange={(event) => setCalendar({ ...calendar, calendarId: event.target.value })} placeholder="...@group.calendar.google.com" /></label><button type="button" className="ops-button primary" disabled={busy || !calendar.calendarId} onClick={() => onCalendar(calendar)}><CalendarCheck2 size={16} /> Conectar al agente</button></div>
+    <div className="ops-agent-manager">
+      <div><strong>Configuración del agente</strong><span>Regenera el prompt y el saludo en Retell al guardar. El cliente ve estos mismos campos en su dashboard.</span></div>
+      <div className="ops-management-grid">
+        <label><span>Nombre del negocio</span><input value={agent.clinicName} onChange={(event) => setAgent({ ...agent, clinicName: event.target.value })} /></label>
+        <label><span>Industria</span><input value={agent.industry} onChange={(event) => setAgent({ ...agent, industry: event.target.value })} /></label>
+        <label><span>Ciudad</span><input value={agent.city} onChange={(event) => setAgent({ ...agent, city: event.target.value })} /></label>
+        <label><span>Horario regular</span><input value={agent.businessHours} onChange={(event) => setAgent({ ...agent, businessHours: event.target.value })} placeholder="Lunes a viernes, 9:00 a 19:00" /></label>
+      </div>
+      <label><span>Descripción breve</span><textarea rows={2} value={agent.description} onChange={(event) => setAgent({ ...agent, description: event.target.value })} /></label>
+      <label><span>Mensaje inicial</span><textarea rows={2} value={agent.greeting} onChange={(event) => setAgent({ ...agent, greeting: event.target.value })} placeholder="Hola, gracias por llamar a…" /></label>
+      <label><span>Servicios (separados por coma)</span><input value={agent.services} onChange={(event) => setAgent({ ...agent, services: event.target.value })} placeholder="Limpieza dental, Ortodoncia" /></label>
+      <label><span>Excepciones de horario (separadas por coma)</span><input value={agent.offDays} onChange={(event) => setAgent({ ...agent, offDays: event.target.value })} placeholder="25 de diciembre, Domingos" /></label>
+      <button type="button" className="ops-button primary" disabled={busy || !agent.clinicName} onClick={saveAgent}><Settings2 size={16} /> Guardar configuración del agente</button>
+    </div>
     <div className="ops-stage-manager"><div><strong>Etapa y acceso</strong><span>Cambia manualmente el ciclo de vida del tenant.</span></div><select value={stage} onChange={(event) => setStage(event.target.value)}><option value="prospect">Prospecto</option><option value="onboarding">Onboarding</option><option value="configuring">Configuración</option><option value="review">Revisión</option><option value="live">Producción</option><option value="suspended">Suspendido</option></select><button type="button" className="ops-button secondary" disabled={busy} onClick={() => onStage(stage)}>Actualizar etapa</button></div>
     <div className="ops-danger-zone">
       <div><strong>Acciones avanzadas</strong><span>Escribe el nombre exacto para habilitarlas.</span></div>
@@ -469,7 +495,7 @@ function LocationManagement({ clinic, clinics, busy, onEdit, onMember, onCalenda
   </section>;
 }
 
-function ClinicDetail({ clinic, clinics, busy, error, onClose, onConfirmPayment, onSaveProvisioning, onAction, onEdit, onMember, onCalendar, onStage, onBypass, onDelete }) {
+function ClinicDetail({ clinic, clinics, busy, error, onClose, onConfirmPayment, onSaveProvisioning, onAction, onEdit, onMember, onCalendar, onAgentConfig, onStage, onBypass, onDelete }) {
   const profile = clinic.profile;
   const accountEnabled = ['verified', 'not_required'].includes(clinic.state.billingStatus);
   return (
@@ -481,7 +507,7 @@ function ClinicDetail({ clinic, clinics, busy, error, onClose, onConfirmPayment,
           <article><span><UserRound size={18} /></span><div><small>Acceso</small><strong>{clinic.accessAssignments?.length || clinic.membersCount || 0} usuarios</strong><p>Organización de Clerk</p></div></article>
         </div>
 
-        <LocationManagement clinic={clinic} clinics={clinics} busy={busy} onEdit={onEdit} onMember={onMember} onCalendar={onCalendar} onStage={onStage} onBypass={onBypass} onDelete={onDelete} />
+        <LocationManagement clinic={clinic} clinics={clinics} busy={busy} onEdit={onEdit} onMember={onMember} onCalendar={onCalendar} onAgentConfig={onAgentConfig} onStage={onStage} onBypass={onBypass} onDelete={onDelete} />
 
         {accountEnabled && <ProvisioningForm clinic={clinic} busy={busy} error={error} onSave={onSaveProvisioning} />}
 
@@ -671,7 +697,7 @@ export default function InternalAdmin() {
         {section === 'Actividad' && <section className="ops-queue ops-simple-view"><header><div><h2>Audit trail</h2><span>Eventos recientes</span></div></header><div className="ops-activity-feed">{clinics.flatMap((clinic) => clinic.auditTrail.map((entry) => ({ ...entry, clinic: clinic.name }))).sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 40).map((entry) => <div key={`${entry.clinic}-${entry.id}`}><i /><span><strong>{entry.clinic}</strong><small>{String(entry.action).replaceAll('_', ' ')} · {dateTime(entry.at)}</small></span></div>)}</div></section>}
       </div>
       {creating && <NewClientModal busy={busy} error={actionError} onClose={() => setCreating(false)} onCreate={createClinic} />}
-      {selected && <ClinicDetail clinic={selected} clinics={clinics} busy={busy} error={actionError} onClose={() => setSelectedId(null)} onConfirmPayment={(payment) => mutateClinic({ action: 'confirm_payment', payment })} onSaveProvisioning={(provisioning) => mutateClinic({ action: 'save_provisioning', provisioning })} onAction={(action, confirmation) => mutateClinic({ action, confirmation })} onEdit={(location) => mutateClinic({ action: 'update_location', location })} onMember={(member) => mutateClinic({ action: 'manage_member', member })} onCalendar={(calendar) => mutateClinic({ action: 'save_calendar', calendar })} onStage={(stage) => mutateClinic({ action: 'override_stage', stage })} onBypass={(confirmation) => mutateClinic({ action: 'bypass_live', confirmation })} onDelete={removeClinic} />}
+      {selected && <ClinicDetail clinic={selected} clinics={clinics} busy={busy} error={actionError} onClose={() => setSelectedId(null)} onConfirmPayment={(payment) => mutateClinic({ action: 'confirm_payment', payment })} onSaveProvisioning={(provisioning) => mutateClinic({ action: 'save_provisioning', provisioning })} onAction={(action, confirmation) => mutateClinic({ action, confirmation })} onEdit={(location) => mutateClinic({ action: 'update_location', location })} onMember={(member) => mutateClinic({ action: 'manage_member', member })} onCalendar={(calendar) => mutateClinic({ action: 'save_calendar', calendar })} onAgentConfig={(agent) => mutateClinic({ action: 'update_agent_configuration', agent })} onStage={(stage) => mutateClinic({ action: 'override_stage', stage })} onBypass={(confirmation) => mutateClinic({ action: 'bypass_live', confirmation })} onDelete={removeClinic} />}
     </main>
   );
 }

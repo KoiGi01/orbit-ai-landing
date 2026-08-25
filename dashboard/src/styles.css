@@ -2404,6 +2404,31 @@ select:focus-visible,
   .voice-settings-actions { align-items: stretch; flex-direction: column; }
 }
 
+.agent-settings { padding: 18px 8px 22px; }
+.agent-settings-fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.agent-settings-fields label { display: grid; gap: 7px; color: #62655e; font-size: 9px; font-weight: 750; text-transform: uppercase; letter-spacing: .08em; }
+.agent-settings-fields label span { display: flex; align-items: center; gap: 5px; }
+.agent-settings-fields .agent-settings-full { grid-column: 1 / -1; }
+.agent-settings-fields input,
+.agent-settings-fields textarea { width: 100%; padding: 10px 12px; color: #242721; background: #f6f4ef; border: 1px solid #d8d5ce; border-radius: 9px; font: inherit; text-transform: none; letter-spacing: normal; resize: vertical; }
+.agent-settings-fields input:disabled,
+.agent-settings-fields textarea:disabled { opacity: .65; cursor: not-allowed; }
+
+.tag-list-field { margin-bottom: 16px; }
+.tag-list-label { display: grid; gap: 4px; margin-bottom: 8px; }
+.tag-list-label small { color: #7c7f76; font-size: 10px; }
+.tag-list-items { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.tag-list-empty { color: #a4a79d; font-size: 10px; }
+.tag-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px 6px 12px; background: #eeece5; border: 1px solid #d8d5ce; border-radius: 999px; font-size: 11px; color: #242721; }
+.tag-chip button { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 999px; border: 0; background: #d8d5ce; color: #4a4d46; font-size: 12px; line-height: 1; cursor: pointer; }
+.tag-list-add { display: flex; gap: 8px; }
+.tag-list-add input { flex: 1; padding: 9px 12px; color: #242721; background: #f6f4ef; border: 1px solid #d8d5ce; border-radius: 9px; font: inherit; }
+.tag-list-add button { padding: 0 16px; border-radius: 9px; border: 1px solid #d8d5ce; background: #eeece5; color: #242721; font-size: 11px; font-weight: 650; cursor: pointer; }
+
+@media (max-width: 720px) {
+  .agent-settings-fields { grid-template-columns: 1fr; }
+}
+
 .settings-list > button,
 .connection-list > button {
   width: 100%;

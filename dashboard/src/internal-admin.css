@@ -241,6 +241,12 @@
 .ops-member-manager { margin-top: 22px; padding-top: 20px; border-top: 1px solid #26344a; }.ops-member-manager > div:first-child { margin-bottom: 13px; display: grid; gap: 4px; }.ops-member-manager > div:first-child span { color: #7f90aa; font-size: 11px; }
 .ops-stage-manager { margin-top: 18px; padding-top: 18px; display: grid; grid-template-columns: 1fr 210px auto; align-items: end; gap: 11px; border-top: 1px solid #26344a; }.ops-stage-manager > div { display: grid; gap: 4px; }.ops-stage-manager span { color: #7f90aa; font-size: 11px; }.ops-stage-manager select { min-height: 43px; padding: 0 11px; color: #e7edf7; background: #0e1727; border: 1px solid #2a3952; border-radius: 9px; font: inherit; font-size: 13px; }
 .ops-calendar-manager { margin-top: 18px; padding: 18px; display: grid; grid-template-columns: 1fr .8fr 1.35fr auto; align-items: end; gap: 11px; background: rgba(24,89,255,.06); border: 1px solid rgba(74,126,255,.23); border-radius: 12px; }.ops-calendar-manager > div, .ops-calendar-manager label { display: grid; gap: 5px; }.ops-calendar-manager span { color: #7f90aa; font-size: 11px; }.ops-calendar-manager input { min-height: 43px; padding: 0 11px; color: #e7edf7; background: #0e1727; border: 1px solid #2a3952; border-radius: 9px; font: inherit; font-size: 13px; }
+.ops-agent-manager { margin-top: 18px; padding: 18px; display: grid; gap: 11px; background: rgba(24,89,255,.06); border: 1px solid rgba(74,126,255,.23); border-radius: 12px; }
+.ops-agent-manager > label { display: grid; gap: 5px; }
+.ops-agent-manager span { color: #7f90aa; font-size: 11px; }
+.ops-agent-manager input, .ops-agent-manager textarea { padding: 10px 11px; color: #e7edf7; background: #0e1727; border: 1px solid #2a3952; border-radius: 9px; font: inherit; font-size: 13px; resize: vertical; }
+.ops-agent-manager .ops-button { justify-self: start; }
+
 .member-grid { grid-template-columns: 1.2fr 1fr 1fr 1fr auto; }
 .ops-danger-zone { margin-top: 22px; padding: 17px; display: grid; grid-template-columns: 1fr minmax(180px, .7fr) auto auto; align-items: center; gap: 10px; background: rgba(255, 90, 78, .06); border: 1px solid rgba(255, 112, 88, .24); border-radius: 12px; }.ops-danger-zone > div { display: grid; gap: 4px; }.ops-danger-zone span { color: #a7b5c9; font-size: 10px; }.ops-button.bypass { color: #ffd36c; background: rgba(255, 202, 72, .08); border: 1px solid rgba(255, 202, 72, .3); }.ops-button.danger { color: #fff; background: #a73529; border: 1px solid #c7493c; }
 

@@ -125,6 +125,13 @@ export function updateWorkspaceVoice(getToken, voiceId) {
   });
 }
 
+export function updateWorkspaceAgentConfiguration(getToken, agent) {
+  return controlRequest(getToken, '/api/workspace', {
+    method: 'PATCH',
+    body: JSON.stringify({ action: 'update_agent_configuration', agent }),
+  });
+}
+
 export function getInternalClinics(getToken, query = '') {
   const suffix = query ? `?query=${encodeURIComponent(query)}` : '';
   return controlRequest(getToken, `/api/internal/clinics${suffix}`);

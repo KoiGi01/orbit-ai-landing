@@ -37,13 +37,13 @@ import './styles.css';
 import './brand-theme.css';
 import DashboardAuth from './auth';
 import { CallExperience } from './workspace';
-import { getWorkspaceActivity, getWorkspaceVoices, updateWorkspaceVoice } from './control-api';
+import { getWorkspaceActivity, getWorkspaceVoices, updateWorkspaceAgentConfiguration, updateWorkspaceVoice } from './control-api';
 
 const primaryNav = [
   { label: 'Hoy', icon: LayoutDashboard },
   { label: 'Conversaciones', icon: PhoneCall },
   { label: 'Oportunidades', icon: Users, badge: 4 },
-  { label: 'Mi recepcionista', icon: Headphones },
+  { label: 'Mi agente', icon: Headphones },
 ];
 
 const secondaryNav = [
@@ -246,7 +246,7 @@ const moduleCopy = {
     title: 'Las conversaciones que pueden convertirse.',
     description: 'Prospectos, citas y próximos pasos en un solo flujo de trabajo.',
   },
-  'Mi recepcionista': {
+  'Mi agente': {
     eyebrow: 'Servicio administrado',
     title: 'Así atiende Lucía cuando suena el teléfono.',
     description: 'Disponibilidad, conocimiento y reglas de transferencia de tu recepcionista.',
@@ -1022,7 +1022,7 @@ function ModulePage({ title, tasks, calls, clinicName, dataMode, profile, connec
   const pendingDescriptions = {
     Conversaciones: 'El historial aparecerá cuando tu agente comience a atender llamadas.',
     Oportunidades: 'Los seguimientos se crearán automáticamente a partir de las conversaciones.',
-    'Mi recepcionista': 'Configura y prueba la recepcionista asignada a tu Location.',
+    'Mi agente': 'Configura y prueba la recepcionista asignada a tu Location.',
     Conexiones: 'Consulta los sistemas operativos y las integraciones disponibles.',
     'Uso y plan': 'El consumo aparecerá cuando tu agente comience a operar.',
   };
@@ -1034,7 +1034,7 @@ function ModulePage({ title, tasks, calls, clinicName, dataMode, profile, connec
       </section>
       {title === 'Conversaciones' && <ConversationsModule tasks={tasks} calls={calls} isDemoData={dataMode.isDemo} onSelectTask={onSelectTask} />}
       {title === 'Oportunidades' && <OpportunitiesModule tasks={tasks} onSelectTask={onSelectTask} />}
-      {title === 'Mi recepcionista' && <ReceptionistModule clinicName={clinicName} isDemoData={dataMode.isDemo} profile={profile} getToken={getToken} isAdmin={isAdmin} onAction={onAction} onTestAgent={onTestAgent} />}
+      {title === 'Mi agente' && <ReceptionistModule clinicName={clinicName} isDemoData={dataMode.isDemo} profile={profile} getToken={getToken} isAdmin={isAdmin} onAction={onAction} onTestAgent={onTestAgent} />}
       {title === 'Conexiones' && <ConnectionsModule connections={connections} />}
       {title === 'Uso y plan' && <UsageModule />}
     </main>
@@ -1103,6 +1103,56 @@ function OpportunitiesModule({ tasks, onSelectTask }) {
 
 const VOICE_PROVIDER_NAMES = { platform: 'Retell', cartesia: 'Cartesia', elevenlabs: 'ElevenLabs', minimax: 'MiniMax', fish_audio: 'Fish Audio', openai: 'OpenAI', deepgram: 'Deepgram' };
 
+// Small add/remove list editor shared by the services and off-days fields —
+// the "menú más sofisticado" replacement for the free-text version.
+function TagListField({ label, hint, placeholder, items, onChange, disabled }) {
+  const [draft, setDraft] = useState('');
+  const addItem = () => {
+    const value = draft.trim();
+    if (!value) return;
+    onChange([...items, value]);
+    setDraft('');
+  };
+  return (
+    <div className="tag-list-field">
+      <span className="tag-list-label"><strong>{label}</strong><small>{hint}</small></span>
+      <div className="tag-list-items">
+        {items.map((item, index) => (
+          <span className="tag-chip" key={`${item}-${index}`}>
+            {item}
+            {!disabled && <button type="button" aria-label={`Quitar ${item}`} onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))}>×</button>}
+          </span>
+        ))}
+        {items.length === 0 && <small className="tag-list-empty">Sin elementos todavía.</small>}
+      </div>
+      {!disabled && (
+        <div className="tag-list-add">
+          <input
+            value={draft}
+            placeholder={placeholder}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addItem(); } }}
+          />
+          <button type="button" onClick={addItem}>Agregar</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function agentDraftFromProfile(profile, clinicName) {
+  return {
+    clinicName: profile?.clinicName || clinicName || '',
+    city: profile?.city || '',
+    industry: profile?.industry || '',
+    description: profile?.description || '',
+    businessHours: profile?.businessHours || '',
+    greeting: profile?.greeting || '',
+    services: profile?.services || [],
+    offDays: profile?.offDays || [],
+  };
+}
+
 function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin, onAction, onTestAgent }) {
   const [voices, setVoices] = useState([]);
   const [provider, setProvider] = useState(profile?.voiceProvider || 'cartesia');
@@ -1111,6 +1161,11 @@ function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin
   const [voiceError, setVoiceError] = useState('');
   const providers = useMemo(() => [...new Set(voices.map((voice) => voice.provider))], [voices]);
   const providerVoices = useMemo(() => voices.filter((voice) => voice.provider === provider), [voices, provider]);
+
+  const [agentDraft, setAgentDraft] = useState(() => agentDraftFromProfile(profile, clinicName));
+  const [agentStatus, setAgentStatus] = useState('idle');
+  const [agentError, setAgentError] = useState('');
+  const updateAgentField = (field, value) => { setAgentDraft((current) => ({ ...current, [field]: value })); setAgentStatus('idle'); };
 
   useEffect(() => {
     let active = true;
@@ -1135,7 +1190,17 @@ function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin
     try { await updateWorkspaceVoice(getToken, voiceId); setVoiceStatus('saved'); }
     catch (error) { setVoiceError(error.message); setVoiceStatus('error'); }
   };
+  const saveAgentConfiguration = async () => {
+    setAgentStatus('saving'); setAgentError('');
+    try {
+      const result = await updateWorkspaceAgentConfiguration(getToken, agentDraft);
+      setAgentDraft(agentDraftFromProfile(result.workspace?.profile, clinicName));
+      setAgentStatus('saved');
+      onAction('Configuración del agente actualizada');
+    } catch (error) { setAgentError(error.message); setAgentStatus('error'); }
+  };
   const selectedVoice = voices.find((voice) => voice.id === voiceId);
+  const fieldsDisabled = isDemoData || !isAdmin || agentStatus === 'saving';
   return (
     <section className="reception-layout">
       <article className="reception-identity dark-module-card"><div className="large-orb"><span /></div><p className="dark-eyebrow">{isDemoData ? 'Agente asignado' : 'En línea ahora'}</p><h2>Lucía</h2><span>Recepcionista de {clinicName}</span><div className="reception-number">{isDemoData ? 'Disponible desde este navegador' : '+52 55 4160 0198'}</div><button type="button" onClick={onTestAgent}><PhoneOutgoing size={16} /> Probar mi agente</button></article>
@@ -1155,17 +1220,28 @@ function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin
           {voiceStatus === 'saved' && <p className="voice-success"><CheckCircle2 size={15} /> Voz actualizada. La siguiente llamada usará esta voz.</p>}
           {voiceError && <p className="voice-error">{voiceError}</p>}
         </div>
-        {(isDemoData ? [
-          ['Disponibilidad', profile?.businessHours || 'Horario por configurar', Clock3],
-          ['Servicios que conoce', profile?.services?.join(', ') || 'Servicios por configurar', FileText],
-          ['Transferencias', 'Sin personas ni reglas conectadas', PhoneCall],
-          ['Mensaje inicial', 'Configurado para tu negocio', MessageSquareText],
-        ] : [
-          ['Disponibilidad', 'Lunes a viernes · 07:00–19:00', Clock3],
-          ['Servicios que conoce', '12 tratamientos y 38 respuestas', FileText],
-          ['Transferencias', '3 personas y una regla fuera de horario', PhoneCall],
-          ['Mensaje inicial', 'Actualizado el 27 de julio', MessageSquareText],
-        ]).map(([label, value, Icon]) => <button type="button" key={label} onClick={() => onAction(`${label} abierto`)}><span className="setting-icon"><Icon size={18} /></span><span><strong>{label}</strong><small>{value}</small></span><ChevronRight size={17} /></button>)}
+
+        <div className="agent-settings">
+          <div className="voice-settings-heading"><span className="setting-icon"><FileText size={18} /></span><span><strong>Configuración de tu agente</strong><small>{isDemoData ? 'Disponible en cuanto tu agente esté configurado.' : 'Estos cambios se aplican directo al agente en Retell.'}</small></span></div>
+
+          <div className="agent-settings-fields">
+            <label><span>Nombre del negocio</span><input disabled={fieldsDisabled} value={agentDraft.clinicName} onChange={(event) => updateAgentField('clinicName', event.target.value)} /></label>
+            <label><span>Industria</span><input disabled={fieldsDisabled} value={agentDraft.industry} onChange={(event) => updateAgentField('industry', event.target.value)} placeholder="Ej. Clínica dental" /></label>
+            <label><span>Ciudad</span><input disabled={fieldsDisabled} value={agentDraft.city} onChange={(event) => updateAgentField('city', event.target.value)} /></label>
+            <label className="agent-settings-full"><span>Descripción breve</span><textarea disabled={fieldsDisabled} rows={2} value={agentDraft.description} onChange={(event) => updateAgentField('description', event.target.value)} placeholder="Qué hace tu negocio, en una frase." /></label>
+            <label className="agent-settings-full"><span><Clock3 size={14} /> Horario regular</span><input disabled={fieldsDisabled} value={agentDraft.businessHours} onChange={(event) => updateAgentField('businessHours', event.target.value)} placeholder="Ej. Lunes a viernes, 9:00 a 19:00" /></label>
+            <label className="agent-settings-full"><span><MessageSquareText size={14} /> Mensaje inicial</span><textarea disabled={fieldsDisabled} rows={2} value={agentDraft.greeting} onChange={(event) => updateAgentField('greeting', event.target.value)} placeholder="Hola, gracias por llamar a tu negocio. Soy Lucía…" /></label>
+          </div>
+
+          <TagListField label="Servicios que conoce" hint="Cada uno se menciona al cliente cuando pregunta." placeholder="Ej. Limpieza dental" items={agentDraft.services} onChange={(value) => updateAgentField('services', value)} disabled={fieldsDisabled} />
+          <TagListField label="Excepciones de horario" hint="Días u ocasiones en que no hay servicio." placeholder="Ej. 25 de diciembre" items={agentDraft.offDays} onChange={(value) => updateAgentField('offDays', value)} disabled={fieldsDisabled} />
+
+          <div className="voice-settings-actions">
+            {isAdmin ? <button type="button" className="primary-action" disabled={isDemoData || !agentDraft.clinicName || agentStatus === 'saving'} onClick={saveAgentConfiguration}>{agentStatus === 'saving' ? 'Guardando…' : 'Guardar configuración'}</button> : <small>Solo un administrador puede editar la configuración del agente.</small>}
+          </div>
+          {agentStatus === 'saved' && <p className="voice-success"><CheckCircle2 size={15} /> Configuración actualizada. La siguiente llamada usará estos cambios.</p>}
+          {agentError && <p className="voice-error">{agentError}</p>}
+        </div>
       </article>
     </section>
   );
