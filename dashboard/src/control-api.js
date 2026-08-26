@@ -118,6 +118,14 @@ export function getWorkspaceActivity(getToken) {
   return controlRequest(getToken, '/api/workspace?resource=activity');
 }
 
+export function getWorkspaceCalendar(getToken, { fromISO, toISO } = {}) {
+  const params = new URLSearchParams();
+  if (fromISO) params.set('from', fromISO);
+  if (toISO) params.set('to', toISO);
+  const suffix = params.toString() ? `&${params.toString()}` : '';
+  return controlRequest(getToken, `/api/workspace?resource=calendar${suffix}`);
+}
+
 export function getWorkspaceNotifications(getToken) {
   return controlRequest(getToken, '/api/workspace?resource=notifications');
 }

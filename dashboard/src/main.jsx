@@ -40,6 +40,7 @@ import DashboardAuth from './auth';
 import { CallExperience } from './workspace';
 import {
   getWorkspaceActivity,
+  getWorkspaceCalendar,
   getWorkspaceNotifications,
   getWorkspaceVoices,
   markAllWorkspaceNotificationsRead,
@@ -499,6 +500,7 @@ function App({ account, workspace }) {
               tasks={tasks}
               calls={calls}
               kpis={kpis}
+              getToken={account.getToken}
               onTaskFilter={setTaskFilter}
               onSelectTask={selectTask}
               onNavigate={navigate}
@@ -741,7 +743,7 @@ function KpiStrip({ kpis, isDemoData }) {
   );
 }
 
-function Dashboard({ period, onPeriod, tasks, calls, kpis, taskFilter, onTaskFilter, onSelectTask, onNavigate, onAction, firstName, isAdmin, dataMode }) {
+function Dashboard({ period, onPeriod, tasks, calls, kpis, getToken, taskFilter, onTaskFilter, onSelectTask, onNavigate, onAction, firstName, isAdmin, dataMode }) {
   const [analysisOpen, setAnalysisOpen] = useState(false);
   const firstTask = tasks[0];
   return (
@@ -774,7 +776,7 @@ function Dashboard({ period, onPeriod, tasks, calls, kpis, taskFilter, onTaskFil
       {analysisOpen && <div className="analysis-details" id="dashboard-analysis">
         <section className="insight-grid">
           <OutcomePanel reasonsData={[]} isDemoData onNavigate={onNavigate} />
-          <AgendaPanel onAction={onAction} />
+          <AgendaPanel onAction={onAction} getToken={getToken} />
         </section>
         <CapacityPanel isAdmin={isAdmin} onNavigate={onNavigate} />
       </div>}
@@ -864,21 +866,91 @@ function OutcomePanel({ reasonsData, isDemoData, onNavigate }) {
   );
 }
 
-function AgendaPanel({ onAction }) {
-  // Google Calendar connection is not wired to this dashboard yet (see
-  // saveClinicCalendar in lib/server/clerk-control.js), so there is no real
-  // appointment source. This stays an honest empty state instead of the
-  // previous hardcoded list of 5 fake appointments.
+function groupEventsByDay(events) {
+  const groups = new Map();
+  for (const event of events) {
+    const dayKey = event.startsAt.slice(0, 10);
+    if (!groups.has(dayKey)) groups.set(dayKey, []);
+    groups.get(dayKey).push(event);
+  }
+  return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
+
+function formatAgendaDay(dayKey) {
+  const date = new Date(`${dayKey}T00:00:00`);
+  const label = date.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'short' });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function formatAgendaTime(isoString) {
+  return new Date(isoString).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+}
+
+// Read-only v1: shows the full calendar (agent-booked + whatever was already
+// there), color-coded by who put it there. Reschedule/cancel from here is a
+// separate, bigger piece (writing back to Google Calendar, not just reading).
+function AgendaPanel({ onAction, getToken }) {
+  const [state, setState] = useState({ status: 'loading', connected: false, events: [] });
+
+  useEffect(() => {
+    let active = true;
+    getWorkspaceCalendar(getToken)
+      .then((result) => { if (active) setState({ status: 'ready', connected: result.connected, events: result.events || [] }); })
+      .catch(() => { if (active) setState({ status: 'error', connected: false, events: [] }); });
+    return () => { active = false; };
+  }, [getToken]);
+
+  const grouped = useMemo(() => groupEventsByDay(state.events), [state.events]);
+  const agentCount = state.events.filter((event) => event.source === 'agent').length;
+
   return (
     <article className="agenda-panel surface-panel">
       <header className="section-head">
-        <div><p className="eyebrow">Agenda de hoy</p><h2>Sin citas registradas</h2></div>
+        <div>
+          <p className="eyebrow">Agenda</p>
+          <h2>{!state.connected ? 'Sin citas registradas' : state.events.length ? `${state.events.length} próximas citas` : 'Sin citas en los próximos 14 días'}</h2>
+        </div>
         <button type="button" className="calendar-button" aria-label="Abrir calendario" onClick={() => onAction('Calendario abierto')}><CalendarCheck2 size={18} /></button>
       </header>
-      <div className="agenda-list agenda-empty">
-        <CalendarCheck2 size={20} /><span>Conecta el calendario del negocio para ver la agenda aquí.</span>
+
+      {state.status === 'loading' && <div className="agenda-list agenda-empty"><Clock3 size={20} /><span>Cargando agenda…</span></div>}
+
+      {state.status === 'error' && <div className="agenda-list agenda-empty"><CalendarCheck2 size={20} /><span>No pudimos cargar la agenda en este momento.</span></div>}
+
+      {state.status === 'ready' && !state.connected && (
+        <div className="agenda-list agenda-empty">
+          <CalendarCheck2 size={20} /><span>Conecta el calendario del negocio para ver la agenda aquí.</span>
+        </div>
+      )}
+
+      {state.status === 'ready' && state.connected && state.events.length === 0 && (
+        <div className="agenda-list agenda-empty">
+          <CalendarCheck2 size={20} /><span>Sin citas registradas en los próximos 14 días.</span>
+        </div>
+      )}
+
+      {state.status === 'ready' && state.connected && state.events.length > 0 && (
+        <div className="agenda-list agenda-grouped">
+          {grouped.map(([dayKey, dayEvents]) => (
+            <div className="agenda-day-group" key={dayKey}>
+              <p className="agenda-day-label">{formatAgendaDay(dayKey)}</p>
+              {dayEvents.map((event) => (
+                <div className={`appointment-row appointment-source-${event.source}`} key={event.externalEventId}>
+                  <time>{formatAgendaTime(event.startsAt)}</time>
+                  <span className="agenda-line"><i className={event.source === 'agent' ? 'agent' : 'external'} /></span>
+                  <span className="appointment-copy"><strong>{event.summary || 'Sin título'}</strong></span>
+                  <span className={`appointment-state ${event.source === 'agent' ? 'agent' : ''}`}>{event.source === 'agent' ? 'Agendada por Lucía' : 'Ya estaba en tu calendario'}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="agenda-foot">
+        <Clock3 size={15} />
+        <span>{state.connected ? `${agentCount} agendadas por Lucía en este rango` : 'Conecta Google Calendar para consultar espacios'}</span>
       </div>
-      <div className="agenda-foot"><Clock3 size={15} /><span>Conecta Google Calendar para consultar espacios</span></div>
     </article>
   );
 }

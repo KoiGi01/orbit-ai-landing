@@ -1890,6 +1890,45 @@ select:focus-visible,
   color: var(--ink);
 }
 
+.agenda-empty {
+  min-height: 140px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 9px;
+  color: var(--ink-soft);
+  font-size: 11px;
+  text-align: center;
+}
+
+.agenda-day-group + .agenda-day-group {
+  margin-top: 14px;
+}
+
+.agenda-day-label {
+  margin: 0 0 6px;
+  color: var(--ink-soft);
+  font-size: 9px;
+  font-weight: 690;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.agenda-line i.agent {
+  background: var(--coral);
+  box-shadow: 0 0 0 1px var(--coral);
+}
+
+.agenda-line i.external {
+  background: #a8aba1;
+  box-shadow: 0 0 0 1px #a8aba1;
+}
+
+.appointment-state.agent {
+  color: #9a4022;
+  background: rgba(239, 104, 76, 0.16);
+}
+
 .capacity-panel {
   display: grid;
   grid-template-columns: 220px minmax(260px, 1fr) auto;
