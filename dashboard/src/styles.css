@@ -2435,38 +2435,44 @@ select:focus-visible,
   padding: 10px 24px;
 }
 
-.voice-settings { padding: 18px 8px 22px; border-bottom: 1px solid #dfdcd5; }
-.voice-settings-heading { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
-.voice-settings-heading > span:last-child { display: grid; gap: 4px; }
-.voice-settings-heading small, .voice-settings > p { color: #7c7f76; font-size: 10px; }
+.agent-config-stack { display: grid; gap: 14px; }
+.agent-panel { padding: 22px 24px; display: grid; gap: 16px; align-content: start; }
+.agent-panel-heading { display: flex; align-items: center; gap: 14px; }
+.agent-panel-heading > span:last-child { display: grid; gap: 4px; }
+.agent-panel-heading small, .agent-panel > p { color: #7c7f76; font-size: 10px; }
+.agent-panel-save { flex-direction: row; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
+.template-grid { display: flex; flex-wrap: wrap; gap: 9px; }
+.template-chip { display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; background: #f6f4ef; border: 1px solid #d8d5ce; border-radius: 999px; color: #3c3f38; font-size: 11px; font-weight: 620; cursor: pointer; }
+.template-chip:hover { border-color: var(--coral); color: var(--coral); }
+
 .voice-settings-fields { display: grid; grid-template-columns: 1fr 1.35fr; gap: 12px; }
 .voice-settings-fields label { display: grid; gap: 7px; color: #62655e; font-size: 9px; font-weight: 750; text-transform: uppercase; letter-spacing: .08em; }
 .voice-settings-fields select { width: 100%; min-height: 43px; padding: 0 12px; color: #242721; background: #f6f4ef; border: 1px solid #d8d5ce; border-radius: 9px; font: inherit; text-transform: none; letter-spacing: normal; }
-.voice-settings-actions { margin-top: 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.voice-settings-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .voice-settings-actions audio { width: min(290px, 100%); height: 36px; }
 .voice-settings-actions .primary-action { min-height: 39px; white-space: nowrap; }
-.voice-settings .voice-success { display: flex; align-items: center; gap: 6px; margin: 12px 0 0; color: #28745b; }
-.voice-settings .voice-error { margin: 12px 0 0; color: #a63b35; }
+.voice-success { display: flex; align-items: center; gap: 6px; margin: 0; color: #28745b; }
+.voice-error { margin: 0; color: #a63b35; }
 
 @media (max-width: 620px) {
   .voice-settings-fields { grid-template-columns: 1fr; }
   .voice-settings-actions { align-items: stretch; flex-direction: column; }
 }
 
-.agent-settings { padding: 18px 8px 22px; }
-.agent-settings-fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.agent-settings-fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.agent-settings-fields-single { grid-template-columns: 1fr; }
 .agent-settings-fields label { display: grid; gap: 7px; color: #62655e; font-size: 9px; font-weight: 750; text-transform: uppercase; letter-spacing: .08em; }
 .agent-settings-fields label span { display: flex; align-items: center; gap: 5px; }
-.agent-settings-fields .agent-settings-full { grid-column: 1 / -1; }
 .agent-settings-fields input,
 .agent-settings-fields textarea { width: 100%; padding: 10px 12px; color: #242721; background: #f6f4ef; border: 1px solid #d8d5ce; border-radius: 9px; font: inherit; text-transform: none; letter-spacing: normal; resize: vertical; }
 .agent-settings-fields input:disabled,
 .agent-settings-fields textarea:disabled { opacity: .65; cursor: not-allowed; }
 
-.tag-list-field { margin-bottom: 16px; }
-.tag-list-label { display: grid; gap: 4px; margin-bottom: 8px; }
+.tag-list-field { display: grid; gap: 10px; }
+.tag-list-label { display: grid; gap: 4px; }
 .tag-list-label small { color: #7c7f76; font-size: 10px; }
-.tag-list-items { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.tag-list-items { display: flex; flex-wrap: wrap; gap: 8px; }
 .tag-list-empty { color: #a4a79d; font-size: 10px; }
 .tag-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px 6px 12px; background: #eeece5; border: 1px solid #d8d5ce; border-radius: 999px; font-size: 11px; color: #242721; }
 .tag-chip button { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 999px; border: 0; background: #d8d5ce; color: #4a4d46; font-size: 12px; line-height: 1; cursor: pointer; }

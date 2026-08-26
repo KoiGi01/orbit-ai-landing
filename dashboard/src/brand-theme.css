@@ -316,6 +316,39 @@ h3,
   box-shadow: none;
 }
 
+/* Mi agente panels (redesigned 2026-08-26): uppercase field labels and
+   panel subtitles used a light-mode gray that reads too dim on the dark
+   surface, and template chips need the same dark surface as everything
+   else instead of the light-mode card color they were written against. */
+
+.agent-settings-fields label,
+.voice-settings-fields label {
+  color: var(--ink-soft);
+}
+
+.agent-panel-heading small,
+.agent-panel > p,
+.tag-list-label small {
+  color: var(--ink-faint);
+}
+
+.agent-panel-heading strong,
+.tag-list-label strong {
+  color: var(--ink);
+}
+
+.template-chip {
+  color: var(--ink-2);
+  background: var(--surface-muted);
+  border-color: var(--line);
+}
+
+.template-chip:hover {
+  color: var(--coral-deep);
+  border-color: var(--coral);
+  background: var(--coral-soft);
+}
+
 .connection-card p {
   color: var(--ink-soft);
 }

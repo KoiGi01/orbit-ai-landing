@@ -26,12 +26,17 @@ import {
   PhoneOutgoing,
   Play,
   PlugZap,
+  Scale,
+  Scissors,
   Search,
   Settings,
   ShieldCheck,
   Sparkles,
+  Stethoscope,
   UserRound,
   Users,
+  UtensilsCrossed,
+  Wrench,
   X,
 } from 'lucide-react';
 import './styles.css';
@@ -1085,6 +1090,73 @@ function TagListField({ label, hint, placeholder, items, onChange, disabled }) {
   );
 }
 
+// Starting points for the most common Mexican SMB verticals -- picking one
+// prefills industry/description/services/hours/greeting so a new business
+// doesn't start from a blank form. Never touches clinicName, city or offDays
+// since those are specific to the business, not the vertical.
+const AGENT_TEMPLATES = [
+  {
+    id: 'clinica_dental',
+    label: 'Clínica dental',
+    Icon: Stethoscope,
+    industry: 'Clínica dental',
+    description: 'Atiende consultas, valoraciones y tratamientos dentales para pacientes particulares.',
+    services: ['Limpieza dental', 'Valoración', 'Ortodoncia', 'Blanqueamiento'],
+    businessHours: 'Lunes a viernes, 9:00 a 19:00. Sábados, 9:00 a 14:00.',
+    greeting: 'Hola, gracias por llamar. Soy Lucía, la asistente virtual. ¿En qué puedo ayudarle?',
+  },
+  {
+    id: 'consultorio_medico',
+    label: 'Consultorio médico',
+    Icon: Stethoscope,
+    industry: 'Consultorio médico',
+    description: 'Agenda citas de consulta general y da seguimiento a pacientes.',
+    services: ['Consulta general', 'Seguimiento', 'Certificados médicos'],
+    businessHours: 'Lunes a viernes, 9:00 a 18:00.',
+    greeting: 'Hola, gracias por llamar al consultorio. Soy Lucía, la asistente virtual. ¿En qué puedo ayudarle?',
+  },
+  {
+    id: 'salon_spa',
+    label: 'Salón de belleza / spa',
+    Icon: Scissors,
+    industry: 'Salón de belleza',
+    description: 'Agenda citas de corte, color y tratamientos de belleza.',
+    services: ['Corte', 'Color', 'Manicure', 'Tratamiento facial'],
+    businessHours: 'Martes a domingo, 10:00 a 20:00.',
+    greeting: 'Hola, gracias por llamar. Soy Lucía. ¿Le gustaría agendar una cita?',
+  },
+  {
+    id: 'restaurante',
+    label: 'Restaurante',
+    Icon: UtensilsCrossed,
+    industry: 'Restaurante',
+    description: 'Toma reservaciones y responde dudas sobre el menú y horarios.',
+    services: ['Reservación', 'Eventos privados', 'Para llevar'],
+    businessHours: 'Todos los días, 13:00 a 23:00.',
+    greeting: 'Hola, gracias por llamar. Soy Lucía. ¿Le gustaría hacer una reservación?',
+  },
+  {
+    id: 'taller_mecanico',
+    label: 'Taller mecánico',
+    Icon: Wrench,
+    industry: 'Taller mecánico',
+    description: 'Agenda servicios de mantenimiento y da seguimiento a reparaciones.',
+    services: ['Afinación', 'Diagnóstico', 'Cambio de aceite', 'Frenos'],
+    businessHours: 'Lunes a sábado, 8:00 a 18:00.',
+    greeting: 'Hola, gracias por llamar al taller. Soy Lucía. ¿En qué puedo ayudarle?',
+  },
+  {
+    id: 'despacho_legal',
+    label: 'Despacho legal',
+    Icon: Scale,
+    industry: 'Servicios legales',
+    description: 'Agenda consultas legales y toma datos de casos nuevos.',
+    services: ['Consulta inicial', 'Seguimiento de caso'],
+    businessHours: 'Lunes a viernes, 9:00 a 18:00.',
+    greeting: 'Hola, gracias por llamar al despacho. Soy Lucía, la asistente virtual. ¿En qué puedo ayudarle?',
+  },
+];
+
 function agentDraftFromProfile(profile, clinicName) {
   return {
     clinicName: profile?.clinicName || clinicName || '',
@@ -1111,6 +1183,17 @@ function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin
   const [agentStatus, setAgentStatus] = useState('idle');
   const [agentError, setAgentError] = useState('');
   const updateAgentField = (field, value) => { setAgentDraft((current) => ({ ...current, [field]: value })); setAgentStatus('idle'); };
+  const applyTemplate = (template) => {
+    setAgentDraft((current) => ({
+      ...current,
+      industry: template.industry,
+      description: template.description,
+      services: template.services,
+      businessHours: template.businessHours,
+      greeting: template.greeting,
+    }));
+    setAgentStatus('idle');
+  };
 
   useEffect(() => {
     let active = true;
@@ -1139,7 +1222,7 @@ function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin
     setAgentStatus('saving'); setAgentError('');
     try {
       const result = await updateWorkspaceAgentConfiguration(getToken, agentDraft);
-      setAgentDraft(agentDraftFromProfile(result.workspace?.profile, clinicName));
+      setAgentDraft(agentDraftFromProfile(result.profile, clinicName));
       setAgentStatus('saved');
       onAction('Configuración del agente actualizada');
     } catch (error) { setAgentError(error.message); setAgentStatus('error'); }
@@ -1149,9 +1232,9 @@ function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin
   return (
     <section className="reception-layout">
       <article className="reception-identity dark-module-card"><div className="large-orb"><span /></div><p className="dark-eyebrow">{isDemoData ? 'Agente asignado' : 'En línea ahora'}</p><h2>Lucía</h2><span>Recepcionista de {clinicName}</span><div className="reception-number">{isDemoData ? 'Disponible desde este navegador' : '+52 55 4160 0198'}</div><button type="button" onClick={onTestAgent}><PhoneOutgoing size={16} /> Probar mi agente</button></article>
-      <article className="settings-list surface-panel">
-        <div className="voice-settings">
-          <div className="voice-settings-heading"><span className="setting-icon"><Headphones size={18} /></span><span><strong>Voz de tu recepcionista</strong><small>Voces disponibles con acento mexicano en Retell.</small></span></div>
+      <div className="agent-config-stack">
+        <article className="agent-panel surface-panel">
+          <div className="agent-panel-heading"><span className="setting-icon"><Headphones size={18} /></span><span><strong>Voz de tu recepcionista</strong><small>Voces disponibles con acento mexicano en Retell.</small></span></div>
           {voiceStatus === 'loading' ? <p>Cargando catálogo de voces…</p> : <>
             <div className="voice-settings-fields">
               <label><span>Proveedor</span><select disabled={!isAdmin || voiceStatus === 'saving'} value={provider} onChange={(event) => changeProvider(event.target.value)}>{providers.map((item) => <option value={item} key={item}>{VOICE_PROVIDER_NAMES[item] || item}</option>)}</select></label>
@@ -1164,30 +1247,53 @@ function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin
           </>}
           {voiceStatus === 'saved' && <p className="voice-success"><CheckCircle2 size={15} /> Voz actualizada. La siguiente llamada usará esta voz.</p>}
           {voiceError && <p className="voice-error">{voiceError}</p>}
-        </div>
+        </article>
 
-        <div className="agent-settings">
-          <div className="voice-settings-heading"><span className="setting-icon"><FileText size={18} /></span><span><strong>Configuración de tu agente</strong><small>{isDemoData ? 'Disponible en cuanto tu agente esté configurado.' : 'Estos cambios se aplican directo al agente en Retell.'}</small></span></div>
+        {isAdmin && !fieldsDisabled && (
+          <article className="agent-panel surface-panel">
+            <div className="agent-panel-heading"><span className="setting-icon"><Sparkles size={18} /></span><span><strong>Empieza con una plantilla</strong><small>Rellena industria, servicios, horario y saludo. Puedes ajustar todo después.</small></span></div>
+            <div className="template-grid">
+              {AGENT_TEMPLATES.map((template) => (
+                <button type="button" key={template.id} className="template-chip" onClick={() => applyTemplate(template)}>
+                  <template.Icon size={16} /><span>{template.label}</span>
+                </button>
+              ))}
+            </div>
+          </article>
+        )}
 
+        <article className="agent-panel surface-panel">
+          <div className="agent-panel-heading"><span className="setting-icon"><FileText size={18} /></span><span><strong>Identidad del negocio</strong><small>Cómo se presenta Lucía al contestar.</small></span></div>
           <div className="agent-settings-fields">
             <label><span>Nombre del negocio</span><input disabled={fieldsDisabled} value={agentDraft.clinicName} onChange={(event) => updateAgentField('clinicName', event.target.value)} /></label>
             <label><span>Industria</span><input disabled={fieldsDisabled} value={agentDraft.industry} onChange={(event) => updateAgentField('industry', event.target.value)} placeholder="Ej. Clínica dental" /></label>
             <label><span>Ciudad</span><input disabled={fieldsDisabled} value={agentDraft.city} onChange={(event) => updateAgentField('city', event.target.value)} /></label>
-            <label className="agent-settings-full"><span>Descripción breve</span><textarea disabled={fieldsDisabled} rows={2} value={agentDraft.description} onChange={(event) => updateAgentField('description', event.target.value)} placeholder="Qué hace tu negocio, en una frase." /></label>
-            <label className="agent-settings-full"><span><Clock3 size={14} /> Horario regular</span><input disabled={fieldsDisabled} value={agentDraft.businessHours} onChange={(event) => updateAgentField('businessHours', event.target.value)} placeholder="Ej. Lunes a viernes, 9:00 a 19:00" /></label>
-            <label className="agent-settings-full"><span><MessageSquareText size={14} /> Mensaje inicial</span><textarea disabled={fieldsDisabled} rows={2} value={agentDraft.greeting} onChange={(event) => updateAgentField('greeting', event.target.value)} placeholder="Hola, gracias por llamar a tu negocio. Soy Lucía…" /></label>
           </div>
+          <div className="agent-settings-fields agent-settings-fields-single">
+            <label><span>Descripción breve</span><textarea disabled={fieldsDisabled} rows={2} value={agentDraft.description} onChange={(event) => updateAgentField('description', event.target.value)} placeholder="Qué hace tu negocio, en una frase." /></label>
+            <label><span><MessageSquareText size={14} /> Mensaje inicial</span><textarea disabled={fieldsDisabled} rows={2} value={agentDraft.greeting} onChange={(event) => updateAgentField('greeting', event.target.value)} placeholder="Hola, gracias por llamar a tu negocio. Soy Lucía…" /></label>
+          </div>
+        </article>
 
-          <TagListField label="Servicios que conoce" hint="Cada uno se menciona al cliente cuando pregunta." placeholder="Ej. Limpieza dental" items={agentDraft.services} onChange={(value) => updateAgentField('services', value)} disabled={fieldsDisabled} />
+        <article className="agent-panel surface-panel">
+          <div className="agent-panel-heading"><span className="setting-icon"><Clock3 size={18} /></span><span><strong>Horario</strong><small>Cuándo atiende tu negocio y sus excepciones.</small></span></div>
+          <div className="agent-settings-fields agent-settings-fields-single">
+            <label><span>Horario regular</span><input disabled={fieldsDisabled} value={agentDraft.businessHours} onChange={(event) => updateAgentField('businessHours', event.target.value)} placeholder="Ej. Lunes a viernes, 9:00 a 19:00" /></label>
+          </div>
           <TagListField label="Excepciones de horario" hint="Días u ocasiones en que no hay servicio." placeholder="Ej. 25 de diciembre" items={agentDraft.offDays} onChange={(value) => updateAgentField('offDays', value)} disabled={fieldsDisabled} />
+        </article>
 
-          <div className="voice-settings-actions">
-            {isAdmin ? <button type="button" className="primary-action" disabled={isDemoData || !agentDraft.clinicName || agentStatus === 'saving'} onClick={saveAgentConfiguration}>{agentStatus === 'saving' ? 'Guardando…' : 'Guardar configuración'}</button> : <small>Solo un administrador puede editar la configuración del agente.</small>}
-          </div>
+        <article className="agent-panel surface-panel">
+          <div className="agent-panel-heading"><span className="setting-icon"><PlugZap size={18} /></span><span><strong>Servicios</strong><small>Cada uno se menciona al cliente cuando pregunta.</small></span></div>
+          <TagListField label="Servicios que conoce" hint="" placeholder="Ej. Limpieza dental" items={agentDraft.services} onChange={(value) => updateAgentField('services', value)} disabled={fieldsDisabled} />
+        </article>
+
+        <article className="agent-panel agent-panel-save surface-panel">
+          {isAdmin ? <button type="button" className="primary-action" disabled={isDemoData || !agentDraft.clinicName || agentStatus === 'saving'} onClick={saveAgentConfiguration}>{agentStatus === 'saving' ? 'Guardando…' : 'Guardar configuración'}</button> : <small>Solo un administrador puede editar la configuración del agente.</small>}
           {agentStatus === 'saved' && <p className="voice-success"><CheckCircle2 size={15} /> Configuración actualizada. La siguiente llamada usará estos cambios.</p>}
           {agentError && <p className="voice-error">{agentError}</p>}
-        </div>
-      </article>
+        </article>
+      </div>
     </section>
   );
 }
