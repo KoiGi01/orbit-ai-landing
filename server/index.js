@@ -11,6 +11,7 @@ import {
   errorResponse as controlErrorResponse,
   getWorkspace,
   getWorkspaceActivityForClient,
+  getWorkspaceCalendar,
   getWorkspaceNotificationsForClient,
   getWorkspaceVoiceCatalog,
   listClinics,
@@ -36,6 +37,7 @@ import {
   buildRetellDemoVariables,
   configuredAgentVersion,
 } from '../lib/server/retell-demo.js';
+import { handleAppointmentsWebhookRequest } from '../lib/server/appointments.js';
 import { handleRetellWebhookRequest, readRawBody } from '../lib/server/retell-webhook.js';
 import {
   consumeRateLimit,
@@ -195,6 +197,36 @@ async function handleRetellWebhook(req, res) {
   }
 }
 
+async function handleAppointmentsSync(req, res) {
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { error: 'method_not_allowed' });
+    return;
+  }
+
+  let database;
+  try {
+    database = createDatabase();
+    const rawBody = await readRawBody(req);
+    const result = await handleAppointmentsWebhookRequest({
+      rawBody,
+      signatureHeader: req.headers['x-autivex-signature'],
+      database,
+      dependencies: {},
+    });
+    if (result.body === null) {
+      res.writeHead(result.status, { 'cache-control': 'no-store' });
+      res.end();
+      return;
+    }
+    sendJson(res, result.status, result.body);
+  } catch (error) {
+    console.error('Appointments sync webhook failed:', error?.message || error);
+    sendJson(res, 502, { error: 'appointment_sync_failed' });
+  } finally {
+    if (database) await database.close();
+  }
+}
+
 async function handleLead(req, res) {
   if (req.method !== 'POST') {
     sendJson(res, 405, { error: 'method_not_allowed' });
@@ -262,6 +294,14 @@ async function handleWorkspace(req, res) {
     }
     if (resource === 'notifications') {
       sendJson(res, 200, await getWorkspaceNotificationsForClient(req.headers.authorization, createDatabase()));
+      return;
+    }
+    if (resource === 'calendar') {
+      const searchParams = new URL(req.url, 'http://localhost').searchParams;
+      sendJson(res, 200, await getWorkspaceCalendar(req.headers.authorization, createDatabase(), {
+        fromISO: searchParams.get('from'),
+        toISO: searchParams.get('to'),
+      }));
       return;
     }
     if (req.method === 'PATCH') {
@@ -474,6 +514,11 @@ const server = createServer(async (req, res) => {
 
   if (pathname === '/api/retell/webhook') {
     await handleRetellWebhook(req, res);
+    return;
+  }
+
+  if (pathname === '/api/appointments/sync') {
+    await handleAppointmentsSync(req, res);
     return;
   }
 

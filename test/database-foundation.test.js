@@ -11,6 +11,7 @@ import {
   provisionVoiceAgentDraft,
   provisionVoiceAgentFoundation,
   provisionWorkspaceFoundation,
+  getConnectedGoogleCalendarId,
   getWorkspaceActivity,
   listWorkspaceNotifications,
   markAllNotificationsRead,
@@ -73,6 +74,7 @@ test('applies every migration repeatedly', async () => {
     assert.deepEqual(
       tables.rows.map((row) => row.table_name),
       [
+        'appointments',
         'audit_log',
         'calls',
         'contacts',
@@ -833,6 +835,24 @@ test('saves and re-saves a Google Calendar connection for a workspace', async ()
       [foundation.workspace.id],
     );
     assert.equal(rowsAfterUpdate.rows[0].count, 1);
+
+    const connectedId = await getConnectedGoogleCalendarId(database, foundation.workspace.id);
+    assert.equal(connectedId, 'updated@group.calendar.google.com');
+  } finally {
+    await client.close();
+  }
+});
+
+test('getConnectedGoogleCalendarId returns null when nothing is connected', async () => {
+  const { client, database } = await migratedDatabase();
+  try {
+    const foundation = await provisionMvpFoundation(database, {
+      clerkOrganizationId: 'org_no_calendar',
+      displayName: 'No Calendar',
+      externalAgentId: 'agent_no_calendar_123',
+    });
+    const connectedId = await getConnectedGoogleCalendarId(database, foundation.workspace.id);
+    assert.equal(connectedId, null);
   } finally {
     await client.close();
   }

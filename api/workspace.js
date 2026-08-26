@@ -3,6 +3,7 @@ import {
   errorResponse,
   getWorkspace,
   getWorkspaceActivityForClient,
+  getWorkspaceCalendar,
   getWorkspaceNotificationsForClient,
   getWorkspaceVoiceCatalog,
   markAllWorkspaceNotificationsReadForClient,
@@ -44,6 +45,18 @@ export default async function handler(req, res) {
       const database = createDatabase();
       try {
         sendJson(res, 200, await getWorkspaceNotificationsForClient(authorization, database));
+      } finally {
+        await database.close();
+      }
+      return;
+    }
+    if (req.method === 'GET' && req.query?.resource === 'calendar') {
+      const database = createDatabase();
+      try {
+        sendJson(res, 200, await getWorkspaceCalendar(authorization, database, {
+          fromISO: req.query?.from,
+          toISO: req.query?.to,
+        }));
       } finally {
         await database.close();
       }
