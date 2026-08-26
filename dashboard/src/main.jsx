@@ -60,6 +60,9 @@ const primaryNav = [
   { label: 'Conversaciones', icon: PhoneCall },
   { label: 'Oportunidades', icon: Users, badge: 4 },
   { label: 'Mi agente', icon: Headphones },
+  // Appended, not inserted -- MobileNav/MobileMoreSheet below index into this
+  // array by position, so a new item always goes at the end.
+  { label: 'Agenda', icon: CalendarCheck2 },
 ];
 
 const secondaryNav = [
@@ -84,6 +87,10 @@ const moduleCopy = {
   'Mi agente': {
     title: 'Mi agente',
     description: 'Voz, disponibilidad y datos del negocio que usa Lucía para atender.',
+  },
+  Agenda: {
+    title: 'Agenda',
+    description: 'El calendario conectado, con lo agendado por Lucía resaltado.',
   },
   Conexiones: {
     title: 'Conexiones',
@@ -774,14 +781,13 @@ function Dashboard({ period, onPeriod, tasks, calls, kpis, getToken, taskFilter,
       </section>
 
       <section className="analysis-disclosure">
-        <div><p className="eyebrow">Más contexto</p><h2>Agenda, resultados y capacidad</h2><span>Lo esencial ya está arriba. Abre el detalle cuando necesites investigar el rendimiento.</span></div>
-        <div className="analysis-facts"><span><small>Agenda hoy</small><strong>Sin citas registradas</strong></span><span><small>Capacidad</small><strong>Sin consumo registrado</strong></span></div>
+        <div><p className="eyebrow">Más contexto</p><h2>Resultados y capacidad</h2><span>Lo esencial ya está arriba. Abre el detalle cuando necesites investigar el rendimiento. La agenda ahora vive en su propia sección.</span></div>
+        <div className="analysis-facts"><span><small>Capacidad</small><strong>Sin consumo registrado</strong></span></div>
         <button type="button" aria-expanded={analysisOpen} aria-controls="dashboard-analysis" onClick={() => setAnalysisOpen((value) => !value)}>{analysisOpen ? 'Ocultar análisis' : 'Ver análisis'}<ChevronDown size={16} className={analysisOpen ? 'rotated' : ''} /></button>
       </section>
       {analysisOpen && <div className="analysis-details" id="dashboard-analysis">
         <section className="insight-grid">
           <OutcomePanel reasonsData={[]} isDemoData onNavigate={onNavigate} />
-          <AgendaPanel onAction={onAction} getToken={getToken} />
         </section>
         <CapacityPanel isAdmin={isAdmin} onNavigate={onNavigate} />
       </div>}
@@ -980,11 +986,12 @@ function ModulePage({ title, tasks, calls, clinicName, dataMode, profile, connec
     <main className="module-page">
       <section className="module-heading">
         <h1>{copy.title}</h1>
-        {!['Conexiones', 'Uso y plan'].includes(title) && <button type="button" className="primary-action" onClick={() => onAction(`Nueva acción en ${title}`)}>Nueva acción <ArrowUpRight size={16} /></button>}
+        {!['Conexiones', 'Uso y plan', 'Agenda'].includes(title) && <button type="button" className="primary-action" onClick={() => onAction(`Nueva acción en ${title}`)}>Nueva acción <ArrowUpRight size={16} /></button>}
       </section>
       {title === 'Conversaciones' && <ConversationsModule tasks={tasks} calls={calls} isDemoData={dataMode.isDemo} onSelectTask={onSelectTask} />}
       {title === 'Oportunidades' && <OpportunitiesModule tasks={tasks} onSelectTask={onSelectTask} />}
       {title === 'Mi agente' && <ReceptionistModule clinicName={clinicName} isDemoData={dataMode.isDemo} profile={profile} getToken={getToken} isAdmin={isAdmin} onAction={onAction} onTestAgent={onTestAgent} />}
+      {title === 'Agenda' && <AgendaPanel onAction={onAction} getToken={getToken} />}
       {title === 'Conexiones' && <ConnectionsModule connections={connections} getToken={getToken} isAdmin={isAdmin} onAction={onAction} />}
       {title === 'Uso y plan' && <UsageModule />}
     </main>
@@ -1090,10 +1097,83 @@ function TagListField({ label, hint, placeholder, items, onChange, disabled }) {
   );
 }
 
+const EMPTY_SERVICE_DRAFT = { name: '', duration: '', price: '', details: '' };
+
+// Each service now carries duration/price/details, not just a name -- so the
+// agent has real answers when someone asks "¿cuánto dura?" or "¿cuánto
+// cuesta?" instead of always having to deflect the question.
+function ServiceListField({ items, onChange, disabled }) {
+  const [draft, setDraft] = useState(EMPTY_SERVICE_DRAFT);
+  const updateDraft = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
+  const addItem = () => {
+    const name = draft.name.trim();
+    if (!name) return;
+    onChange([...items, { name, duration: draft.duration.trim(), price: draft.price.trim(), details: draft.details.trim() }]);
+    setDraft(EMPTY_SERVICE_DRAFT);
+  };
+  const updateItem = (index, field, value) => {
+    onChange(items.map((item, itemIndex) => (itemIndex === index ? { ...item, [field]: value } : item)));
+  };
+  const removeItem = (index) => onChange(items.filter((_, itemIndex) => itemIndex !== index));
+  return (
+    <div className="service-list-field">
+      <div className="service-list-head">
+        <span>Servicio</span><span>Duración</span><span>Costo</span><span>Detalles</span>
+      </div>
+      {items.length === 0 && <small className="tag-list-empty">Sin servicios todavía.</small>}
+      {items.map((item, index) => (
+        <div className="service-row" key={index}>
+          <input disabled={disabled} value={item.name} onChange={(event) => updateItem(index, 'name', event.target.value)} aria-label="Nombre del servicio" placeholder="Ej. Limpieza dental" />
+          <input disabled={disabled} value={item.duration || ''} onChange={(event) => updateItem(index, 'duration', event.target.value)} aria-label="Duración" placeholder="Ej. 30 min" />
+          <input disabled={disabled} value={item.price || ''} onChange={(event) => updateItem(index, 'price', event.target.value)} aria-label="Costo" placeholder="Ej. $800" />
+          <input disabled={disabled} value={item.details || ''} onChange={(event) => updateItem(index, 'details', event.target.value)} aria-label="Detalles" placeholder="Ej. Incluye revisión inicial" />
+          {!disabled && <button type="button" className="service-row-remove" aria-label={`Quitar ${item.name}`} onClick={() => removeItem(index)}>×</button>}
+        </div>
+      ))}
+      {!disabled && (
+        <div className="service-row service-row-add">
+          <input value={draft.name} onChange={(event) => updateDraft('name', event.target.value)} placeholder="Nuevo servicio" aria-label="Nombre del nuevo servicio" onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addItem(); } }} />
+          <input value={draft.duration} onChange={(event) => updateDraft('duration', event.target.value)} placeholder="Duración" aria-label="Duración del nuevo servicio" />
+          <input value={draft.price} onChange={(event) => updateDraft('price', event.target.value)} placeholder="Costo" aria-label="Costo del nuevo servicio" />
+          <input value={draft.details} onChange={(event) => updateDraft('details', event.target.value)} placeholder="Detalles" aria-label="Detalles del nuevo servicio" />
+          <button type="button" onClick={addItem}>Agregar</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// A service used to be just a name string. It now carries duration/price/
+// details too, so the agent can actually answer "¿cuánto dura?" or "¿cuánto
+// cuesta?" instead of always deflecting. Old profiles saved before this
+// change still have plain strings in Clerk metadata, so every place that
+// reads services coerces through this first.
+function normalizeServiceEntry(item) {
+  if (typeof item === 'string') {
+    const name = item.trim();
+    return name ? { name, duration: '', price: '', details: '' } : null;
+  }
+  if (!item || typeof item !== 'object') return null;
+  const name = String(item.name || '').trim();
+  if (!name) return null;
+  return {
+    name,
+    duration: String(item.duration || '').trim(),
+    price: String(item.price || '').trim(),
+    details: String(item.details || '').trim(),
+  };
+}
+
+function normalizeServiceList(value) {
+  return (Array.isArray(value) ? value : []).map(normalizeServiceEntry).filter(Boolean);
+}
+
 // Starting points for the most common Mexican SMB verticals -- picking one
 // prefills industry/description/services/hours/greeting so a new business
 // doesn't start from a blank form. Never touches clinicName, city or offDays
-// since those are specific to the business, not the vertical.
+// since those are specific to the business, not the vertical. Duration is a
+// reasonable default; price is left blank since it varies by business and
+// templates shouldn't invent a number the admin didn't say.
 const AGENT_TEMPLATES = [
   {
     id: 'clinica_dental',
@@ -1101,7 +1181,12 @@ const AGENT_TEMPLATES = [
     Icon: Stethoscope,
     industry: 'Clínica dental',
     description: 'Atiende consultas, valoraciones y tratamientos dentales para pacientes particulares.',
-    services: ['Limpieza dental', 'Valoración', 'Ortodoncia', 'Blanqueamiento'],
+    services: [
+      { name: 'Limpieza dental', duration: '45 min', price: '', details: '' },
+      { name: 'Valoración', duration: '30 min', price: '', details: '' },
+      { name: 'Ortodoncia', duration: '60 min', price: '', details: '' },
+      { name: 'Blanqueamiento', duration: '60 min', price: '', details: '' },
+    ],
     businessHours: 'Lunes a viernes, 9:00 a 19:00. Sábados, 9:00 a 14:00.',
     greeting: 'Hola, gracias por llamar. Soy Lucía, la asistente virtual. ¿En qué puedo ayudarle?',
   },
@@ -1111,7 +1196,11 @@ const AGENT_TEMPLATES = [
     Icon: Stethoscope,
     industry: 'Consultorio médico',
     description: 'Agenda citas de consulta general y da seguimiento a pacientes.',
-    services: ['Consulta general', 'Seguimiento', 'Certificados médicos'],
+    services: [
+      { name: 'Consulta general', duration: '30 min', price: '', details: '' },
+      { name: 'Seguimiento', duration: '20 min', price: '', details: '' },
+      { name: 'Certificados médicos', duration: '15 min', price: '', details: '' },
+    ],
     businessHours: 'Lunes a viernes, 9:00 a 18:00.',
     greeting: 'Hola, gracias por llamar al consultorio. Soy Lucía, la asistente virtual. ¿En qué puedo ayudarle?',
   },
@@ -1121,7 +1210,12 @@ const AGENT_TEMPLATES = [
     Icon: Scissors,
     industry: 'Salón de belleza',
     description: 'Agenda citas de corte, color y tratamientos de belleza.',
-    services: ['Corte', 'Color', 'Manicure', 'Tratamiento facial'],
+    services: [
+      { name: 'Corte', duration: '30 min', price: '', details: '' },
+      { name: 'Color', duration: '90 min', price: '', details: '' },
+      { name: 'Manicure', duration: '45 min', price: '', details: '' },
+      { name: 'Tratamiento facial', duration: '60 min', price: '', details: '' },
+    ],
     businessHours: 'Martes a domingo, 10:00 a 20:00.',
     greeting: 'Hola, gracias por llamar. Soy Lucía. ¿Le gustaría agendar una cita?',
   },
@@ -1131,7 +1225,11 @@ const AGENT_TEMPLATES = [
     Icon: UtensilsCrossed,
     industry: 'Restaurante',
     description: 'Toma reservaciones y responde dudas sobre el menú y horarios.',
-    services: ['Reservación', 'Eventos privados', 'Para llevar'],
+    services: [
+      { name: 'Reservación', duration: '', price: '', details: '' },
+      { name: 'Eventos privados', duration: '', price: '', details: '' },
+      { name: 'Para llevar', duration: '', price: '', details: '' },
+    ],
     businessHours: 'Todos los días, 13:00 a 23:00.',
     greeting: 'Hola, gracias por llamar. Soy Lucía. ¿Le gustaría hacer una reservación?',
   },
@@ -1141,7 +1239,12 @@ const AGENT_TEMPLATES = [
     Icon: Wrench,
     industry: 'Taller mecánico',
     description: 'Agenda servicios de mantenimiento y da seguimiento a reparaciones.',
-    services: ['Afinación', 'Diagnóstico', 'Cambio de aceite', 'Frenos'],
+    services: [
+      { name: 'Afinación', duration: '90 min', price: '', details: '' },
+      { name: 'Diagnóstico', duration: '30 min', price: '', details: '' },
+      { name: 'Cambio de aceite', duration: '30 min', price: '', details: '' },
+      { name: 'Frenos', duration: '60 min', price: '', details: '' },
+    ],
     businessHours: 'Lunes a sábado, 8:00 a 18:00.',
     greeting: 'Hola, gracias por llamar al taller. Soy Lucía. ¿En qué puedo ayudarle?',
   },
@@ -1151,10 +1254,20 @@ const AGENT_TEMPLATES = [
     Icon: Scale,
     industry: 'Servicios legales',
     description: 'Agenda consultas legales y toma datos de casos nuevos.',
-    services: ['Consulta inicial', 'Seguimiento de caso'],
+    services: [
+      { name: 'Consulta inicial', duration: '45 min', price: '', details: '' },
+      { name: 'Seguimiento de caso', duration: '30 min', price: '', details: '' },
+    ],
     businessHours: 'Lunes a viernes, 9:00 a 18:00.',
     greeting: 'Hola, gracias por llamar al despacho. Soy Lucía, la asistente virtual. ¿En qué puedo ayudarle?',
   },
+];
+
+const AGENT_TABS = [
+  { id: 'identidad', label: 'Identidad', Icon: FileText },
+  { id: 'horario', label: 'Horario', Icon: Clock3 },
+  { id: 'servicios', label: 'Servicios', Icon: PlugZap },
+  { id: 'voz', label: 'Voz', Icon: Headphones },
 ];
 
 function agentDraftFromProfile(profile, clinicName) {
@@ -1165,7 +1278,7 @@ function agentDraftFromProfile(profile, clinicName) {
     description: profile?.description || '',
     businessHours: profile?.businessHours || '',
     greeting: profile?.greeting || '',
-    services: profile?.services || [],
+    services: normalizeServiceList(profile?.services),
     offDays: profile?.offDays || [],
   };
 }
@@ -1182,6 +1295,7 @@ function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin
   const [agentDraft, setAgentDraft] = useState(() => agentDraftFromProfile(profile, clinicName));
   const [agentStatus, setAgentStatus] = useState('idle');
   const [agentError, setAgentError] = useState('');
+  const [activeTab, setActiveTab] = useState('identidad');
   const updateAgentField = (field, value) => { setAgentDraft((current) => ({ ...current, [field]: value })); setAgentStatus('idle'); };
   const applyTemplate = (template) => {
     setAgentDraft((current) => ({
@@ -1233,22 +1347,6 @@ function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin
     <section className="reception-layout">
       <article className="reception-identity dark-module-card"><div className="large-orb"><span /></div><p className="dark-eyebrow">{isDemoData ? 'Agente asignado' : 'En línea ahora'}</p><h2>Lucía</h2><span>Recepcionista de {clinicName}</span><div className="reception-number">{isDemoData ? 'Disponible desde este navegador' : '+52 55 4160 0198'}</div><button type="button" onClick={onTestAgent}><PhoneOutgoing size={16} /> Probar mi agente</button></article>
       <div className="agent-config-stack">
-        <article className="agent-panel surface-panel">
-          <div className="agent-panel-heading"><span className="setting-icon"><Headphones size={18} /></span><span><strong>Voz de tu recepcionista</strong><small>Voces disponibles con acento mexicano en Retell.</small></span></div>
-          {voiceStatus === 'loading' ? <p>Cargando catálogo de voces…</p> : <>
-            <div className="voice-settings-fields">
-              <label><span>Proveedor</span><select disabled={!isAdmin || voiceStatus === 'saving'} value={provider} onChange={(event) => changeProvider(event.target.value)}>{providers.map((item) => <option value={item} key={item}>{VOICE_PROVIDER_NAMES[item] || item}</option>)}</select></label>
-              <label><span>Voz</span><select disabled={!isAdmin || voiceStatus === 'saving'} value={voiceId} onChange={(event) => { setVoiceId(event.target.value); setVoiceStatus('ready'); }}>{providerVoices.map((voice) => <option value={voice.id} key={voice.id}>{voice.name} · {voice.gender === 'female' ? 'Femenina' : 'Masculina'}{voice.recommended ? ' · Recomendada' : ''}</option>)}</select></label>
-            </div>
-            <div className="voice-settings-actions">
-              {selectedVoice?.previewUrl && <audio controls preload="none" src={selectedVoice.previewUrl}>Tu navegador no puede reproducir esta muestra.</audio>}
-              {isAdmin ? <button type="button" className="primary-action" disabled={!voiceId || voiceStatus === 'saving'} onClick={saveVoice}>{voiceStatus === 'saving' ? 'Guardando…' : 'Guardar voz'}</button> : <small>Solo un administrador puede cambiar la voz.</small>}
-            </div>
-          </>}
-          {voiceStatus === 'saved' && <p className="voice-success"><CheckCircle2 size={15} /> Voz actualizada. La siguiente llamada usará esta voz.</p>}
-          {voiceError && <p className="voice-error">{voiceError}</p>}
-        </article>
-
         {isAdmin && !fieldsDisabled && (
           <article className="agent-panel surface-panel">
             <div className="agent-panel-heading"><span className="setting-icon"><Sparkles size={18} /></span><span><strong>Empieza con una plantilla</strong><small>Rellena industria, servicios, horario y saludo. Puedes ajustar todo después.</small></span></div>
@@ -1262,37 +1360,71 @@ function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin
           </article>
         )}
 
-        <article className="agent-panel surface-panel">
-          <div className="agent-panel-heading"><span className="setting-icon"><FileText size={18} /></span><span><strong>Identidad del negocio</strong><small>Cómo se presenta Lucía al contestar.</small></span></div>
-          <div className="agent-settings-fields">
-            <label><span>Nombre del negocio</span><input disabled={fieldsDisabled} value={agentDraft.clinicName} onChange={(event) => updateAgentField('clinicName', event.target.value)} /></label>
-            <label><span>Industria</span><input disabled={fieldsDisabled} value={agentDraft.industry} onChange={(event) => updateAgentField('industry', event.target.value)} placeholder="Ej. Clínica dental" /></label>
-            <label><span>Ciudad</span><input disabled={fieldsDisabled} value={agentDraft.city} onChange={(event) => updateAgentField('city', event.target.value)} /></label>
-          </div>
-          <div className="agent-settings-fields agent-settings-fields-single">
-            <label><span>Descripción breve</span><textarea disabled={fieldsDisabled} rows={2} value={agentDraft.description} onChange={(event) => updateAgentField('description', event.target.value)} placeholder="Qué hace tu negocio, en una frase." /></label>
-            <label><span><MessageSquareText size={14} /> Mensaje inicial</span><textarea disabled={fieldsDisabled} rows={2} value={agentDraft.greeting} onChange={(event) => updateAgentField('greeting', event.target.value)} placeholder="Hola, gracias por llamar a tu negocio. Soy Lucía…" /></label>
-          </div>
-        </article>
+        <div className="agent-tabs" role="tablist" aria-label="Secciones de configuración del agente">
+          {AGENT_TABS.map(({ id, label, Icon }) => (
+            <button type="button" key={id} role="tab" aria-selected={activeTab === id} className={activeTab === id ? 'active' : ''} onClick={() => setActiveTab(id)}>
+              <Icon size={15} /><span>{label}</span>
+            </button>
+          ))}
+        </div>
 
-        <article className="agent-panel surface-panel">
-          <div className="agent-panel-heading"><span className="setting-icon"><Clock3 size={18} /></span><span><strong>Horario</strong><small>Cuándo atiende tu negocio y sus excepciones.</small></span></div>
-          <div className="agent-settings-fields agent-settings-fields-single">
-            <label><span>Horario regular</span><input disabled={fieldsDisabled} value={agentDraft.businessHours} onChange={(event) => updateAgentField('businessHours', event.target.value)} placeholder="Ej. Lunes a viernes, 9:00 a 19:00" /></label>
-          </div>
-          <TagListField label="Excepciones de horario" hint="Días u ocasiones en que no hay servicio." placeholder="Ej. 25 de diciembre" items={agentDraft.offDays} onChange={(value) => updateAgentField('offDays', value)} disabled={fieldsDisabled} />
-        </article>
+        {activeTab === 'identidad' && (
+          <article className="agent-panel surface-panel">
+            <div className="agent-panel-heading"><span className="setting-icon"><FileText size={18} /></span><span><strong>Identidad del negocio</strong><small>Cómo se presenta Lucía al contestar.</small></span></div>
+            <div className="agent-settings-fields">
+              <label><span>Nombre del negocio</span><input disabled={fieldsDisabled} value={agentDraft.clinicName} onChange={(event) => updateAgentField('clinicName', event.target.value)} /></label>
+              <label><span>Industria</span><input disabled={fieldsDisabled} value={agentDraft.industry} onChange={(event) => updateAgentField('industry', event.target.value)} placeholder="Ej. Clínica dental" /></label>
+              <label><span>Ciudad</span><input disabled={fieldsDisabled} value={agentDraft.city} onChange={(event) => updateAgentField('city', event.target.value)} /></label>
+            </div>
+            <div className="agent-settings-fields agent-settings-fields-single">
+              <label><span>Descripción breve</span><textarea disabled={fieldsDisabled} rows={2} value={agentDraft.description} onChange={(event) => updateAgentField('description', event.target.value)} placeholder="Qué hace tu negocio, en una frase." /></label>
+              <label><span><MessageSquareText size={14} /> Mensaje inicial</span><textarea disabled={fieldsDisabled} rows={2} value={agentDraft.greeting} onChange={(event) => updateAgentField('greeting', event.target.value)} placeholder="Hola, gracias por llamar a tu negocio. Soy Lucía…" /></label>
+            </div>
+          </article>
+        )}
 
-        <article className="agent-panel surface-panel">
-          <div className="agent-panel-heading"><span className="setting-icon"><PlugZap size={18} /></span><span><strong>Servicios</strong><small>Cada uno se menciona al cliente cuando pregunta.</small></span></div>
-          <TagListField label="Servicios que conoce" hint="" placeholder="Ej. Limpieza dental" items={agentDraft.services} onChange={(value) => updateAgentField('services', value)} disabled={fieldsDisabled} />
-        </article>
+        {activeTab === 'horario' && (
+          <article className="agent-panel surface-panel">
+            <div className="agent-panel-heading"><span className="setting-icon"><Clock3 size={18} /></span><span><strong>Horario</strong><small>Cuándo atiende tu negocio y sus excepciones.</small></span></div>
+            <div className="agent-settings-fields agent-settings-fields-single">
+              <label><span>Horario regular</span><input disabled={fieldsDisabled} value={agentDraft.businessHours} onChange={(event) => updateAgentField('businessHours', event.target.value)} placeholder="Ej. Lunes a viernes, 9:00 a 19:00" /></label>
+            </div>
+            <TagListField label="Excepciones de horario" hint="Días u ocasiones en que no hay servicio." placeholder="Ej. 25 de diciembre" items={agentDraft.offDays} onChange={(value) => updateAgentField('offDays', value)} disabled={fieldsDisabled} />
+          </article>
+        )}
 
-        <article className="agent-panel agent-panel-save surface-panel">
-          {isAdmin ? <button type="button" className="primary-action" disabled={isDemoData || !agentDraft.clinicName || agentStatus === 'saving'} onClick={saveAgentConfiguration}>{agentStatus === 'saving' ? 'Guardando…' : 'Guardar configuración'}</button> : <small>Solo un administrador puede editar la configuración del agente.</small>}
-          {agentStatus === 'saved' && <p className="voice-success"><CheckCircle2 size={15} /> Configuración actualizada. La siguiente llamada usará estos cambios.</p>}
-          {agentError && <p className="voice-error">{agentError}</p>}
-        </article>
+        {activeTab === 'servicios' && (
+          <article className="agent-panel surface-panel">
+            <div className="agent-panel-heading"><span className="setting-icon"><PlugZap size={18} /></span><span><strong>Servicios</strong><small>Duración y costo le permiten a Lucía responder sin inventar. Deja el costo en blanco si prefieres que no lo mencione.</small></span></div>
+            <ServiceListField items={agentDraft.services} onChange={(value) => updateAgentField('services', value)} disabled={fieldsDisabled} />
+          </article>
+        )}
+
+        {activeTab === 'voz' && (
+          <article className="agent-panel surface-panel">
+            <div className="agent-panel-heading"><span className="setting-icon"><Headphones size={18} /></span><span><strong>Voz de tu recepcionista</strong><small>Voces disponibles con acento mexicano en Retell.</small></span></div>
+            {voiceStatus === 'loading' ? <p>Cargando catálogo de voces…</p> : <>
+              <div className="voice-settings-fields">
+                <label><span>Proveedor</span><select disabled={!isAdmin || voiceStatus === 'saving'} value={provider} onChange={(event) => changeProvider(event.target.value)}>{providers.map((item) => <option value={item} key={item}>{VOICE_PROVIDER_NAMES[item] || item}</option>)}</select></label>
+                <label><span>Voz</span><select disabled={!isAdmin || voiceStatus === 'saving'} value={voiceId} onChange={(event) => { setVoiceId(event.target.value); setVoiceStatus('ready'); }}>{providerVoices.map((voice) => <option value={voice.id} key={voice.id}>{voice.name} · {voice.gender === 'female' ? 'Femenina' : 'Masculina'}{voice.recommended ? ' · Recomendada' : ''}</option>)}</select></label>
+              </div>
+              <div className="voice-settings-actions">
+                {selectedVoice?.previewUrl && <audio controls preload="none" src={selectedVoice.previewUrl}>Tu navegador no puede reproducir esta muestra.</audio>}
+                {isAdmin ? <button type="button" className="primary-action" disabled={!voiceId || voiceStatus === 'saving'} onClick={saveVoice}>{voiceStatus === 'saving' ? 'Guardando…' : 'Guardar voz'}</button> : <small>Solo un administrador puede cambiar la voz.</small>}
+              </div>
+            </>}
+            {voiceStatus === 'saved' && <p className="voice-success"><CheckCircle2 size={15} /> Voz actualizada. La siguiente llamada usará esta voz.</p>}
+            {voiceError && <p className="voice-error">{voiceError}</p>}
+          </article>
+        )}
+
+        {activeTab !== 'voz' && (
+          <article className="agent-panel agent-panel-save surface-panel">
+            {isAdmin ? <button type="button" className="primary-action" disabled={isDemoData || !agentDraft.clinicName || agentStatus === 'saving'} onClick={saveAgentConfiguration}>{agentStatus === 'saving' ? 'Guardando…' : 'Guardar configuración'}</button> : <small>Solo un administrador puede editar la configuración del agente.</small>}
+            {agentStatus === 'saved' && <p className="voice-success"><CheckCircle2 size={15} /> Configuración actualizada. La siguiente llamada usará estos cambios.</p>}
+            {agentError && <p className="voice-error">{agentError}</p>}
+          </article>
+        )}
       </div>
     </section>
   );
@@ -1476,7 +1608,7 @@ function MobileNav({ active, onNavigate, onMore }) {
 
 function MobileMoreSheet({ active, isAdmin, onClose, onNavigate }) {
   const dialogRef = useDialogFocus();
-  const items = [primaryNav[3], ...(isAdmin ? secondaryNav : [])];
+  const items = [primaryNav[3], primaryNav[4], ...(isAdmin ? secondaryNav : [])];
   return (
     <div className="mobile-more-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section ref={dialogRef} className="mobile-more-sheet" role="dialog" aria-modal="true" aria-label="Más secciones">

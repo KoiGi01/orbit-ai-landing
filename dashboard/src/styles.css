@@ -1668,8 +1668,10 @@ select:focus-visible,
 }
 
 .insight-grid {
+  /* Was a 2-column grid pairing this with AgendaPanel; the calendar moved to
+     its own "Agenda" nav section, so this now holds just OutcomePanel. */
   display: grid;
-  grid-template-columns: minmax(0, 1.42fr) minmax(320px, 0.78fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   margin-top: 16px;
 }
@@ -2479,6 +2481,28 @@ select:focus-visible,
 .tag-list-add { display: flex; gap: 8px; }
 .tag-list-add input { flex: 1; padding: 9px 12px; color: #242721; background: #f6f4ef; border: 1px solid #d8d5ce; border-radius: 9px; font: inherit; }
 .tag-list-add button { padding: 0 16px; border-radius: 9px; border: 1px solid #d8d5ce; background: #eeece5; color: #242721; font-size: 11px; font-weight: 650; cursor: pointer; }
+
+.agent-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 5px; background: #eeece5; border: 1px solid #d8d5ce; border-radius: 12px; }
+.agent-tabs button { flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 37px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; color: #6a6d64; font-size: 11px; font-weight: 650; cursor: pointer; white-space: nowrap; }
+.agent-tabs button.active { color: #242721; background: #ffffff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06); }
+@media (max-width: 560px) {
+  .agent-tabs button span { display: none; }
+}
+
+.service-list-field { display: grid; gap: 8px; }
+.service-list-head { display: grid; grid-template-columns: 1.3fr 0.8fr 0.8fr 1.3fr; gap: 8px; padding: 0 12px; color: #9a9d94; font-size: 9px; font-weight: 750; text-transform: uppercase; letter-spacing: .07em; }
+.service-row { display: grid; grid-template-columns: 1.3fr 0.8fr 0.8fr 1.3fr auto; gap: 8px; align-items: center; }
+.service-row input { width: 100%; padding: 9px 12px; color: #242721; background: #f6f4ef; border: 1px solid #d8d5ce; border-radius: 9px; font: inherit; }
+.service-row-remove { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 999px; border: 0; background: #d8d5ce; color: #4a4d46; font-size: 13px; line-height: 1; cursor: pointer; }
+.service-row-add { padding-top: 4px; border-top: 1px dashed #d8d5ce; margin-top: 2px; }
+.service-row-add button { grid-column: 5; padding: 0 14px; min-height: 37px; border-radius: 9px; border: 1px solid #d8d5ce; background: #eeece5; color: #242721; font-size: 11px; font-weight: 650; cursor: pointer; white-space: nowrap; }
+
+@media (max-width: 720px) {
+  .service-list-head { display: none; }
+  .service-row,
+  .service-row-add { grid-template-columns: 1fr; }
+  .service-row-remove { justify-self: end; }
+}
 
 @media (max-width: 720px) {
   .agent-settings-fields { grid-template-columns: 1fr; }

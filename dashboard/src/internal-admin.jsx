@@ -446,12 +446,26 @@ function LocationManagement({ clinic, clinics, busy, onEdit, onMember, onCalenda
     description: clinic.profile?.description || '',
     businessHours: clinic.profile?.businessHours || '',
     greeting: clinic.profile?.greeting || '',
-    services: (clinic.profile?.services || []).join(', '),
+    // Services carry duration/price/details now (see main.jsx's Servicios
+    // tab), but this quick admin editor only exposes names -- editing here
+    // preserves whatever duration/price/details a name already had rather
+    // than wiping them, via serviceNamesToObjects below.
+    services: (clinic.profile?.services || []).map((item) => (typeof item === 'string' ? item : item?.name || '')).join(', '),
     offDays: (clinic.profile?.offDays || []).join(', '),
   });
   useEffect(() => setEdit({ name: clinic.name, city: clinic.profile?.city || '', industry: clinic.profile?.industry || '' }), [clinic.id, clinic.name]);
   const splitList = (value) => value.split(',').map((item) => item.trim()).filter(Boolean);
-  const saveAgent = () => onAgentConfig({ ...agent, services: splitList(agent.services), offDays: splitList(agent.offDays) });
+  const serviceNamesToObjects = (namesText) => {
+    const currentByName = new Map((clinic.profile?.services || []).map((item) => {
+      const normalized = typeof item === 'string' ? { name: item, duration: '', price: '', details: '' } : item;
+      return [String(normalized?.name || '').toLowerCase(), normalized];
+    }));
+    return splitList(namesText).map((name) => {
+      const existing = currentByName.get(name.toLowerCase());
+      return existing ? { ...existing, name } : { name, duration: '', price: '', details: '' };
+    });
+  };
+  const saveAgent = () => onAgentConfig({ ...agent, services: serviceNamesToObjects(agent.services), offDays: splitList(agent.offDays) });
   return <section className="ops-record-section location-management">
     <header><Settings2 size={19} /><h3>Administrar Location</h3><span>Cambios reales en Clerk</span></header>
     <form className="ops-management-grid" onSubmit={(event) => { event.preventDefault(); onEdit(edit); }}>
@@ -481,7 +495,7 @@ function LocationManagement({ clinic, clinics, busy, onEdit, onMember, onCalenda
       </div>
       <label><span>Descripción breve</span><textarea rows={2} value={agent.description} onChange={(event) => setAgent({ ...agent, description: event.target.value })} /></label>
       <label><span>Mensaje inicial</span><textarea rows={2} value={agent.greeting} onChange={(event) => setAgent({ ...agent, greeting: event.target.value })} placeholder="Hola, gracias por llamar a…" /></label>
-      <label><span>Servicios (separados por coma)</span><input value={agent.services} onChange={(event) => setAgent({ ...agent, services: event.target.value })} placeholder="Limpieza dental, Ortodoncia" /></label>
+      <label><span>Servicios (separados por coma)</span><input value={agent.services} onChange={(event) => setAgent({ ...agent, services: event.target.value })} placeholder="Limpieza dental, Ortodoncia" /><small>Duración, costo y detalles de cada servicio se editan desde el dashboard del cliente (pestaña Servicios).</small></label>
       <label><span>Excepciones de horario (separadas por coma)</span><input value={agent.offDays} onChange={(event) => setAgent({ ...agent, offDays: event.target.value })} placeholder="25 de diciembre, Domingos" /></label>
       <button type="button" className="ops-button primary" disabled={busy || !agent.clinicName} onClick={saveAgent}><Settings2 size={16} /> Guardar configuración del agente</button>
     </div>

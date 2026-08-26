@@ -36,6 +36,23 @@ test('builds a concise Mexican Spanish business prompt without private notes', (
   assert.doesNotMatch(prompt, /texto secreto/);
 });
 
+test('renders service duration, price and details so the agent can answer without inventing, and stays backward-compatible with plain string services', () => {
+  const structured = buildRetellBusinessPrompt({
+    clinicName: 'Clínica Centro',
+    services: [
+      { name: 'Limpieza dental', duration: '45 min', price: '$800', details: 'Incluye revisión inicial' },
+      { name: 'Consulta', duration: '', price: '', details: '' },
+    ],
+  });
+  assert.match(structured, /Limpieza dental \(45 min, \$800\) — Incluye revisión inicial; Consulta/);
+
+  const legacyStrings = buildRetellBusinessPrompt({ clinicName: 'Clínica Centro', services: ['Limpieza', 'Ortodoncia'] });
+  assert.match(legacyStrings, /Servicios: Limpieza; Ortodoncia/);
+
+  const noServices = buildRetellBusinessPrompt({ clinicName: 'Clínica Centro' });
+  assert.match(noServices, /Servicios: Servicios por confirmar/);
+});
+
 test('includes schedule exceptions in the prompt only when off days are set', () => {
   const withoutOffDays = buildRetellBusinessPrompt({ clinicName: 'Clínica Centro' });
   assert.doesNotMatch(withoutOffDays, /Excepciones de horario/);
