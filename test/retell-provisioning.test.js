@@ -47,6 +47,16 @@ test('includes schedule exceptions in the prompt only when off days are set', ()
   assert.match(withOffDays, /Excepciones de horario: 25 de diciembre; Domingos/);
 });
 
+test('tells the agent to actually book once a calendar is connected, instead of just taking a message', () => {
+  const disconnected = buildRetellBusinessPrompt({ clinicName: 'Clínica Centro' });
+  assert.match(disconnected, /Todavía no tienes una agenda conectada/);
+  assert.doesNotMatch(disconnected, /herramienta de agenda conectada/);
+
+  const connected = buildRetellBusinessPrompt({ clinicName: 'Clínica Centro', calendarId: 'clinica@group.calendar.google.com' });
+  assert.match(connected, /Tienes una herramienta de agenda conectada/);
+  assert.doesNotMatch(connected, /Todavía no tienes una agenda conectada/);
+});
+
 test('pushes a regenerated prompt and greeting to an existing agent LLM', async () => {
   const requests = [];
   const fetchImpl = async (url, options = {}) => {
