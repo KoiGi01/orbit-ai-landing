@@ -61,33 +61,29 @@ const secondaryNav = [
   { label: 'Uso y plan', icon: Gauge },
 ];
 
-// moduleCopy: short and functional on purpose. Every section used to open
-// with a line of ad copy ("Así atiende Lucía cuando suena el teléfono.") that
-// took up space without telling the reader anything - cut in favor of
-// getting to the actual data faster.
+// moduleCopy.title is the only thing shown in the desktop header now (just
+// the section name, e.g. "Conversaciones") -- every section used to open
+// with a line of ad copy ("Así atiende Lucía cuando suena el teléfono.")
+// that took up space without telling the reader anything. description is
+// still used in the mobile nav sheet, so it stays.
 const moduleCopy = {
   Conversaciones: {
-    eyebrow: 'Bitácora',
     title: 'Conversaciones',
     description: 'Busca y escucha cualquier llamada que haya atendido tu recepcionista.',
   },
   Oportunidades: {
-    eyebrow: 'Seguimiento',
     title: 'Oportunidades',
     description: 'Prospectos y citas que necesitan un siguiente paso.',
   },
   'Mi agente': {
-    eyebrow: 'Recepcionista',
     title: 'Mi agente',
     description: 'Voz, disponibilidad y datos del negocio que usa Lucía para atender.',
   },
   Conexiones: {
-    eyebrow: 'Integraciones',
     title: 'Conexiones',
     description: 'Los sistemas conectados a tu agente y qué función cumple cada uno.',
   },
   'Uso y plan': {
-    eyebrow: 'Capacidad',
     title: 'Uso y plan',
     description: 'Consumo del mes y margen disponible.',
   },
@@ -903,17 +899,10 @@ function CapacityPanel({ isAdmin, onNavigate }) {
 
 function ModulePage({ title, tasks, calls, clinicName, dataMode, profile, connections, getToken, isAdmin, onSelectTask, onAction, onTestAgent }) {
   const copy = moduleCopy[title];
-  const pendingDescriptions = {
-    Conversaciones: 'El historial aparecerá cuando tu agente comience a atender llamadas.',
-    Oportunidades: 'Los seguimientos se crearán automáticamente a partir de las conversaciones.',
-    'Mi agente': 'Configura y prueba la recepcionista asignada a tu Location.',
-    Conexiones: 'Consulta los sistemas operativos y las integraciones disponibles.',
-    'Uso y plan': 'El consumo aparecerá cuando tu agente comience a operar.',
-  };
   return (
     <main className="module-page">
       <section className="module-heading">
-        <div><p className="eyebrow">{copy.eyebrow}</p><h1>{copy.title}</h1><span>{dataMode.isDemo ? pendingDescriptions[title] : copy.description}</span></div>
+        <h1>{copy.title}</h1>
         {!['Conexiones', 'Uso y plan'].includes(title) && <button type="button" className="primary-action" onClick={() => onAction(`Nueva acción en ${title}`)}>Nueva acción <ArrowUpRight size={16} /></button>}
       </section>
       {title === 'Conversaciones' && <ConversationsModule tasks={tasks} calls={calls} isDemoData={dataMode.isDemo} onSelectTask={onSelectTask} />}
