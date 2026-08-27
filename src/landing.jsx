@@ -140,6 +140,8 @@ function MotionRuntime() {
 const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_URL
   || (import.meta.env.DEV ? 'http://127.0.0.1:4184' : window.location.origin);
 
+const CALENDLY_URL = import.meta.env.VITE_CALENDLY_URL || 'https://calendly.com/autivex/consultoria';
+
 function track(event, properties = {}) {
   const payload = { event, ...properties, occurredAt: new Date().toISOString() };
   window.dispatchEvent(new CustomEvent('autivex:analytics', { detail: payload }));
@@ -157,36 +159,59 @@ function formatMoney(value) {
 const DEMO_CASES = [
   {
     key: 'urgent',
-    label: 'Dolor desde anoche',
-    description: 'Prueba cómo recopila contexto sin ofrecer un diagnóstico.',
-    business_role: 'recepcionista de una clínica dental',
-    customer_context: 'El usuario llama como paciente con dolor dental desde anoche. Debes recopilar contexto básico, evitar cualquier diagnóstico y explicar que el equipo de la clínica debe valorar la urgencia.',
-    first_line: 'Clínica dental, buenas tardes. ¿En qué le puedo ayudar?',
+    label: 'Solicitud urgente',
+    description: 'Prueba cómo recopila contexto sin prometer algo que no puede garantizar.',
+    business_role: 'recepcionista de un negocio de servicios con atención por cita',
+    customer_context: 'El usuario llama como cliente con una necesidad urgente desde anoche. Debes recopilar contexto básico, evitar prometer una solución inmediata y explicar que el equipo debe valorar la urgencia.',
+    first_line: 'Buenas tardes, gracias por llamar. ¿En qué le puedo ayudar?',
   },
   {
     key: 'first-visit',
-    label: 'Primera valoración',
-    description: 'Pregunta por ortodoncia y quiere saber cuál sería el siguiente paso.',
-    business_role: 'recepcionista de una clínica dental',
-    customer_context: 'El usuario llama por primera vez y está interesado en una valoración de ortodoncia. Debes entender lo que busca, recopilar lo necesario y ofrecer que el equipo continúe con la agenda sin inventar horarios.',
-    first_line: 'Clínica dental, buenas tardes. ¿En qué le puedo ayudar?',
+    label: 'Primer contacto',
+    description: 'Pregunta por un servicio y quiere saber cuál sería el siguiente paso.',
+    business_role: 'recepcionista de un negocio de servicios con atención por cita',
+    customer_context: 'El usuario llama por primera vez y está interesado en un servicio. Debes entender lo que busca, recopilar lo necesario y ofrecer que el equipo continúe con la agenda sin inventar horarios.',
+    first_line: 'Buenas tardes, gracias por llamar. ¿En qué le puedo ayudar?',
   },
   {
     key: 'existing',
     label: 'Mover una cita',
     description: 'Solicita cambiar una cita cuando aún no hay calendario conectado.',
-    business_role: 'recepcionista de una clínica dental',
-    customer_context: 'El usuario ya es paciente y quiere cambiar una cita. Debes pedir los datos necesarios y explicar con honestidad que el equipo confirmará el nuevo horario; no inventes disponibilidad.',
-    first_line: 'Clínica dental, buenas tardes. ¿En qué le puedo ayudar?',
+    business_role: 'recepcionista de un negocio de servicios con atención por cita',
+    customer_context: 'El usuario ya es cliente y quiere cambiar una cita. Debes pedir los datos necesarios y explicar con honestidad que el equipo confirmará el nuevo horario; no inventes disponibilidad.',
+    first_line: 'Buenas tardes, gracias por llamar. ¿En qué le puedo ayudar?',
   },
   {
     key: 'question',
-    label: 'Pregunta por un implante',
-    description: 'Haz una pregunta que recepción no debería responder clínicamente.',
-    business_role: 'recepcionista de una clínica dental',
-    customer_context: 'El usuario pregunta por un implante dental y puede solicitar información clínica o un precio definitivo. Debes responder únicamente información general, reconocer límites y ofrecer seguimiento del equipo.',
-    first_line: 'Clínica dental, buenas tardes. ¿En qué le puedo ayudar?',
+    label: 'Pregunta por precio o duración',
+    description: 'Pide un dato exacto que el agente no tiene por qué inventar.',
+    business_role: 'recepcionista de un negocio de servicios con atención por cita',
+    customer_context: 'El usuario pregunta por el precio o la duración exacta de un servicio. Debes responder únicamente con la información configurada para ese servicio, reconocer con honestidad cuando no la tienes y ofrecer seguimiento del equipo.',
+    first_line: 'Buenas tardes, gracias por llamar. ¿En qué le puedo ayudar?',
   },
+];
+
+const MISSED_CALLS = 62;
+
+const TECH_STACK = [
+  { name: 'Retell', role: 'Orquesta la llamada en tiempo real', src: '/logos/retell.svg', tone: 'cyan' },
+  { name: 'OpenAI', role: 'Entiende y decide qué responder', src: '/logos/openai.svg', tone: 'cobalt' },
+  { name: 'Anthropic', role: 'Entiende y decide qué responder', src: '/logos/anthropic.svg', tone: 'coral' },
+  { name: 'ElevenLabs', role: 'Contesta con voz natural', src: '/logos/elevenlabs.svg', tone: 'yellow' },
+];
+
+const FIT_YES = [
+  'Pierdes llamadas recurrentes en horas pico o fuera de horario.',
+  'Te preguntan lo mismo todo el día: horarios, precios, ubicación, disponibilidad.',
+  'Trabajas con citas, reservas o visitas agendadas.',
+  'Quieres que cada llamada termine en un dato registrado, no en un recado perdido.',
+];
+
+const FIT_NO = [
+  'Recibes tan pocas llamadas que tu equipo nunca deja una sin contestar.',
+  'Cada llamada necesita criterio humano experto desde el primer segundo.',
+  'Nadie en tu equipo puede dar seguimiento a lo que el agente deje listo.',
+  'Todavía no tienes claro qué debería pasar cuando el agente no sepa responder.',
 ];
 
 const CAPABILITIES = [
@@ -231,19 +256,19 @@ const PILOT_STEPS = [
 const FAQS = [
   {
     question: '¿AutiveX reemplaza a mi recepcionista?',
-    answer: 'No tiene que hacerlo. El punto de partida recomendado es cubrir los momentos en que tu equipo está ocupado o la clínica ya cerró. Los casos que requieren criterio humano siguen llegando a una persona.',
+    answer: 'No tiene que hacerlo. El punto de partida recomendado es cubrir los momentos en que tu equipo está ocupado o el negocio ya cerró. Los casos que requieren criterio humano siguen llegando a una persona.',
   },
   {
-    question: '¿Puede usar el número actual de la clínica?',
+    question: '¿Puede usar el número actual de mi negocio?',
     answer: 'Depende de tu proveedor telefónico. Revisamos si conviene desvío, una segunda línea o una integración directa antes de cambiar cualquier cosa.',
   },
   {
     question: '¿Qué pasa cuando no sabe responder?',
-    answer: 'Reconoce el límite y sigue una ruta definida: transferir, registrar una devolución o pedir los datos necesarios. No debería inventar una respuesta clínica ni prometer disponibilidad.',
+    answer: 'Reconoce el límite y sigue una ruta definida: transferir, registrar una devolución o pedir los datos necesarios. No debería inventar una respuesta ni prometer disponibilidad.',
   },
   {
     question: '¿Qué está conectado en la demo de hoy?',
-    answer: 'La demo pública prueba la conversación por voz mediante Retell. Calendario, telefonía y mensajería todavía no se presentan como integraciones activas: se conectan y validan durante un piloto según los sistemas de cada clínica.',
+    answer: 'La demo pública prueba la conversación por voz mediante Retell. Calendario, telefonía y mensajería todavía no se presentan como integraciones activas: se conectan y validan durante un piloto según los sistemas de cada negocio.',
   },
   {
     question: '¿Qué pasa si la voz o una integración falla?',
@@ -364,12 +389,12 @@ function HeroProduct() {
       </div>
       <article className="incoming-call-card">
         <span className="incoming-icon"><PhoneCall size={22} /></span>
-        <div><span>Llamada entrante</span><strong>Paciente nuevo</strong></div>
+        <div><span>Llamada entrante</span><strong>Cliente nuevo</strong></div>
         <span className="call-live-dot" aria-label="En curso" />
       </article>
       <article className="call-result-card">
         <span><Check size={22} /></span>
-        <div><strong>Motivo registrado</strong><p>Valoración de ortodoncia</p></div>
+        <div><strong>Motivo registrado</strong><p>Primer contacto</p></div>
       </article>
     </div>
   );
@@ -382,8 +407,8 @@ function Hero({ onDemo, onPilot }) {
       <div className="hero-orbit hero-orbit-two" />
       <div className="hero-grid">
         <div className="hero-copy">
-          <h1>Que una llamada sin respuesta no te cueste un paciente.</h1>
-          <p>AutiveX atiende las llamadas de tu clínica dental cuando recepción está ocupada, identifica el motivo y deja cada caso listo para confirmar una cita, devolver la llamada o escalar.</p>
+          <h1>Que una llamada sin respuesta no te cueste un cliente.</h1>
+          <p>AutiveX atiende las llamadas de tu negocio cuando tu equipo está ocupado, identifica el motivo y deja cada caso listo para confirmar una cita, devolver la llamada o escalar.</p>
           <div className="hero-actions" data-reveal style={{ '--reveal-delay': '280ms' }}>
             <button type="button" className="button button-coral" onClick={onDemo}>
               <Volume2 size={21} /> Probar la voz
@@ -400,6 +425,65 @@ function Hero({ onDemo, onPilot }) {
         <span><CircleDot size={22} /> Clasifica</span>
         <span><Route size={22} /> Escala</span>
         <span><CalendarCheck size={22} /> Deja la cita lista</span>
+      </div>
+    </section>
+  );
+}
+
+function CallMatrix() {
+  return (
+    <div
+      className="call-matrix"
+      role="img"
+      aria-label={`De cada 100 llamadas, ${MISSED_CALLS} quedan sin respuesta y ${100 - MISSED_CALLS} se contestan.`}
+    >
+      {Array.from({ length: 100 }, (_, index) => (
+        <i
+          key={index}
+          className={index < MISSED_CALLS ? 'is-lost' : 'is-answered'}
+          style={{ '--dot-delay': `${index * 11}ms` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ProblemSection() {
+  return (
+    <section className="problem-section" id="evidencia">
+      <div className="section-heading" data-reveal>
+        <h2>El costo real de no contestar.</h2>
+        <p>No es una corazonada: así lo está midiendo la industria del servicio al cliente.</p>
+      </div>
+
+      <div className="call-panel" data-reveal>
+        <header className="call-panel-head">
+          <span className="call-panel-eyebrow"><PhoneCall size={18} /> De cada 100 llamadas que entran a un negocio como el tuyo</span>
+          <strong className="call-panel-figure">{MISSED_CALLS}<i>%</i></strong>
+        </header>
+        <CallMatrix />
+        <footer className="call-panel-foot">
+          <span className="matrix-key matrix-key-lost"><i />{MISSED_CALLS} quedan sin respuesta</span>
+          <span className="matrix-key matrix-key-answered"><i />{100 - MISSED_CALLS} se contestan</span>
+          <cite>Small Business Trends · análisis de telecomunicaciones</cite>
+        </footer>
+      </div>
+
+      <div className="problem-consequences">
+        <article className="consequence consequence-loss" data-reveal>
+          <strong>85%</strong>
+          <p>de quienes no reciben respuesta no vuelve a llamar.</p>
+          <span className="consequence-flow">Tu negocio <ArrowRight size={17} /> la competencia</span>
+          <cite>MessageDesk / BT Business</cite>
+        </article>
+        <article className="consequence consequence-gain" data-reveal style={{ '--reveal-delay': '110ms' }}>
+          <span className="consequence-eyebrow">Con un agente de voz</span>
+          <ul>
+            <li><strong>100%</strong><span>de las llamadas contestadas, todos los días, a toda hora.</span></li>
+            <li><strong>30–50%</strong><span>menos costo operativo de atención al cliente.</span></li>
+          </ul>
+          <cite>McKinsey &amp; Company / IBM</cite>
+        </article>
       </div>
     </section>
   );
@@ -476,7 +560,7 @@ function ResultsSection() {
         </div>
         <div className="attention-row">
           <span className="attention-icon"><Headphones size={22} /></span>
-          <div><strong>3 llamadas necesitan revisión</strong><p>Urgencia, cambio de cita y pregunta clínica</p></div>
+          <div><strong>3 llamadas necesitan revisión</strong><p>Urgencia, cambio de cita y pregunta sobre servicio</p></div>
           <ArrowRight size={22} />
         </div>
       </div>
@@ -511,7 +595,7 @@ function ValueCalculator({ onPilot }) {
             <input type="range" min="5" max="80" step="5" value={intentRate} onChange={(event) => setIntentRate(Number(event.target.value))} />
           </label>
           <label>
-            <span>Valor de la primera visita</span>
+            <span>Valor promedio por cliente</span>
             <output>{formatMoney(firstVisitValue)}</output>
             <input type="range" min="300" max="3000" step="100" value={firstVisitValue} onChange={(event) => setFirstVisitValue(Number(event.target.value))} />
           </label>
@@ -542,7 +626,7 @@ function VoiceSection({ onDemo }) {
     <section className="voice-section">
       <div className="voice-copy" data-reveal>
         <h2>No te pedimos que imagines la voz. Escúchala.</h2>
-        <p>Entra como paciente, cambia el tema o haz una pregunta difícil. La mejor demo es una conversación que no sigue el guion perfecto.</p>
+        <p>Entra como cliente, cambia el tema o haz una pregunta difícil. La mejor demo es una conversación que no sigue el guion perfecto.</p>
         <button type="button" className="button button-ink" onClick={onDemo}>
           <Mic size={21} /> Probar la voz
         </button>
@@ -554,6 +638,30 @@ function VoiceSection({ onDemo }) {
           <div><ShieldCheck size={25} /><span><strong>Límite aplicado</strong><p>No ofrecer diagnóstico</p></span></div>
           <div><UserRound size={25} /><span><strong>Siguiente paso</strong><p>Escalar con contexto</p></span></div>
         </div>
+      </div>
+    </section>
+  );
+}
+
+function TechStackSection() {
+  return (
+    <section className="tech-section" id="tecnologia">
+      <div className="section-heading" data-reveal>
+        <h2>Lo que pasa mientras tu cliente habla.</h2>
+        <p>Entre su pregunta y la respuesta hay cuatro capas trabajando. Tardan alrededor de un segundo.</p>
+      </div>
+      <div className="tech-chain" data-reveal>
+        <span className="chain-marker chain-marker-in"><PhoneCall size={17} /> Entra la llamada</span>
+        <div className="chain-nodes">
+          {TECH_STACK.map(({ name, role, src, tone }, index) => (
+            <article className={`chain-node node-${tone}`} key={name} style={{ '--i': index }}>
+              <span className="node-chip"><img src={src} alt={name} loading="lazy" /></span>
+              <strong>{name}</strong>
+              <span className="node-role">{role}</span>
+            </article>
+          ))}
+        </div>
+        <span className="chain-marker chain-marker-out"><Volume2 size={17} /> Contesta en segundos</span>
       </div>
     </section>
   );
@@ -577,6 +685,40 @@ function PilotSection({ onPilot }) {
         ))}
       </div>
       <button type="button" className="button button-blue" data-reveal onClick={onPilot}>Solicitar demo <ArrowRight size={21} /></button>
+    </section>
+  );
+}
+
+function FitCheckSection() {
+  return (
+    <section className="fit-section" id="es-para-mi">
+      <div className="section-heading" data-reveal>
+        <h2>¿Un agente de voz es lo que necesita tu negocio?</h2>
+        <p>Preferimos decírtelo con honestidad antes de que inviertas tiempo. No todos los negocios son un buen candidato — todavía.</p>
+      </div>
+      <div className="fit-grid" data-reveal data-reveal-direction="right" style={{ '--reveal-delay': '120ms' }}>
+        <div className="fit-column fit-yes">
+          <h3><Check size={22} /> Te puede ayudar si...</h3>
+          <ul>
+            {FIT_YES.map((item) => <li key={item}>{item}</li>)}
+          </ul>
+        </div>
+        <div className="fit-column fit-no">
+          <h3><X size={22} /> Probablemente no es para ti (todavía) si...</h3>
+          <ul>
+            {FIT_NO.map((item) => <li key={item}>{item}</li>)}
+          </ul>
+        </div>
+      </div>
+      <a
+        className="button button-coral fit-cta"
+        href={CALENDLY_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={() => track('calendly_cta_click', { source: 'fit_check' })}
+      >
+        Agenda tu consultoría gratis <ArrowUpRight size={20} />
+      </a>
     </section>
   );
 }
@@ -611,7 +753,7 @@ function LeadForm() {
     if (form.name.trim().length < 2 || form.clinic.trim().length < 2 || digits.length < 10 || digits.length > 15 || !form.consent) {
       track('lead_form_validation_error');
       setStatus('error');
-      setMessage('Revisa tu nombre, clínica, WhatsApp y autorización de contacto.');
+      setMessage('Revisa tu nombre, negocio, WhatsApp y autorización de contacto.');
       return;
     }
 
@@ -635,7 +777,7 @@ function LeadForm() {
       });
       if (!response.ok) throw new Error('request_failed');
       setStatus('success');
-      setMessage('Listo. Te contactaremos por WhatsApp para revisar la cobertura de tu clínica.');
+      setMessage('Listo. Te contactaremos por WhatsApp para revisar la cobertura de tu negocio.');
       track('lead_form_success', { coverage: form.coverage });
     } catch {
       setStatus('error');
@@ -670,7 +812,7 @@ function LeadForm() {
       </label>
       <div className="form-row">
         <label>Tu nombre<input type="text" autoComplete="name" value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="Nombre y apellido" required /></label>
-        <label>Clínica<input type="text" autoComplete="organization" value={form.clinic} onChange={(event) => update('clinic', event.target.value)} placeholder="Nombre de la clínica" required /></label>
+        <label>Negocio<input type="text" autoComplete="organization" value={form.clinic} onChange={(event) => update('clinic', event.target.value)} placeholder="Nombre de tu negocio" required /></label>
       </div>
       <div className="form-row">
         <label>WhatsApp<input type="tel" inputMode="tel" autoComplete="tel" value={form.whatsapp} onChange={(event) => update('whatsapp', event.target.value)} placeholder="+52 55 0000 0000" required /></label>
@@ -865,7 +1007,7 @@ function DemoDialog({ open, onClose, onPilot }) {
         {phase === 'select' && (
           <div className="demo-select">
             <div className="demo-select-heading">
-              <h2 id="demo-title">Habla como lo haría un paciente.</h2>
+              <h2 id="demo-title">Habla como lo haría un cliente.</h2>
               <p>Elige un caso y prueba la conversación. La llamada usa tu micrófono, así que utiliza información ficticia.</p>
             </div>
             <div className="case-grid">
@@ -902,12 +1044,12 @@ function DemoDialog({ open, onClose, onPilot }) {
           <div className="sample-demo">
             <h2 id="demo-title">Una respuesta útil también sabe dónde detenerse.</h2>
             <div className="sample-lines">
-              <p className="user"><strong>Paciente</strong>“Me duele una muela desde ayer. ¿Qué me puedo tomar?”</p>
-              <p className="agent"><strong>AutiveX</strong>“No puedo indicarle un tratamiento, pero sí dejar el caso para que el equipo valore la urgencia. ¿Presenta inflamación o sangrado?”</p>
-              <p className="user"><strong>Paciente</strong>“Sí, tengo un poco de inflamación.”</p>
-              <p className="agent"><strong>AutiveX</strong>“Gracias. Voy a registrar ese dato para que la clínica continúe con usted.”</p>
+              <p className="user"><strong>Cliente</strong>“Necesito ayuda urgente, ¿pueden atenderme hoy mismo?”</p>
+              <p className="agent"><strong>AutiveX</strong>“Entiendo la urgencia. No puedo confirmarle disponibilidad ahora mismo, pero sí dejar su caso listo para que el equipo lo revise de inmediato. ¿Me comparte su nombre y teléfono?”</p>
+              <p className="user"><strong>Cliente</strong>“Sí, claro.”</p>
+              <p className="agent"><strong>AutiveX</strong>“Gracias. Voy a registrar ese dato para que el equipo continúe con usted.”</p>
             </div>
-            <div className="sample-outcome"><ShieldCheck size={24} /><span><strong>Resultado</strong><p>Sin diagnóstico, contexto capturado y escalamiento.</p></span></div>
+            <div className="sample-outcome"><ShieldCheck size={24} /><span><strong>Resultado</strong><p>Sin promesas inventadas, contexto capturado y escalamiento.</p></span></div>
             <div className="dialog-actions"><button type="button" className="button button-blue" onClick={() => startLive(DEMO_CASES[0])}><Mic size={20} /> Probar la voz</button><button type="button" className="dialog-link" onClick={() => { close(); onPilot(); }}>Solicitar demo</button></div>
           </div>
         )}
@@ -959,8 +1101,8 @@ function PrivacyDialog({ open, onClose }) {
       <section ref={dialogRef} className="privacy-dialog" role="dialog" aria-modal="true" aria-labelledby="privacy-title">
         <button ref={closeRef} type="button" onClick={onClose} aria-label="Cerrar"><X size={24} /></button>
         <h2 id="privacy-title">Prueba siempre con un caso ficticio.</h2>
-        <p>La demostración solicita acceso al micrófono y procesa la conversación mediante Retell. No compartas nombres, teléfonos, diagnósticos ni información de pacientes reales.</p>
-        <p>Antes de una implementación productiva se definen consentimiento, acceso, retención y eliminación con cada clínica.</p>
+        <p>La demostración solicita acceso al micrófono y procesa la conversación mediante Retell. No compartas nombres, teléfonos ni información real de tus clientes.</p>
+        <p>Antes de una implementación productiva se definen consentimiento, acceso, retención y eliminación con cada negocio.</p>
         <a href="mailto:contact@autivexai.com">contact@autivexai.com <ArrowUpRight size={19} /></a>
       </section>
     </div>
@@ -999,11 +1141,14 @@ function App() {
       <Navigation onDemo={() => openDemo('navigation')} onPilot={() => goToForm('navigation')} />
       <main id="main-content">
         <Hero onDemo={() => openDemo('hero')} onPilot={() => goToForm('hero')} />
+        <ProblemSection />
         <CapabilitySection />
         <ResultsSection />
         <ValueCalculator onPilot={() => goToForm('calculator')} />
         <VoiceSection onDemo={() => openDemo('voice_section')} />
+        <TechStackSection />
         <PilotSection onPilot={() => goToForm('pilot')} />
+        <FitCheckSection />
         <FaqSection />
         <ContactSection onDemo={() => openDemo('contact')} />
       </main>
