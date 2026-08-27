@@ -839,14 +839,7 @@ h3,
 .text-link:hover,
 .section-head > button:not(.calendar-button):hover {
   color: var(--cobalt-deep);
-}
-
-.agenda-line i {
-  background: var(--cobalt);
-  box-shadow: 0 0 0 1px var(--cobalt);
-}
-
-.agenda-line i.past {
+}.agenda-line i.past {
   background: var(--success);
   box-shadow: 0 0 0 1px var(--success);
 }
@@ -854,14 +847,7 @@ h3,
 .agenda-line i.pending {
   background: var(--coral);
   box-shadow: 0 0 0 1px var(--coral);
-}
-
-.appointment-state {
-  color: var(--success);
-  background: var(--success-soft);
-}
-
-.appointment-state.pending {
+}.appointment-state.pending {
   color: var(--coral-deep);
   background: var(--coral-soft);
 }
@@ -1074,4 +1060,1068 @@ h3,
   .task-row:nth-child(3) {
     border-color: var(--line);
   }
+}
+
+/* ============================================================================
+   Agenda, Mi agente y capa de movimiento.
+
+   Todo lo de abajo se escribe una sola vez y con tokens. La razón: el bug de
+   `.agenda-foot` (fondo crema del tema claro + texto del tema oscuro, 2.58:1)
+   nació de tener el color en un archivo y el fondo en otro. Estas reglas viven
+   al final de brand-theme.css, que carga al último, así que ganan la cascada
+   sin necesidad de subir especificidad a mano.
+   ========================================================================== */
+
+:root {
+  --motion-fast: 130ms;
+  --motion-med: 240ms;
+  --motion-slow: 420ms;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+/* ---------- Agenda: estructura ---------- */
+
+.agenda-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+}
+
+.agenda-calendar-column {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* ---------- Agenda: rejilla del mes ---------- */
+
+.calendar-month {
+  padding: 18px 18px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  transition: opacity var(--motion-med) var(--ease);
+}
+
+.calendar-month.is-loading {
+  opacity: 0.5;
+}
+
+.calendar-month-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.calendar-month-head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-transform: capitalize;
+}
+
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calendar-nav button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 9px;
+  color: var(--ink-soft);
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--ease),
+              background var(--motion-fast) var(--ease),
+              border-color var(--motion-fast) var(--ease);
+}
+
+.calendar-nav button:hover {
+  color: var(--ink);
+  background: var(--surface-hover);
+  border-color: var(--line-strong);
+}
+
+.calendar-nav .flip {
+  transform: rotate(180deg);
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.calendar-weekdays span {
+  padding-left: 8px;
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.calendar-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-height: 66px;
+  padding: 8px;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  animation: cell-in var(--motion-med) var(--ease) backwards;
+  animation-delay: calc(var(--cell, 0) * 18ms);
+  transition: background var(--motion-fast) var(--ease),
+              border-color var(--motion-fast) var(--ease),
+              transform var(--motion-fast) var(--ease);
+}
+
+.calendar-cell:hover {
+  background: var(--surface-hover);
+  transform: translateY(-1px);
+}
+
+.calendar-cell.has-events {
+  color: var(--ink);
+  background: var(--surface-muted);
+  border-color: var(--line-strong);
+}
+
+.calendar-cell:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 1px;
+}
+
+.calendar-cell:active {
+  transform: translateY(0);
+}
+
+.calendar-cell.is-outside {
+  opacity: 0.32;
+}
+
+.calendar-cell.is-today {
+  border-color: var(--cyan);
+}
+
+.calendar-cell.is-today .calendar-cell-number {
+  color: var(--cyan);
+  font-weight: 750;
+}
+
+.calendar-cell.is-selected {
+  background: var(--cobalt-soft);
+  border-color: var(--cobalt);
+}
+
+.calendar-cell.is-pulsing {
+  animation: cell-pulse 1200ms var(--ease);
+}
+
+.calendar-cell-number {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar-cell-dots {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: auto;
+}
+
+.calendar-cell-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.calendar-cell-dots i.agent {
+  background: var(--coral);
+}
+
+.calendar-cell-dots i.external {
+  background: var(--slate);
+}
+
+.calendar-cell-dots b {
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.calendar-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.calendar-legend i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.calendar-legend i.agent {
+  background: var(--coral);
+}
+
+.calendar-legend i.external {
+  background: var(--slate);
+}
+
+/* ---------- Agenda: detalle del día ---------- */
+
+.agenda-day-detail {
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.agenda-day-detail > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.agenda-day-detail h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.agenda-day-detail > header span {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.agenda-day-free {
+  margin: 0;
+  padding: 14px 0 6px;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.agenda-day-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agenda-day-row {
+  display: grid;
+  grid-template-columns: 82px 8px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 11px 13px;
+  background: var(--surface-muted);
+  border-radius: 10px;
+  animation: rise-in var(--motion-med) var(--ease) backwards;
+  animation-delay: calc(var(--stagger, 0) * 45ms);
+  transition: background var(--motion-fast) var(--ease),
+              box-shadow var(--motion-med) var(--ease);
+}
+
+.agenda-day-row time {
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.agenda-day-mark {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.agenda-day-row.is-agent .agenda-day-mark {
+  background: var(--coral);
+}
+
+.agenda-day-row.is-external .agenda-day-mark {
+  background: var(--slate);
+}
+
+.agenda-day-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agenda-day-copy strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agenda-day-copy small {
+  color: var(--ink-soft);
+  font-size: 10px;
+}
+
+.agenda-day-row.is-focused {
+  background: var(--coral-soft);
+  box-shadow: inset 0 0 0 1px var(--coral);
+}
+
+/* ---------- Agenda: cola de Lucía ---------- */
+
+.agent-queue {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: calc(100vh - 130px);
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.agent-queue-head {
+  display: grid;
+  gap: 3px;
+}
+
+.agent-queue-head .eyebrow {
+  color: var(--ink-soft);
+}
+
+.agent-queue-head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.agent-queue-head small {
+  color: var(--ink-soft);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.agent-queue-scroll {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.agent-queue-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.agent-queue-scroll::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 3px;
+}
+
+.agent-queue-group {
+  display: grid;
+  gap: 5px;
+}
+
+.agent-queue-day {
+  margin: 0 0 2px;
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.agent-queue-item {
+  display: grid;
+  grid-template-columns: 8px 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 10px 11px;
+  background: var(--surface-muted);
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: var(--ink-2);
+  text-align: left;
+  cursor: pointer;
+  animation: rise-in var(--motion-med) var(--ease) backwards;
+  animation-delay: calc(var(--stagger, 0) * 40ms);
+  transition: background var(--motion-fast) var(--ease),
+              border-color var(--motion-fast) var(--ease),
+              transform var(--motion-fast) var(--ease);
+}
+
+.agent-queue-item::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  background: var(--coral);
+  border-radius: 50%;
+}
+
+.agent-queue-item:hover {
+  background: var(--surface-hover);
+  border-color: var(--line-strong);
+  transform: translateX(2px);
+}
+
+.agent-queue-item time {
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-queue-item strong {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-queue-item.is-focused {
+  background: var(--coral-soft);
+  border-color: var(--coral);
+}
+
+.agent-queue-skeletons {
+  display: grid;
+  gap: 6px;
+}
+
+.queue-skeleton {
+  height: 41px;
+  background: linear-gradient(90deg, var(--surface-muted) 25%, var(--surface-hover) 50%, var(--surface-muted) 75%);
+  background-size: 200% 100%;
+  border-radius: 9px;
+  animation: queue-shimmer 1400ms linear infinite;
+  animation-delay: calc(var(--stagger, 0) * 90ms);
+}
+
+/* ---------- Agenda: estados vacíos y de error ---------- */
+
+.agenda-state {
+  display: grid;
+  justify-items: center;
+  gap: 11px;
+  padding: 26px 20px;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.agenda-state p {
+  margin: 0;
+  max-width: 34ch;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.agenda-state button {
+  min-height: 34px;
+  padding: 0 15px;
+  color: var(--ink);
+  background: var(--surface-hover);
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: border-color var(--motion-fast) var(--ease),
+              color var(--motion-fast) var(--ease);
+}
+
+.agenda-state button:hover {
+  color: var(--coral);
+  border-color: var(--coral);
+}
+
+.agenda-state-error p {
+  color: var(--coral-deep);
+}
+
+.agenda-state-full {
+  grid-column: 1 / -1;
+  align-content: center;
+  min-height: 340px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+/* ---------- Mi agente: tarjeta de identidad compacta ---------- */
+
+/* Antes: 440px de alto, todo centrado, con el orbe comiéndose la primera
+   pantalla completa en móvil antes de llegar al formulario. */
+.reception-identity {
+  min-height: 0;
+  padding: 22px;
+  text-align: left;
+}
+
+.reception-identity-main {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.reception-identity-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.reception-identity .large-orb {
+  width: 58px;
+  height: 58px;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.reception-identity .large-orb::before {
+  inset: 8px;
+}
+
+.reception-identity h2 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: -0.03em;
+}
+
+.reception-identity .dark-eyebrow {
+  margin: 0;
+}
+
+.reception-identity .reception-number {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 12px;
+  padding: 11px 13px;
+  color: var(--ink-soft);
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.reception-identity > button {
+  width: 100%;
+  justify-content: center;
+  transition: color var(--motion-fast) var(--ease),
+              border-color var(--motion-fast) var(--ease),
+              background var(--motion-fast) var(--ease);
+}
+
+/* ---------- Mi agente: pestañas con indicador deslizante ---------- */
+
+.agent-tabs {
+  position: relative;
+  background: var(--surface-muted);
+  border-color: var(--line);
+}
+
+.agent-tabs-indicator {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  bottom: 5px;
+  width: calc((100% - 10px) / var(--tab-count, 4));
+  background: var(--surface-hover);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  transform: translateX(calc(var(--tab-index, 0) * 100%));
+  transition: transform var(--motion-med) var(--ease-spring);
+  pointer-events: none;
+}
+
+.agent-tabs button {
+  position: relative;
+  z-index: 1;
+  color: var(--ink-faint);
+  transition: color var(--motion-fast) var(--ease);
+}
+
+.agent-tabs button:hover {
+  color: var(--ink-2);
+}
+
+.agent-tabs button.active {
+  color: var(--ink);
+  background: transparent;
+  box-shadow: none;
+}
+
+/* En móvil las etiquetas se ocultan y los botones dejan de repartirse en
+   partes iguales, así que el indicador deslizante ya no coincide. */
+@media (max-width: 560px) {
+  .agent-tabs-indicator { display: none; }
+  .agent-tabs button.active {
+    background: var(--surface-hover);
+    box-shadow: inset 0 0 0 1px var(--line-strong);
+  }
+}
+
+/* ---------- Mi agente: barra de guardado ---------- */
+
+.agent-savebar {
+  position: sticky;
+  bottom: 14px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 13px 16px;
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 14px 34px rgba(3, 6, 13, 0.45);
+  transition: border-color var(--motion-med) var(--ease),
+              box-shadow var(--motion-med) var(--ease);
+}
+
+.agent-savebar.is-dirty {
+  border-color: var(--coral);
+  box-shadow: 0 0 0 1px var(--coral-soft), 0 14px 34px rgba(3, 6, 13, 0.5);
+}
+
+.agent-savebar-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.savebar-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-soft);
+}
+
+.savebar-dirty {
+  color: var(--coral-deep);
+}
+
+.savebar-dot {
+  width: 7px;
+  height: 7px;
+  background: var(--coral);
+  border-radius: 50%;
+  animation: savebar-breathe 2000ms var(--ease) infinite;
+}
+
+.savebar-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--success);
+  animation: rise-in var(--motion-med) var(--ease);
+}
+
+.savebar-error {
+  color: var(--coral-deep);
+}
+
+.savebar-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--coral);
+  border-radius: 50%;
+  animation: savebar-spin 700ms linear infinite;
+}
+
+.agent-savebar .primary-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---------- Capa de respuesta: lo que faltaba ---------- */
+
+/* El dashboard animaba entradas pero casi nada respondía al cursor: 9
+   `transition` en 4,319 líneas. Esto es la capa que faltaba. */
+
+.side-nav button,
+.primary-action,
+.status-button,
+.search-button,
+.top-icon,
+.template-chip,
+.surface-panel,
+.connection-card {
+  transition: color var(--motion-fast) var(--ease),
+              background var(--motion-fast) var(--ease),
+              border-color var(--motion-fast) var(--ease),
+              transform var(--motion-fast) var(--ease),
+              box-shadow var(--motion-med) var(--ease);
+}
+
+.side-nav button:hover {
+  transform: translateX(2px);
+}
+
+.primary-action:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.primary-action:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.template-chip:hover {
+  transform: translateY(-1px);
+}
+
+.connection-card:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-2px);
+}
+
+/* ---------- Keyframes ---------- */
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cell-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes cell-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  25%      { box-shadow: 0 0 0 3px var(--coral-soft); }
+  60%      { box-shadow: 0 0 0 6px transparent; }
+}
+
+@keyframes queue-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+@keyframes savebar-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes savebar-breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(0.85); }
+}
+
+/* ---------- Responsivo ---------- */
+
+@media (max-width: 1080px) {
+  .agenda-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agent-queue {
+    position: static;
+    max-height: 420px;
+  }
+}
+
+@media (max-width: 620px) {
+  .calendar-month {
+    padding: 14px 12px 12px;
+  }
+
+  .calendar-grid,
+  .calendar-weekdays {
+    gap: 4px;
+  }
+
+  .calendar-cell {
+    min-height: 52px;
+    padding: 6px;
+    border-radius: 8px;
+  }
+
+  .agenda-day-row {
+    grid-template-columns: 76px 8px minmax(0, 1fr);
+    gap: 9px;
+    padding: 10px;
+  }
+
+  .agent-savebar {
+    bottom: 0;
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .agent-savebar .primary-action {
+    width: 100%;
+  }
+
+  .agent-savebar-state {
+    justify-content: center;
+  }
+}
+
+/* El bloque global de prefers-reduced-motion en styles.css ya neutraliza
+   duración de animación y transición para todo lo de arriba. Esto sólo apaga
+   los desplazamientos, que son lo que marea aunque duren 0.01ms. */
+@media (prefers-reduced-motion: reduce) {
+  .calendar-cell:hover,
+  .side-nav button:hover,
+  .primary-action:hover:not(:disabled),
+  .template-chip:hover,
+  .connection-card:hover,
+  .agent-queue-item:hover {
+    transform: none;
+  }
+
+  .savebar-dot,
+  .queue-skeleton {
+    animation: none;
+  }
+}
+
+/* ---------- Despeje de los elementos flotantes ---------- */
+
+/* El nav móvil (fijo, 66px + 10px de separación) y el botón de Ava se montan
+   encima del contenido. Antes tapaban las últimas filas de la agenda y la
+   barra de guardado quedaba escondida detrás del nav. */
+@media (max-width: 900px) {
+  .agent-savebar {
+    bottom: 88px;
+  }
+
+  .module-page {
+    padding-bottom: 96px;
+  }
+}
+
+@media (min-width: 901px) {
+  .agenda-workspace,
+  .reception-layout {
+    padding-bottom: 62px;
+  }
+}
+
+/* ---------- Color por servicio ---------- */
+
+/* Cada cita se pinta con el color de su servicio cuando lo reconocemos por el
+   título. Sin color reconocido, --dot no existe y cae al coral (agendada por
+   Lucía) o al gris (ya estaba en el calendario), que es el lenguaje previo. */
+
+.calendar-cell-dots i.agent { background: var(--dot, var(--coral)); }
+.calendar-cell-dots i.external { background: var(--dot, var(--slate)); }
+.calendar-legend i { background: var(--dot, var(--slate)); }
+.calendar-legend i.agent { background: var(--dot, var(--coral)); }
+.calendar-legend i.external { background: var(--dot, var(--slate)); }
+.agenda-day-row.is-agent .agenda-day-mark { background: var(--dot, var(--coral)); }
+.agenda-day-row.is-external .agenda-day-mark { background: var(--dot, var(--slate)); }
+.agent-queue-item::before { background: var(--dot, var(--coral)); }
+
+.calendar-legend {
+  row-gap: 8px;
+}
+
+/* ---------- Selector de color del servicio ---------- */
+
+.service-color {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.service-color-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: var(--swatch, transparent);
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: transform var(--motion-fast) var(--ease),
+              border-color var(--motion-fast) var(--ease);
+}
+
+.service-color-swatch:hover:not(:disabled) {
+  transform: scale(1.12);
+  border-color: var(--ink-soft);
+}
+
+.service-color-swatch:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Sin color todavía: una diagonal, no un cuadro vacío que parezca un bug. */
+.service-color-swatch.is-empty {
+  background:
+    linear-gradient(to top right,
+      transparent calc(50% - 1px), var(--ink-faint) calc(50% - 1px),
+      var(--ink-faint) calc(50% + 1px), transparent calc(50% + 1px));
+}
+
+.service-color-menu {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+  background: var(--surface-strong);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(3, 6, 13, 0.55);
+  animation: rise-in var(--motion-fast) var(--ease);
+}
+
+.service-color-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 22px);
+  gap: 7px;
+}
+
+.service-color-option {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: var(--swatch);
+  border: 2px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: transform var(--motion-fast) var(--ease),
+              border-color var(--motion-fast) var(--ease);
+}
+
+.service-color-option:hover {
+  transform: scale(1.14);
+}
+
+.service-color-option.is-selected {
+  border-color: var(--ink);
+}
+
+.service-color-clear {
+  padding: 5px 8px;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--ease),
+              border-color var(--motion-fast) var(--ease);
+}
+
+.service-color-clear:hover {
+  color: var(--coral);
+  border-color: var(--coral);
+}
+
+.service-list-hint {
+  margin: 10px 0 0;
+  color: var(--ink-soft);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .service-color-swatch:hover:not(:disabled),
+  .service-color-option:hover { transform: none; }
+}
+
+/* La fila de servicios ganó una columna de color al inicio. */
+.service-list-head {
+  grid-template-columns: 26px 1.3fr 0.8fr 0.8fr 1.3fr;
+  padding-left: 0;
+}
+
+.service-row {
+  grid-template-columns: 26px 1.3fr 0.8fr 0.8fr 1.3fr auto;
+}
+
+.service-row-add button {
+  grid-column: 6;
+}
+
+@media (max-width: 640px) {
+  .service-row,
+  .service-row-add {
+    grid-template-columns: 26px minmax(0, 1fr);
+  }
+
+  .service-row-add button {
+    grid-column: 1 / -1;
+  }
+
+  .service-row-remove {
+    grid-column: 2;
+    justify-self: end;
+  }
+}
+
+/* El botón flotante de Ava se monta sobre la esquina inferior derecha, justo
+   donde termina la cola. Este colchón evita que tape la última cita. */
+.agent-queue-scroll {
+  padding-bottom: 52px;
+}
+
+@media (max-width: 1080px) {
+  .agent-queue-scroll { padding-bottom: 8px; }
 }

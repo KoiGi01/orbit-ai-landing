@@ -1,6 +1,6 @@
 # Repository guidance
 
-> **Start here:** read `docs/CLAUDE_CODE_HANDOFF_2026-08-05.md` before making changes. It is the current verified handoff for production state, architecture, pending integrations, and next checkpoints. Older planning documents may describe superseded assumptions.
+> **Start here:** read `docs/CLAUDE_CODE_HANDOFF_2026-08-26.md` before making changes. It is the current verified handoff for production state, architecture, pending integrations, and next checkpoints. Older planning documents (including earlier dated handoffs) may describe superseded assumptions.
 
 ## Product
 
@@ -49,6 +49,8 @@ npm run dev:dashboard    # dashboard only
 npm run dev:server       # API only
 npm test                 # node --test (all files in test/)
 node --test test/retell-provisioning.test.js  # run a single test file
+# tests need no live database or network: they boot an in-memory Postgres via
+# @electric-sql/pglite and apply every file in supabase/migrations/ before asserting
 npm run build
 npm run build:dashboard
 npm run build:platform    # builds both apps into dist/; this is Vercel's buildCommand
@@ -64,6 +66,7 @@ Use `.env.example` as the source of truth for server configuration and `dashboar
 - `LEAD_WEBHOOK_*` or `RESEND_*` for lead delivery
 - `AUTIVEX_PUBLIC_ORIGINS` and rate limits for public endpoint protection
 - `DATABASE_URL` or Vercel's Supabase-provided `POSTGRES_URL` for the server-only CRM database; never create a `VITE_` database variable
+- `RETELL_CALENDAR_WEBHOOK_URL` and `AUTIVEX_APPOINTMENTS_WEBHOOK_SECRET` for the n8n-mediated Google Calendar booking and read flow (see the handoff for how n8n resolves and writes to a client's calendar)
 
 ## Persistent data
 
@@ -71,17 +74,18 @@ The canonical schema lives in `supabase/migrations/`. Run `npm run db:migrate` t
 
 The repository is linked locally to the hosted Supabase and Vercel projects. Link metadata under `supabase/.temp/` and `.vercel/` is intentionally ignored. Create every schema change as a new Supabase migration, inspect it with `supabase db push --linked --dry-run`, and only then push it. Do not make untracked structural changes in the production SQL Editor.
 
-Clerk owns identity, memberships, and organization roles. Postgres owns CRM activity, voice-agent bindings, webhook idempotency, and integration connection state. Every operational query must resolve and filter by the active Clerk organization; never trust a workspace ID supplied by browser input.
+Clerk owns identity, memberships, and organization roles. Postgres owns CRM activity, voice-agent bindings, webhook idempotency, appointment and notification records, and integration connection state. Every operational query must resolve and filter by the active Clerk organization; never trust a workspace ID supplied by browser input.
 
-The `app` Postgres schema is private and has no browser role grants. OAuth credentials are represented only by `credential_ref`; access and refresh tokens must live in a vault or encrypted server-side store, never in Clerk metadata, public JSON, logs, or n8n credentials shared across tenants.
+The `app` Postgres schema is private and has no browser role grants. OAuth credentials are represented only by `credential_ref`; access and refresh tokens must live in a vault or encrypted server-side store, never in Clerk metadata, public JSON, logs, or n8n credentials shared across tenants. The one deliberate, documented exception is n8n's Google Calendar credential: it authenticates as a single shared "calendar bot" account across every client rather than one OAuth connection per tenant, because per-tenant OAuth self-service was built and then explicitly dropped (see the handoff). Do not replicate that exception for any other integration without the same explicit product decision.
 
 ## API responsibilities
 
 - `POST /api/retell/token`: create a Retell web-call token after origin and rate-limit checks.
 - `POST /api/demo/lead`: validate and deliver a public lead.
-- `/api/workspace`: authenticated prospect/client workspace state.
+- `/api/workspace`: authenticated prospect/client workspace state; also serves `?resource=voices|activity|calendar|notifications` reads and accepts `PATCH action=update_agent_configuration|save_calendar|update_voice|mark_notification_read|mark_all_notifications_read`.
 - `/api/internal/clinics`: internal manual-payment and provisioning operations.
 - `POST /api/retell/webhook`: verifies and persists Retell call lifecycle events (call_started/call_ended/call_analyzed) into the CRM schema.
+- `POST /api/appointments/sync`: verifies an n8n-signed callback and records an agent-booked appointment (create/cancel/edit) into `app.appointments`.
 
 Unknown `/api/*` paths must return JSON `404`, never the SPA fallback.
 
@@ -94,3 +98,7 @@ Unknown `/api/*` paths must return JSON `404`, never the SPA fallback.
 - Preserve UTF-8 accents.
 - Keep changes scoped and avoid introducing parallel implementations.
 - Run tests and both production builds after cross-application changes.
+
+## Further reading
+
+`docs/runbooks/` has the Spanish-language operating procedures referenced from the README: end-to-end setup (`PRIMER_FLUJO_FUNCIONAL.md`), the CRM/integrations database foundation (`DIA_2_CRM_E_INTEGRACIONES.md`), the manual client onboarding + n8n checklist (`ALTA_MANUAL_DE_CLIENTE_Y_N8N.md`), and linked-project/migration operations (`VERCEL_Y_SUPABASE.md`).

@@ -272,13 +272,20 @@ function getDashboardDataMode(workspace, hasRealActivity) {
   const serviceIsLive = workspace?.view === 'live'
     || workspace?.state?.serviceStatus === 'live';
 
-  // isDemo now reflects whether app.calls/app.tasks actually returned
-  // anything for this workspace (see App's activity fetch), not a hardcoded
-  // placeholder. A workspace with no calls yet still reads as "demo" so it
-  // gets the honest waiting-for-activity copy instead of an error state.
+  // isDemo reflects whether app.calls/app.tasks actually returned anything for
+  // this workspace (see App's activity fetch). It answers "is there data to
+  // show?" and drives KPI/copy only.
+  //
+  // It deliberately does NOT gate editing. It used to: fieldsDisabled was
+  // `isDemo || !isAdmin`, which meant a live workspace could not configure its
+  // agent until the agent had already taken calls -- and the first calls are
+  // exactly the ones that need the configuration. Whether you may edit is a
+  // question about the service and your role, not about call volume, so it
+  // gets its own flag.
   return {
     isDemo: !hasRealActivity,
     serviceIsLive,
+    canConfigure: serviceIsLive,
     serviceStatus: workspace?.state?.serviceStatus || 'unknown',
   };
 }
@@ -580,6 +587,8 @@ function Sidebar({ active, taskCount, identity, dataMode, onNavigate }) {
             className={active === label ? 'active' : ''}
             onClick={() => onNavigate(label)}
             aria-current={active === label ? 'page' : undefined}
+            aria-label={label}
+            title={label}
           >
             <Icon size={18} aria-hidden="true" />
             <span>{label}</span>
@@ -595,6 +604,8 @@ function Sidebar({ active, taskCount, identity, dataMode, onNavigate }) {
               className={active === label ? 'active' : ''}
               onClick={() => onNavigate(label)}
               aria-current={active === label ? 'page' : undefined}
+              aria-label={label}
+              title={label}
             >
               <Icon size={18} aria-hidden="true" />
               <span>{label}</span>
@@ -877,92 +888,407 @@ function OutcomePanel({ reasonsData, isDemoData, onNavigate }) {
   );
 }
 
+const MONTH_NAMES = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+];
+const WEEKDAY_INITIALS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+const QUEUE_HORIZON_DAYS = 60;
+
+// Google returns UTC timestamps. Grouping on startsAt.slice(0, 10) -- what the
+// old list did -- files a 19:00 appointment in Mexico City under the NEXT day,
+// because that is 01:00 UTC. Every day key here is derived in the viewer's own
+// timezone so the grid matches the calendar the client actually reads.
+function localDayKey(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function startOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function shiftMonth(date, delta) {
+  return new Date(date.getFullYear(), date.getMonth() + delta, 1);
+}
+
+function monthRangeISO(viewMonth) {
+  const from = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1, 0, 0, 0, 0);
+  const to = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0, 23, 59, 59, 999);
+  return { fromISO: from.toISOString(), toISO: to.toISOString() };
+}
+
+// Six rows of seven so the grid never changes height as you page through
+// months -- a jumping container is the thing that makes a calendar feel cheap.
+function buildMonthCells(viewMonth) {
+  const first = startOfMonth(viewMonth);
+  const offset = (first.getDay() + 6) % 7; // Monday-first
+  const start = new Date(first.getFullYear(), first.getMonth(), 1 - offset);
+  const todayKey = localDayKey(new Date());
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + index);
+    return {
+      dayKey: localDayKey(date),
+      dayNumber: date.getDate(),
+      inMonth: date.getMonth() === viewMonth.getMonth(),
+      isToday: localDayKey(date) === todayKey,
+    };
+  });
+}
+
 function groupEventsByDay(events) {
   const groups = new Map();
   for (const event of events) {
-    const dayKey = event.startsAt.slice(0, 10);
+    const dayKey = localDayKey(event.startsAt);
+    if (!dayKey) continue;
     if (!groups.has(dayKey)) groups.set(dayKey, []);
     groups.get(dayKey).push(event);
   }
-  return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  for (const list of groups.values()) {
+    list.sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
+  }
+  return groups;
 }
 
 function formatAgendaDay(dayKey) {
   const date = new Date(`${dayKey}T00:00:00`);
-  const label = date.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'short' });
+  const label = date.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-function formatAgendaTime(isoString) {
-  return new Date(isoString).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+function formatQueueDay(dayKey) {
+  const date = new Date(`${dayKey}T00:00:00`);
+  const todayKey = localDayKey(new Date());
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if (dayKey === todayKey) return 'Hoy';
+  if (dayKey === localDayKey(tomorrow)) return 'Mañana';
+  const label = date.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' });
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-// Read-only v1: shows the full calendar (agent-booked + whatever was already
-// there), color-coded by who put it there. Reschedule/cancel from here is a
-// separate, bigger piece (writing back to Google Calendar, not just reading).
-function AgendaPanel({ onAction, getToken }) {
-  const [state, setState] = useState({ status: 'loading', connected: false, events: [] });
+// 24h on purpose: es-MX renders "09:00 a.m.", which wraps to two lines in the
+// queue's time column and doubles the width of every range in the day detail.
+function formatAgendaTime(isoString) {
+  return new Date(isoString).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
 
-  useEffect(() => {
-    let active = true;
-    getWorkspaceCalendar(getToken)
-      .then((result) => { if (active) setState({ status: 'ready', connected: result.connected, events: result.events || [] }); })
-      .catch(() => { if (active) setState({ status: 'error', connected: false, events: [] }); });
-    return () => { active = false; };
-  }, [getToken]);
+function formatEventRange(event) {
+  const start = formatAgendaTime(event.startsAt);
+  if (!event.endsAt) return start;
+  return `${start}–${formatAgendaTime(event.endsAt)}`;
+}
 
-  const grouped = useMemo(() => groupEventsByDay(state.events), [state.events]);
-  const agentCount = state.events.filter((event) => event.source === 'agent').length;
+function CalendarMonth({ viewMonth, eventsByDay, legend = [], selectedDay, pulseDay, loading, onSelectDay, onShiftMonth, onToday }) {
+  const cells = useMemo(() => buildMonthCells(viewMonth), [viewMonth]);
+  const monthLabel = `${MONTH_NAMES[viewMonth.getMonth()]} ${viewMonth.getFullYear()}`;
 
   return (
-    <article className="agenda-panel surface-panel">
-      <header className="section-head">
-        <div>
-          <p className="eyebrow">Agenda</p>
-          <h2>{!state.connected ? 'Sin citas registradas' : state.events.length ? `${state.events.length} próximas citas` : 'Sin citas en los próximos 14 días'}</h2>
+    <div className={`calendar-month${loading ? ' is-loading' : ''}`}>
+      <header className="calendar-month-head">
+        <h3>{monthLabel}</h3>
+        <div className="calendar-nav">
+          <button type="button" onClick={() => onShiftMonth(-1)} aria-label="Mes anterior"><ChevronRight size={16} className="flip" aria-hidden="true" /></button>
+          <button type="button" className="calendar-today" onClick={onToday}>Hoy</button>
+          <button type="button" onClick={() => onShiftMonth(1)} aria-label="Mes siguiente"><ChevronRight size={16} aria-hidden="true" /></button>
         </div>
-        <button type="button" className="calendar-button" aria-label="Abrir calendario" onClick={() => onAction('Calendario abierto')}><CalendarCheck2 size={18} /></button>
       </header>
 
-      {state.status === 'loading' && <div className="agenda-list agenda-empty"><Clock3 size={20} /><span>Cargando agenda…</span></div>}
+      <div className="calendar-weekdays" aria-hidden="true">
+        {WEEKDAY_INITIALS.map((initial, index) => <span key={`${initial}-${index}`}>{initial}</span>)}
+      </div>
 
-      {state.status === 'error' && <div className="agenda-list agenda-empty"><CalendarCheck2 size={20} /><span>No pudimos cargar la agenda en este momento.</span></div>}
+      <div className="calendar-grid" role="grid" aria-label={`Calendario de ${monthLabel}`}>
+        {cells.map((cell, index) => {
+          const dayEvents = eventsByDay.get(cell.dayKey) || [];
+          const isSelected = cell.dayKey === selectedDay;
+          return (
+            <button
+              type="button"
+              role="gridcell"
+              key={cell.dayKey}
+              style={{ '--cell': index % 7 }}
+              className={[
+                'calendar-cell',
+                cell.inMonth ? '' : 'is-outside',
+                cell.isToday ? 'is-today' : '',
+                isSelected ? 'is-selected' : '',
+                dayEvents.length ? 'has-events' : '',
+                cell.dayKey === pulseDay ? 'is-pulsing' : '',
+              ].filter(Boolean).join(' ')}
+              aria-pressed={isSelected}
+              aria-label={`${formatAgendaDay(cell.dayKey)}${dayEvents.length ? `, ${dayEvents.length} ${dayEvents.length === 1 ? 'cita' : 'citas'}` : ', sin citas'}`}
+              onClick={() => onSelectDay(cell.dayKey)}
+            >
+              <span className="calendar-cell-number">{cell.dayNumber}</span>
+              {dayEvents.length > 0 && (
+                <span className="calendar-cell-dots" aria-hidden="true">
+                  {dayEvents.slice(0, 3).map((event, dot) => (
+                    <i
+                      key={`${event.externalEventId}-${dot}`}
+                      className={event.source === 'agent' ? 'agent' : 'external'}
+                      style={event.colorHex ? { '--dot': event.colorHex } : undefined}
+                    />
+                  ))}
+                  {dayEvents.length > 3 && <b>+{dayEvents.length - 3}</b>}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
-      {state.status === 'ready' && !state.connected && (
-        <div className="agenda-list agenda-empty">
-          <CalendarCheck2 size={20} /><span>Conecta el calendario del negocio para ver la agenda aquí.</span>
+      <footer className="calendar-legend">
+        {legend.map(([name, hex]) => (
+          <span key={name}><i style={{ '--dot': hex }} aria-hidden="true" /> {name}</span>
+        ))}
+        <span><i className="agent" aria-hidden="true" /> {legend.length ? 'Otra cita de Lucía' : 'Agendada por Lucía'}</span>
+        <span><i className="external" aria-hidden="true" /> Ya estaba en tu calendario</span>
+      </footer>
+    </div>
+  );
+}
+
+function DayDetail({ dayKey, events, focusedEventId, detailRef }) {
+  return (
+    <div className="agenda-day-detail" ref={detailRef}>
+      <header>
+        <h3>{formatAgendaDay(dayKey)}</h3>
+        <span>{events.length ? `${events.length} ${events.length === 1 ? 'cita' : 'citas'}` : 'Sin citas'}</span>
+      </header>
+      {events.length === 0 ? (
+        <p className="agenda-day-free">Este día está libre.</p>
+      ) : (
+        <ul className="agenda-day-list">
+          {events.map((event, index) => (
+            <li
+              key={event.externalEventId}
+              style={{ '--stagger': index }}
+              className={[
+                'agenda-day-row',
+                event.source === 'agent' ? 'is-agent' : 'is-external',
+                event.externalEventId === focusedEventId ? 'is-focused' : '',
+              ].filter(Boolean).join(' ')}
+            >
+              <time dateTime={event.startsAt}>{formatEventRange(event)}</time>
+              <span className="agenda-day-mark" style={event.colorHex ? { '--dot': event.colorHex } : undefined} aria-hidden="true" />
+              <span className="agenda-day-copy">
+                <strong>{event.summary || 'Sin título'}</strong>
+                <small>{event.serviceName ? `${event.serviceName} · Agendada por Lucía` : (event.source === 'agent' ? 'Agendada por Lucía' : 'Ya estaba en tu calendario')}</small>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function AgentQueue({ state, focusedEventId, onFocusEvent, onRetry }) {
+  const grouped = useMemo(() => {
+    const groups = groupEventsByDay(state.events.filter((event) => event.source === 'agent'));
+    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [state.events]);
+  const total = grouped.reduce((sum, [, events]) => sum + events.length, 0);
+
+  return (
+    <aside className="agent-queue" aria-label="Citas agendadas por Lucía">
+      <header className="agent-queue-head">
+        <p className="eyebrow">Cola de Lucía</p>
+        <h3>{state.status === 'ready' ? `${total} ${total === 1 ? 'cita agendada' : 'citas agendadas'}` : 'Citas agendadas'}</h3>
+        <small>Próximos {QUEUE_HORIZON_DAYS} días · doble clic para verla en el calendario</small>
+      </header>
+
+      {state.status === 'loading' && (
+        <div className="agent-queue-skeletons" aria-hidden="true">
+          {[0, 1, 2, 3].map((index) => <span className="queue-skeleton" style={{ '--stagger': index }} key={index} />)}
         </div>
       )}
 
-      {state.status === 'ready' && state.connected && state.events.length === 0 && (
-        <div className="agenda-list agenda-empty">
-          <CalendarCheck2 size={20} /><span>Sin citas registradas en los próximos 14 días.</span>
+      {state.status === 'error' && (
+        <div className="agenda-state agenda-state-error">
+          <p>No pudimos leer la cola.</p>
+          <button type="button" onClick={onRetry}>Reintentar</button>
         </div>
       )}
 
-      {state.status === 'ready' && state.connected && state.events.length > 0 && (
-        <div className="agenda-list agenda-grouped">
-          {grouped.map(([dayKey, dayEvents]) => (
-            <div className="agenda-day-group" key={dayKey}>
-              <p className="agenda-day-label">{formatAgendaDay(dayKey)}</p>
-              {dayEvents.map((event) => (
-                <div className={`appointment-row appointment-source-${event.source}`} key={event.externalEventId}>
-                  <time>{formatAgendaTime(event.startsAt)}</time>
-                  <span className="agenda-line"><i className={event.source === 'agent' ? 'agent' : 'external'} /></span>
-                  <span className="appointment-copy"><strong>{event.summary || 'Sin título'}</strong></span>
-                  <span className={`appointment-state ${event.source === 'agent' ? 'agent' : ''}`}>{event.source === 'agent' ? 'Agendada por Lucía' : 'Ya estaba en tu calendario'}</span>
-                </div>
+      {state.status === 'ready' && total === 0 && (
+        <div className="agenda-state">
+          <CalendarCheck2 size={20} aria-hidden="true" />
+          <p>Lucía todavía no ha agendado nada en este periodo.</p>
+        </div>
+      )}
+
+      {state.status === 'ready' && total > 0 && (
+        <div className="agent-queue-scroll">
+          {grouped.map(([dayKey, events]) => (
+            <div className="agent-queue-group" key={dayKey}>
+              <p className="agent-queue-day">{formatQueueDay(dayKey)}</p>
+              {events.map((event, index) => (
+                <button
+                  type="button"
+                  key={event.externalEventId}
+                  className={`agent-queue-item${event.externalEventId === focusedEventId ? ' is-focused' : ''}`}
+                  style={{ '--stagger': index, ...(event.colorHex ? { '--dot': event.colorHex } : {}) }}
+                  onDoubleClick={() => onFocusEvent(event)}
+                  onKeyDown={(domEvent) => { if (domEvent.key === 'Enter') onFocusEvent(event); }}
+                  title="Doble clic para verla en el calendario"
+                >
+                  <time dateTime={event.startsAt}>{formatAgendaTime(event.startsAt)}</time>
+                  <strong>{event.summary || 'Sin título'}</strong>
+                </button>
               ))}
             </div>
           ))}
         </div>
       )}
+    </aside>
+  );
+}
 
-      <div className="agenda-foot">
-        <Clock3 size={15} />
-        <span>{state.connected ? `${agentCount} agendadas por Lucía en este rango` : 'Conecta Google Calendar para consultar espacios'}</span>
+// Read-only: shows the connected Google Calendar as a month grid, with the
+// day's appointments underneath and a scrollable queue of everything the agent
+// itself booked. Rescheduling and cancelling from here would mean writing back
+// to Google Calendar, which is a separate piece.
+function AgendaSection({ onAction, getToken, services = [] }) {
+  const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
+  const [selectedDay, setSelectedDay] = useState(() => localDayKey(new Date()));
+  const [focusedEventId, setFocusedEventId] = useState(null);
+  const [pulseDay, setPulseDay] = useState(null);
+  const [monthState, setMonthState] = useState({ status: 'loading', connected: false, events: [] });
+  const [queueState, setQueueState] = useState({ status: 'loading', connected: false, events: [] });
+  const [monthReloads, setMonthReloads] = useState(0);
+  const [queueReloads, setQueueReloads] = useState(0);
+  const detailRef = useRef(null);
+
+  // The visible month and the queue answer different questions, so each one
+  // owns its own request instead of sharing a single oversized range.
+  useEffect(() => {
+    let active = true;
+    setMonthState((current) => ({ ...current, status: 'loading' }));
+    getWorkspaceCalendar(getToken, monthRangeISO(viewMonth))
+      .then((result) => { if (active) setMonthState({ status: 'ready', connected: result.connected, events: result.events || [] }); })
+      .catch(() => { if (active) setMonthState({ status: 'error', connected: false, events: [] }); });
+    return () => { active = false; };
+  }, [getToken, viewMonth, monthReloads]);
+
+  useEffect(() => {
+    let active = true;
+    const fromISO = new Date().toISOString();
+    const toISO = new Date(Date.now() + QUEUE_HORIZON_DAYS * 24 * 3600 * 1000).toISOString();
+    setQueueState((current) => ({ ...current, status: 'loading' }));
+    getWorkspaceCalendar(getToken, { fromISO, toISO })
+      .then((result) => { if (active) setQueueState({ status: 'ready', connected: result.connected, events: result.events || [] }); })
+      .catch(() => { if (active) setQueueState({ status: 'error', connected: false, events: [] }); });
+    return () => { active = false; };
+  }, [getToken, queueReloads]);
+
+  // The calendar read only returns a title, so the service (and therefore the
+  // colour) is recognised from that title. An event we can't place keeps the
+  // plain agent/external treatment rather than being guessed into a colour.
+  const paint = useMemo(() => (list) => list.map((event) => {
+    const service = event.source === 'agent' ? matchServiceForEvent(event.summary, services) : null;
+    return service ? { ...event, serviceName: service.name, colorHex: serviceColorHex(service.color) } : event;
+  }), [services]);
+
+  const eventsByDay = useMemo(() => groupEventsByDay(paint(monthState.events)), [monthState.events, paint]);
+  const selectedEvents = eventsByDay.get(selectedDay) || [];
+
+  // Only the services actually present in the visible month, so the legend
+  // explains what is on screen instead of listing the whole catalogue.
+  const monthLegend = useMemo(() => {
+    const seen = new Map();
+    for (const event of paint(monthState.events)) {
+      if (event.serviceName && event.colorHex && !seen.has(event.serviceName)) {
+        seen.set(event.serviceName, event.colorHex);
+      }
+    }
+    return [...seen.entries()];
+  }, [monthState.events, paint]);
+
+  // Double-clicking a queued appointment is the one connective move in this
+  // screen: it pages the calendar to that month, opens the day, and pulses the
+  // cell so the eye lands on it.
+  const focusEvent = (event) => {
+    const dayKey = localDayKey(event.startsAt);
+    if (!dayKey) return;
+    const target = new Date(`${dayKey}T00:00:00`);
+    setViewMonth((current) => (
+      current.getFullYear() === target.getFullYear() && current.getMonth() === target.getMonth()
+        ? current
+        : startOfMonth(target)
+    ));
+    setSelectedDay(dayKey);
+    setFocusedEventId(event.externalEventId);
+    setPulseDay(dayKey);
+    onAction(`Mostrando ${formatQueueDay(dayKey).toLowerCase()} a las ${formatAgendaTime(event.startsAt)}`);
+  };
+
+  useEffect(() => {
+    if (!pulseDay) return undefined;
+    detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    const timer = setTimeout(() => setPulseDay(null), 1200);
+    return () => clearTimeout(timer);
+  }, [pulseDay]);
+
+  const connected = monthState.connected || queueState.connected;
+  const bothFailed = monthState.status === 'error' && queueState.status === 'error';
+
+  if (bothFailed) {
+    return (
+      <section className="agenda-workspace">
+        <div className="agenda-state agenda-state-error agenda-state-full">
+          <CalendarCheck2 size={22} aria-hidden="true" />
+          <p>No pudimos leer tu calendario.</p>
+          <button type="button" onClick={() => { setMonthReloads((n) => n + 1); setQueueReloads((n) => n + 1); }}>Reintentar</button>
+        </div>
+      </section>
+    );
+  }
+
+  if (monthState.status === 'ready' && !connected) {
+    return (
+      <section className="agenda-workspace">
+        <div className="agenda-state agenda-state-full">
+          <CalendarCheck2 size={22} aria-hidden="true" />
+          <p>Conecta el calendario de tu negocio para que Lucía consulte espacios y agende de verdad.</p>
+          <button type="button" onClick={() => onAction('Ve a Conexiones para conectar tu calendario')}>Cómo conectarlo</button>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="agenda-workspace">
+      <div className="agenda-calendar-column">
+        <CalendarMonth
+          viewMonth={viewMonth}
+          eventsByDay={eventsByDay}
+          legend={monthLegend}
+          selectedDay={selectedDay}
+          pulseDay={pulseDay}
+          loading={monthState.status === 'loading'}
+          onSelectDay={(dayKey) => { setSelectedDay(dayKey); setFocusedEventId(null); }}
+          onShiftMonth={(delta) => setViewMonth((current) => shiftMonth(current, delta))}
+          onToday={() => {
+            const todayKey = localDayKey(new Date());
+            setViewMonth(startOfMonth(new Date()));
+            setSelectedDay(todayKey);
+            setFocusedEventId(null);
+          }}
+        />
+        <DayDetail dayKey={selectedDay} events={selectedEvents} focusedEventId={focusedEventId} detailRef={detailRef} />
       </div>
-    </article>
+      <AgentQueue
+        state={{ ...queueState, events: paint(queueState.events) }}
+        focusedEventId={focusedEventId}
+        onFocusEvent={focusEvent}
+        onRetry={() => setQueueReloads((n) => n + 1)}
+      />
+    </section>
   );
 }
 
@@ -990,8 +1316,8 @@ function ModulePage({ title, tasks, calls, clinicName, dataMode, profile, connec
       </section>
       {title === 'Conversaciones' && <ConversationsModule tasks={tasks} calls={calls} isDemoData={dataMode.isDemo} onSelectTask={onSelectTask} />}
       {title === 'Oportunidades' && <OpportunitiesModule tasks={tasks} onSelectTask={onSelectTask} />}
-      {title === 'Mi agente' && <ReceptionistModule clinicName={clinicName} isDemoData={dataMode.isDemo} profile={profile} getToken={getToken} isAdmin={isAdmin} onAction={onAction} onTestAgent={onTestAgent} />}
-      {title === 'Agenda' && <AgendaPanel onAction={onAction} getToken={getToken} />}
+      {title === 'Mi agente' && <ReceptionistModule clinicName={clinicName} hasActivity={!dataMode.isDemo} canConfigure={dataMode.canConfigure} profile={profile} getToken={getToken} isAdmin={isAdmin} onAction={onAction} onTestAgent={onTestAgent} />}
+      {title === 'Agenda' && <AgendaSection onAction={onAction} getToken={getToken} services={normalizeServiceList(profile?.services)} />}
       {title === 'Conexiones' && <ConnectionsModule connections={connections} getToken={getToken} isAdmin={isAdmin} onAction={onAction} />}
       {title === 'Uso y plan' && <UsageModule />}
     </main>
@@ -1097,18 +1423,89 @@ function TagListField({ label, hint, placeholder, items, onChange, disabled }) {
   );
 }
 
-const EMPTY_SERVICE_DRAFT = { name: '', duration: '', price: '', details: '' };
+const EMPTY_SERVICE_DRAFT = { name: '', duration: '', price: '', details: '', color: '' };
+
+// New services get a colour that isn't taken yet, so a business that just adds
+// entries one after another still ends up with a readable calendar instead of
+// ten identical dots.
+function nextUnusedServiceColor(items) {
+  const taken = new Set((items || []).map((item) => item?.color).filter(Boolean));
+  return (SERVICE_COLORS.find((entry) => !taken.has(entry.id)) || SERVICE_COLORS[0]).id;
+}
 
 // Each service now carries duration/price/details, not just a name -- so the
 // agent has real answers when someone asks "¿cuánto dura?" or "¿cuánto
 // cuesta?" instead of always having to deflect the question.
+// Picks the colour a service's appointments are painted with in the calendar.
+// A swatch that opens a small palette, rather than a native <select>, because
+// the choice IS the colour -- reading its name off a dropdown defeats it.
+function ServiceColorPicker({ value, onChange, disabled, serviceName }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+  const current = SERVICE_COLOR_BY_ID.get(value) || null;
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (event) => { if (!wrapRef.current?.contains(event.target)) setOpen(false); };
+    const escape = (event) => { if (event.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', escape); };
+  }, [open]);
+
+  const label = serviceName ? `Color de ${serviceName}` : 'Color del servicio';
+
+  return (
+    <div className="service-color" ref={wrapRef}>
+      <button
+        type="button"
+        className={`service-color-swatch${current ? '' : ' is-empty'}`}
+        style={current ? { '--swatch': current.hex } : undefined}
+        disabled={disabled}
+        aria-label={current ? `${label}: ${current.label}` : `${label}: sin color`}
+        aria-expanded={open}
+        onClick={() => setOpen((state) => !state)}
+      />
+      {open && !disabled && (
+        <div className="service-color-menu" role="dialog" aria-label={label}>
+          <div className="service-color-grid">
+            {SERVICE_COLORS.map((entry) => (
+              <button
+                type="button"
+                key={entry.id}
+                className={`service-color-option${entry.id === value ? ' is-selected' : ''}`}
+                style={{ '--swatch': entry.hex }}
+                title={entry.label}
+                aria-label={entry.label}
+                aria-pressed={entry.id === value}
+                onClick={() => { onChange(entry.id); setOpen(false); }}
+              />
+            ))}
+          </div>
+          {value && (
+            <button type="button" className="service-color-clear" onClick={() => { onChange(''); setOpen(false); }}>
+              Quitar color
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ServiceListField({ items, onChange, disabled }) {
   const [draft, setDraft] = useState(EMPTY_SERVICE_DRAFT);
   const updateDraft = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
   const addItem = () => {
     const name = draft.name.trim();
     if (!name) return;
-    onChange([...items, { name, duration: draft.duration.trim(), price: draft.price.trim(), details: draft.details.trim() }]);
+    onChange([...items, {
+      name,
+      duration: draft.duration.trim(),
+      price: draft.price.trim(),
+      details: draft.details.trim(),
+      color: draft.color || nextUnusedServiceColor(items),
+    }]);
     setDraft(EMPTY_SERVICE_DRAFT);
   };
   const updateItem = (index, field, value) => {
@@ -1118,11 +1515,12 @@ function ServiceListField({ items, onChange, disabled }) {
   return (
     <div className="service-list-field">
       <div className="service-list-head">
-        <span>Servicio</span><span>Duración</span><span>Costo</span><span>Detalles</span>
+        <span>Color</span><span>Servicio</span><span>Duración</span><span>Costo</span><span>Detalles</span>
       </div>
       {items.length === 0 && <small className="tag-list-empty">Sin servicios todavía.</small>}
       {items.map((item, index) => (
         <div className="service-row" key={index}>
+          <ServiceColorPicker value={item.color || ''} serviceName={item.name} disabled={disabled} onChange={(color) => updateItem(index, 'color', color)} />
           <input disabled={disabled} value={item.name} onChange={(event) => updateItem(index, 'name', event.target.value)} aria-label="Nombre del servicio" placeholder="Ej. Limpieza dental" />
           <input disabled={disabled} value={item.duration || ''} onChange={(event) => updateItem(index, 'duration', event.target.value)} aria-label="Duración" placeholder="Ej. 30 min" />
           <input disabled={disabled} value={item.price || ''} onChange={(event) => updateItem(index, 'price', event.target.value)} aria-label="Costo" placeholder="Ej. $800" />
@@ -1132,6 +1530,7 @@ function ServiceListField({ items, onChange, disabled }) {
       ))}
       {!disabled && (
         <div className="service-row service-row-add">
+          <ServiceColorPicker value={draft.color} serviceName={draft.name} onChange={(color) => updateDraft('color', color)} />
           <input value={draft.name} onChange={(event) => updateDraft('name', event.target.value)} placeholder="Nuevo servicio" aria-label="Nombre del nuevo servicio" onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addItem(); } }} />
           <input value={draft.duration} onChange={(event) => updateDraft('duration', event.target.value)} placeholder="Duración" aria-label="Duración del nuevo servicio" />
           <input value={draft.price} onChange={(event) => updateDraft('price', event.target.value)} placeholder="Costo" aria-label="Costo del nuevo servicio" />
@@ -1139,6 +1538,9 @@ function ServiceListField({ items, onChange, disabled }) {
           <button type="button" onClick={addItem}>Agregar</button>
         </div>
       )}
+      <p className="service-list-hint">
+        El color distingue cada servicio en tu agenda. Se aplica al calendario de AutiveX; en Google Calendar las citas conservan el color que tenga tu calendario.
+      </p>
     </div>
   );
 }
@@ -1147,11 +1549,62 @@ function ServiceListField({ items, onChange, disabled }) {
 // details too, so the agent can actually answer "¿cuánto dura?" or "¿cuánto
 // cuesta?" instead of always deflecting. Old profiles saved before this
 // change still have plain strings in Clerk metadata, so every place that
+// Service colours.
+//
+// Stored as a stable id ("tomate"), never a hex, so the rendered colour can be
+// retuned without migrating anyone's saved profile. The ids and their order
+// deliberately mirror Google Calendar's fixed 11-colour event palette, which is
+// the only palette Google accepts -- today the colour is ours alone, but if the
+// n8n workflow ever sets colorId on the booked event, this maps across without
+// a redesign or a second palette to keep in sync.
+const SERVICE_COLORS = [
+  { id: 'tomate', label: 'Tomate', hex: '#ff7058', googleColorId: '11' },
+  { id: 'mandarina', label: 'Mandarina', hex: '#ff9f45', googleColorId: '6' },
+  { id: 'platano', label: 'Plátano', hex: '#ffd763', googleColorId: '5' },
+  { id: 'albahaca', label: 'Albahaca', hex: '#3ddb96', googleColorId: '10' },
+  { id: 'salvia', label: 'Salvia', hex: '#7ae0c3', googleColorId: '2' },
+  { id: 'pavo', label: 'Pavo real', hex: '#47e6de', googleColorId: '7' },
+  { id: 'arandano', label: 'Arándano', hex: '#5c8aff', googleColorId: '9' },
+  { id: 'lavanda', label: 'Lavanda', hex: '#a9a4ff', googleColorId: '1' },
+  { id: 'uva', label: 'Uva', hex: '#c77dff', googleColorId: '3' },
+  { id: 'flamenco', label: 'Flamenco', hex: '#ff8fb1', googleColorId: '4' },
+];
+
+const SERVICE_COLOR_BY_ID = new Map(SERVICE_COLORS.map((entry) => [entry.id, entry]));
+
+function serviceColorHex(colorId) {
+  return SERVICE_COLOR_BY_ID.get(colorId)?.hex || '';
+}
+
+// Accent- and case-insensitive so "Limpieza dental" matches a summary that
+// reads "Ana Ruiz — limpieza dental".
+function foldText(value) {
+  return String(value || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+// The calendar only gives us an event title, so a service is recognised by its
+// name appearing in that title. Longest name wins, otherwise a service called
+// "Limpieza" would claim every "Limpieza dental profunda" before the more
+// specific entry got a chance.
+function matchServiceForEvent(summary, services) {
+  const haystack = foldText(summary);
+  if (!haystack) return null;
+  let best = null;
+  for (const service of services || []) {
+    if (!service?.color || !service?.name) continue;
+    const needle = foldText(service.name);
+    if (needle && haystack.includes(needle) && (!best || needle.length > foldText(best.name).length)) {
+      best = service;
+    }
+  }
+  return best;
+}
+
 // reads services coerces through this first.
 function normalizeServiceEntry(item) {
   if (typeof item === 'string') {
     const name = item.trim();
-    return name ? { name, duration: '', price: '', details: '' } : null;
+    return name ? { name, duration: '', price: '', details: '', color: '' } : null;
   }
   if (!item || typeof item !== 'object') return null;
   const name = String(item.name || '').trim();
@@ -1161,6 +1614,7 @@ function normalizeServiceEntry(item) {
     duration: String(item.duration || '').trim(),
     price: String(item.price || '').trim(),
     details: String(item.details || '').trim(),
+    color: SERVICE_COLORS.some((entry) => entry.id === item.color) ? item.color : '',
   };
 }
 
@@ -1283,7 +1737,22 @@ function agentDraftFromProfile(profile, clinicName) {
   };
 }
 
-function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin, onAction, onTestAgent }) {
+// Drafts are plain data (strings, string arrays, and service objects), so a
+// stable-key JSON compare is enough to answer "is there anything to save?"
+// without pulling in a deep-equal helper.
+function isSameAgentDraft(a, b) {
+  if (!a || !b) return a === b;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+// Only render a number we were actually given. Anything that isn't a
+// plausible phone is treated as "no number recorded" rather than printed.
+function cleanPhone(value) {
+  const text = String(value || '').trim();
+  return /^\+?[\d\s().-]{8,20}$/.test(text) ? text : '';
+}
+
+function ReceptionistModule({ clinicName, hasActivity, canConfigure, profile, getToken, isAdmin, onAction, onTestAgent }) {
   const [voices, setVoices] = useState([]);
   const [provider, setProvider] = useState(profile?.voiceProvider || 'cartesia');
   const [voiceId, setVoiceId] = useState(profile?.voiceId || 'cartesia-Sofia');
@@ -1293,6 +1762,9 @@ function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin
   const providerVoices = useMemo(() => voices.filter((voice) => voice.provider === provider), [voices, provider]);
 
   const [agentDraft, setAgentDraft] = useState(() => agentDraftFromProfile(profile, clinicName));
+  // Mirror of what the server last confirmed, so the save footer can tell
+  // "nothing to save" apart from "unsaved changes".
+  const [savedDraft, setSavedDraft] = useState(() => agentDraftFromProfile(profile, clinicName));
   const [agentStatus, setAgentStatus] = useState('idle');
   const [agentError, setAgentError] = useState('');
   const [activeTab, setActiveTab] = useState('identidad');
@@ -1336,16 +1808,38 @@ function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin
     setAgentStatus('saving'); setAgentError('');
     try {
       const result = await updateWorkspaceAgentConfiguration(getToken, agentDraft);
-      setAgentDraft(agentDraftFromProfile(result.profile, clinicName));
+      const confirmed = agentDraftFromProfile(result.profile, clinicName);
+      setAgentDraft(confirmed);
+      setSavedDraft(confirmed);
       setAgentStatus('saved');
       onAction('Configuración del agente actualizada');
     } catch (error) { setAgentError(error.message); setAgentStatus('error'); }
   };
   const selectedVoice = voices.find((voice) => voice.id === voiceId);
-  const fieldsDisabled = isDemoData || !isAdmin || agentStatus === 'saving';
+  const fieldsDisabled = !canConfigure || !isAdmin || agentStatus === 'saving';
+  const hasUnsavedChanges = agentStatus === 'idle' && !isSameAgentDraft(agentDraft, savedDraft);
+  // The assigned number only shows when provisioning actually recorded one.
+  // This used to print a hardcoded "+52 55 4160 0198" to every workspace that
+  // had activity -- a number that belonged to no one.
+  const assignedNumber = cleanPhone(profile?.assignedPhoneNumber);
   return (
     <section className="reception-layout">
-      <article className="reception-identity dark-module-card"><div className="large-orb"><span /></div><p className="dark-eyebrow">{isDemoData ? 'Agente asignado' : 'En línea ahora'}</p><h2>Lucía</h2><span>Recepcionista de {clinicName}</span><div className="reception-number">{isDemoData ? 'Disponible desde este navegador' : '+52 55 4160 0198'}</div><button type="button" onClick={onTestAgent}><PhoneOutgoing size={16} /> Probar mi agente</button></article>
+      <article className="reception-identity dark-module-card">
+        <div className="reception-identity-main">
+          <div className="large-orb"><span /></div>
+          <div className="reception-identity-copy">
+            <p className="dark-eyebrow">{hasActivity ? 'En línea ahora' : 'Agente asignado'}</p>
+            <h2>Lucía</h2>
+            <span>Recepcionista de {clinicName}</span>
+          </div>
+        </div>
+        <div className="reception-number">
+          {assignedNumber
+            ? <><PhoneCall size={14} aria-hidden="true" /> {assignedNumber}</>
+            : <><Headphones size={14} aria-hidden="true" /> Disponible desde este navegador</>}
+        </div>
+        <button type="button" onClick={onTestAgent}><PhoneOutgoing size={16} /> Probar mi agente</button>
+      </article>
       <div className="agent-config-stack">
         {isAdmin && !fieldsDisabled && (
           <article className="agent-panel surface-panel">
@@ -1360,16 +1854,32 @@ function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin
           </article>
         )}
 
-        <div className="agent-tabs" role="tablist" aria-label="Secciones de configuración del agente">
+        <div
+          className="agent-tabs"
+          role="tablist"
+          aria-label="Secciones de configuración del agente"
+          style={{ '--tab-count': AGENT_TABS.length, '--tab-index': Math.max(0, AGENT_TABS.findIndex((tab) => tab.id === activeTab)) }}
+        >
+          <span className="agent-tabs-indicator" aria-hidden="true" />
           {AGENT_TABS.map(({ id, label, Icon }) => (
-            <button type="button" key={id} role="tab" aria-selected={activeTab === id} className={activeTab === id ? 'active' : ''} onClick={() => setActiveTab(id)}>
-              <Icon size={15} /><span>{label}</span>
+            <button
+              type="button"
+              key={id}
+              role="tab"
+              id={`agent-tab-${id}`}
+              aria-selected={activeTab === id}
+              aria-controls={`agent-panel-${id}`}
+              tabIndex={activeTab === id ? 0 : -1}
+              className={activeTab === id ? 'active' : ''}
+              onClick={() => setActiveTab(id)}
+            >
+              <Icon size={15} aria-hidden="true" /><span>{label}</span>
             </button>
           ))}
         </div>
 
         {activeTab === 'identidad' && (
-          <article className="agent-panel surface-panel">
+          <article className="agent-panel surface-panel" role="tabpanel" id="agent-panel-identidad" aria-labelledby="agent-tab-identidad">
             <div className="agent-panel-heading"><span className="setting-icon"><FileText size={18} /></span><span><strong>Identidad del negocio</strong><small>Cómo se presenta Lucía al contestar.</small></span></div>
             <div className="agent-settings-fields">
               <label><span>Nombre del negocio</span><input disabled={fieldsDisabled} value={agentDraft.clinicName} onChange={(event) => updateAgentField('clinicName', event.target.value)} /></label>
@@ -1384,7 +1894,7 @@ function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin
         )}
 
         {activeTab === 'horario' && (
-          <article className="agent-panel surface-panel">
+          <article className="agent-panel surface-panel" role="tabpanel" id="agent-panel-horario" aria-labelledby="agent-tab-horario">
             <div className="agent-panel-heading"><span className="setting-icon"><Clock3 size={18} /></span><span><strong>Horario</strong><small>Cuándo atiende tu negocio y sus excepciones.</small></span></div>
             <div className="agent-settings-fields agent-settings-fields-single">
               <label><span>Horario regular</span><input disabled={fieldsDisabled} value={agentDraft.businessHours} onChange={(event) => updateAgentField('businessHours', event.target.value)} placeholder="Ej. Lunes a viernes, 9:00 a 19:00" /></label>
@@ -1394,14 +1904,14 @@ function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin
         )}
 
         {activeTab === 'servicios' && (
-          <article className="agent-panel surface-panel">
+          <article className="agent-panel surface-panel" role="tabpanel" id="agent-panel-servicios" aria-labelledby="agent-tab-servicios">
             <div className="agent-panel-heading"><span className="setting-icon"><PlugZap size={18} /></span><span><strong>Servicios</strong><small>Duración y costo le permiten a Lucía responder sin inventar. Deja el costo en blanco si prefieres que no lo mencione.</small></span></div>
             <ServiceListField items={agentDraft.services} onChange={(value) => updateAgentField('services', value)} disabled={fieldsDisabled} />
           </article>
         )}
 
         {activeTab === 'voz' && (
-          <article className="agent-panel surface-panel">
+          <article className="agent-panel surface-panel" role="tabpanel" id="agent-panel-voz" aria-labelledby="agent-tab-voz">
             <div className="agent-panel-heading"><span className="setting-icon"><Headphones size={18} /></span><span><strong>Voz de tu recepcionista</strong><small>Voces disponibles con acento mexicano en Retell.</small></span></div>
             {voiceStatus === 'loading' ? <p>Cargando catálogo de voces…</p> : <>
               <div className="voice-settings-fields">
@@ -1419,11 +1929,26 @@ function ReceptionistModule({ clinicName, isDemoData, profile, getToken, isAdmin
         )}
 
         {activeTab !== 'voz' && (
-          <article className="agent-panel agent-panel-save surface-panel">
-            {isAdmin ? <button type="button" className="primary-action" disabled={isDemoData || !agentDraft.clinicName || agentStatus === 'saving'} onClick={saveAgentConfiguration}>{agentStatus === 'saving' ? 'Guardando…' : 'Guardar configuración'}</button> : <small>Solo un administrador puede editar la configuración del agente.</small>}
-            {agentStatus === 'saved' && <p className="voice-success"><CheckCircle2 size={15} /> Configuración actualizada. La siguiente llamada usará estos cambios.</p>}
-            {agentError && <p className="voice-error">{agentError}</p>}
-          </article>
+          <div className={`agent-savebar${hasUnsavedChanges ? ' is-dirty' : ''}`}>
+            <div className="agent-savebar-state" role="status" aria-live="polite">
+              {!isAdmin && <span className="savebar-note">Solo un administrador puede editar la configuración.</span>}
+              {isAdmin && !canConfigure && <span className="savebar-note">Tu servicio todavía se está activando.</span>}
+              {isAdmin && canConfigure && agentStatus === 'saving' && <span className="savebar-note"><span className="savebar-spinner" aria-hidden="true" /> Guardando…</span>}
+              {isAdmin && canConfigure && agentStatus === 'saved' && <span className="savebar-ok"><CheckCircle2 size={15} aria-hidden="true" /> Guardado. La siguiente llamada usará estos cambios.</span>}
+              {isAdmin && canConfigure && agentStatus !== 'saving' && agentStatus !== 'saved' && hasUnsavedChanges && <span className="savebar-note savebar-dirty"><span className="savebar-dot" aria-hidden="true" /> Tienes cambios sin guardar.</span>}
+              {agentError && <span className="savebar-error">{agentError}</span>}
+            </div>
+            {isAdmin && (
+              <button
+                type="button"
+                className="primary-action"
+                disabled={fieldsDisabled || !agentDraft.clinicName || !hasUnsavedChanges}
+                onClick={saveAgentConfiguration}
+              >
+                {agentStatus === 'saving' ? 'Guardando…' : 'Guardar configuración'}
+              </button>
+            )}
+          </div>
         )}
       </div>
     </section>

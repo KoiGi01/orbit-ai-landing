@@ -68,9 +68,10 @@ After deployment, `GET /api/health/database` verifies the server-to-database con
 
 ## Integrations
 
-- Retell AI: browser voice calls through `POST /api/retell/token`.
+- Retell AI: browser voice calls through `POST /api/retell/token`; call lifecycle events (started/ended/analyzed) are persisted through the signed `POST /api/retell/webhook`.
 - Clerk: authentication, invitations, roles, and workspace access.
 - n8n or Resend: lead delivery through `POST /api/demo/lead`.
+- Google Calendar, via n8n: the agent checks availability and books/cancels/edits real events; agent-booked appointments are confirmed back into Postgres through the signed `POST /api/appointments/sync`.
 - Location operations: internal operators create workspaces, assign users, retry provisioning, and control production activation. Billing is deferred for the current MVP.
 
 See `docs/runbooks/PRIMER_FLUJO_FUNCIONAL.md` for the end-to-end setup and operating procedure.

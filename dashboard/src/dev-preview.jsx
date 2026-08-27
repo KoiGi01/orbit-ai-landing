@@ -12,6 +12,88 @@ import {
 import { PortalBrand, ProspectOnboarding, ProspectPreview } from './workspace';
 import { NewClientModal } from './internal-admin';
 
+// ---------------------------------------------------------------------------
+// Sample calendar for the design preview.
+//
+// The preview account has no Clerk session, so /api/workspace answers
+// `invalid_session` and Agenda can only ever render its error state -- which
+// makes the whole screen impossible to review. This answers just the calendar
+// read with sample events so the month grid, the day detail and the queue can
+// be clicked through without a login or any environment variable.
+//
+// Scoped hard on purpose: it only installs when you explicitly opened
+// `?preview=dashboard`, and the whole module is behind import.meta.env.DEV, so
+// a normal `npm run dev:control` sign-in still talks to the real API.
+// ---------------------------------------------------------------------------
+
+const SAMPLE_APPOINTMENTS = [
+  [0, 9, 0, 45, 'Ana Ruiz — Limpieza dental', 'agent'],
+  [0, 11, 30, 30, 'Luis Mora — Valoración de implante', 'agent'],
+  [0, 16, 0, 60, 'Junta de equipo', 'external'],
+  [1, 10, 0, 45, 'Carmen Salas — Ortodoncia', 'agent'],
+  [1, 13, 0, 30, 'Comida con proveedor', 'external'],
+  [2, 9, 30, 60, 'Miguel Ángel Torres — Endodoncia', 'agent'],
+  [2, 12, 0, 45, 'Rocío Beltrán — Limpieza dental', 'agent'],
+  [2, 15, 0, 30, 'Sofía Navarro — Revisión', 'agent'],
+  [2, 17, 0, 45, 'Diego Fuentes — Blanqueamiento', 'agent'],
+  [5, 10, 30, 45, 'Paola Ibarra — Valoración', 'agent'],
+  [6, 9, 0, 30, 'Entrega de material', 'external'],
+  [9, 11, 0, 45, 'Héctor Ramos — Limpieza dental', 'agent'],
+  [13, 16, 30, 30, 'Valentina Cruz — Retiro de brackets', 'agent'],
+  [-3, 10, 0, 45, 'Jorge Lemus — Limpieza dental', 'agent'],
+  [-8, 12, 0, 60, 'Revisión trimestral', 'external'],
+  [-15, 9, 30, 45, 'Mariana Ochoa — Ortodoncia', 'agent'],
+  [22, 11, 0, 45, 'Andrés Peña — Valoración', 'agent'],
+  [31, 10, 0, 45, 'Lucía Herrera — Limpieza dental', 'agent'],
+];
+
+// Anchored on today so the grid always looks current, whenever you open it.
+function buildSampleEvents() {
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  return SAMPLE_APPOINTMENTS.map(([offsetDays, hour, minute, minutes, summary, source], index) => {
+    const start = new Date(midnight);
+    start.setDate(start.getDate() + offsetDays);
+    start.setHours(hour, minute, 0, 0);
+    return {
+      externalEventId: `preview-event-${index}`,
+      summary,
+      startsAt: start.toISOString(),
+      endsAt: new Date(start.getTime() + minutes * 60000).toISOString(),
+      source,
+    };
+  });
+}
+
+function installSampleCalendar() {
+  const realFetch = window.fetch.bind(window);
+  window.fetch = async (input, init) => {
+    const url = typeof input === 'string' ? input : input?.url || '';
+    if (!url.includes('/api/workspace') || !url.includes('resource=calendar')) {
+      return realFetch(input, init);
+    }
+    // Honour the requested window so paging between months behaves like the
+    // real endpoint instead of dumping every sample event into every month.
+    const params = new URLSearchParams(url.split('?')[1] || '');
+    const from = params.get('from') ? Date.parse(params.get('from')) : -Infinity;
+    const to = params.get('to') ? Date.parse(params.get('to')) : Infinity;
+    const events = buildSampleEvents().filter((event) => {
+      const at = Date.parse(event.startsAt);
+      return at >= from && at <= to;
+    });
+    return new Response(
+      JSON.stringify({ connected: true, calendarId: 'muestra@group.calendar.google.com', events }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  };
+}
+
+if (import.meta.env.DEV
+  && typeof window !== 'undefined'
+  && new URLSearchParams(window.location.search).get('preview') === 'dashboard') {
+  installSampleCalendar();
+}
+
 const previewUser = {
   id: 'preview-user',
   preview: true,
@@ -27,6 +109,12 @@ const previewAccount = {
     publicMetadata: { businessType: 'Clínica dental' },
   },
   membership: { role: 'org:admin' },
+  // Without this the dashboard's data fetches threw on `getToken()` before
+  // ever reaching the network, so every preview rendered the empty state and
+  // nothing downstream of a request could be inspected. Returning a token
+  // lets the requests actually go out: against a seeded local API they load
+  // real data, and otherwise they fail honestly like they would in the app.
+  getToken: async () => 'preview',
 };
 
 const previewProfile = {
@@ -98,6 +186,23 @@ export default function DevPreview({ screen, DashboardComponent }) {
           view: 'live',
           organization: { id: previewAccount.organization.id, name: previewAccount.organization.name },
           state: { billingStatus: 'verified', onboardingStatus: 'active', serviceStatus: 'live' },
+          // Service names match the sample appointment titles above, so the
+          // calendar actually demonstrates the per-service colouring instead
+          // of painting every appointment the same default coral.
+          profile: {
+            clinicName: 'Clínica Dental Aurora',
+            city: 'Querétaro, Qro.',
+            industry: 'Clínica dental',
+            businessHours: 'Lunes a viernes, 9:00 a 19:00',
+            services: [
+              { name: 'Limpieza dental', duration: '45 min', price: '$800', details: 'Incluye revisión inicial', color: 'pavo' },
+              { name: 'Valoración de implante', duration: '30 min', price: '$500', details: '', color: 'mandarina' },
+              { name: 'Ortodoncia', duration: '45 min', price: '$1,500', details: '', color: 'uva' },
+              { name: 'Endodoncia', duration: '60 min', price: '$2,400', details: '', color: 'tomate' },
+              { name: 'Blanqueamiento', duration: '45 min', price: '$1,900', details: '', color: 'platano' },
+              { name: 'Revisión', duration: '30 min', price: '', details: '', color: 'albahaca' },
+            ],
+          },
         }}
       />
     );
