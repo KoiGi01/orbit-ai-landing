@@ -274,7 +274,6 @@ h3,
    they never had a light-mode-only hardcoded color to begin with, but
    still need to be pulled onto the token system explicitly. */
 
-.voice-settings-fields select,
 .agent-settings-fields input,
 .agent-settings-fields textarea,
 .tag-list-add input,
@@ -321,9 +320,19 @@ h3,
    surface, and template chips need the same dark surface as everything
    else instead of the light-mode card color they were written against. */
 
-.agent-settings-fields label,
-.voice-settings-fields label {
+.agent-settings-fields label {
   color: var(--ink-soft);
+}
+
+/* The voice picker reads from the tokens above, so only its two warm accents
+   need restating: amber-on-cream does not survive the dark surface. */
+.voice-card-accent {
+  color: var(--yellow-deep);
+  background: var(--yellow-soft);
+}
+
+.voice-error {
+  color: var(--coral-deep);
 }
 
 .agent-panel-heading small,

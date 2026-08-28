@@ -2323,17 +2323,80 @@ select:focus-visible,
 .template-chip { display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; background: #f6f4ef; border: 1px solid #d8d5ce; border-radius: 999px; color: #3c3f38; font-size: 11px; font-weight: 620; cursor: pointer; }
 .template-chip:hover { border-color: var(--coral); color: var(--coral); }
 
-.voice-settings-fields { display: grid; grid-template-columns: 1fr 1.35fr; gap: 12px; }
-.voice-settings-fields label { display: grid; gap: 7px; color: #62655e; font-size: 9px; font-weight: 750; text-transform: uppercase; letter-spacing: .08em; }
-.voice-settings-fields select { width: 100%; min-height: 43px; padding: 0 12px; color: #242721; background: #f6f4ef; border: 1px solid #d8d5ce; border-radius: 9px; font: inherit; text-transform: none; letter-spacing: normal; }
+/* Voice picker. This used to be two native <select>s that inherited their
+   label's 9px uppercase font, which left both the field and its dropdown list
+   nearly unreadable. The catalog is a card grid now: the sample plays from the
+   voice's own avatar, and a coral ring marks whichever one is speaking.
+   Everything here reads from the shared tokens, so the dark pass in
+   brand-theme.css only has to restate the two warm accents below. */
+.agent-panel > .voice-loading,
+.agent-panel > .voice-empty { color: var(--ink-soft); font-size: 12px; }
+
+.voice-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.voice-filter { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; color: var(--ink-soft); font-size: 11px; font-weight: 620; cursor: pointer; }
+.voice-filter span { color: var(--ink-faint); font-size: 10px; font-variant-numeric: tabular-nums; }
+.voice-filter:hover { border-color: var(--line-strong); color: var(--ink); }
+.voice-filter.is-active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.voice-filter.is-active span { color: var(--paper); opacity: .68; }
+
+.voice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(234px, 1fr)); gap: 9px; }
+
+.voice-card { position: relative; }
+.voice-card-pick { position: relative; width: 100%; display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 11px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; text-align: left; cursor: pointer; }
+.voice-card-pick:hover:not(:disabled) { border-color: var(--line-strong); }
+.voice-card-pick:disabled { opacity: .62; cursor: not-allowed; }
+.voice-card.is-selected .voice-card-pick { background: var(--surface-strong); border-color: var(--coral); box-shadow: inset 0 0 0 1px var(--coral); }
+
+.voice-card-avatar { position: relative; width: 46px; height: 46px; display: grid; place-items: center; background: var(--paper-deep); border-radius: 999px; }
+.voice-card-avatar img { width: 100%; height: 100%; border-radius: 999px; object-fit: cover; }
+.voice-card-avatar b { color: var(--ink-soft); font-size: 15px; font-weight: 640; }
+
+.voice-card-copy { display: grid; gap: 3px; min-width: 0; }
+.voice-card-name { color: var(--ink); font-size: 13px; font-weight: 640; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.voice-card-meta { color: var(--ink-soft); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Marks the exception, not an error: most of the catalog is Mexican, and this
+   badge is how you notice the one you picked is not. */
+.voice-card-accent { padding: 3px 7px; background: rgba(182, 120, 40, .14); border-radius: 999px; color: var(--amber); font-size: 9px; font-weight: 700; white-space: nowrap; }
+
+.voice-card-check { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; display: grid; place-items: center; background: var(--coral); border-radius: 999px; color: #fff; opacity: 0; transform: scale(.6); transition: opacity .15s ease, transform .15s ease; }
+.voice-card.is-selected .voice-card-check { opacity: 1; transform: scale(1); }
+
+/* Sits on top of the avatar, so the sample is one click from the face you are
+   choosing instead of a separate browser audio bar. The scrim is deliberately
+   theme-independent: it covers a photo, not a panel surface. */
+.voice-card-play { position: absolute; z-index: 2; top: 22px; left: 23px; width: 26px; height: 26px; display: grid; place-items: center; background: rgba(5, 11, 22, .74); border: 0; border-radius: 999px; color: #f7f5ef; cursor: pointer; opacity: 0; transition: opacity .15s ease; }
+.voice-card:hover .voice-card-play,
+.voice-card:focus-within .voice-card-play,
+.voice-card.is-playing .voice-card-play { opacity: 1; }
+.voice-card.is-playing .voice-card-play { background: var(--coral); }
+.voice-card.is-playing .voice-card-avatar::after { content: ''; position: absolute; inset: -3px; border: 2px solid var(--coral); border-radius: 999px; animation: voice-preview-pulse 1.5s ease-out infinite; }
+
+@keyframes voice-preview-pulse {
+  from { opacity: .85; transform: scale(1); }
+  to { opacity: 0; transform: scale(1.3); }
+}
+
 .voice-settings-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.voice-settings-actions audio { width: min(290px, 100%); height: 36px; }
 .voice-settings-actions .primary-action { min-height: 39px; white-space: nowrap; }
-.voice-success { display: flex; align-items: center; gap: 6px; margin: 0; color: #28745b; }
+.voice-selected-note { margin: 0; color: var(--ink-soft); font-size: 11px; }
+.voice-selected-note strong { color: var(--ink); font-weight: 650; }
+.voice-success { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--green); }
 .voice-error { margin: 0; color: #a63b35; }
 
+/* Without hover there is nothing to reveal the play control, and an invisible
+   button over the avatar would swallow the tap that picks the voice. */
+@media (hover: none) {
+  .voice-card-play { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-card-check { transition: none; }
+  .voice-card.is-playing .voice-card-avatar::after { animation: none; opacity: .85; }
+}
+
 @media (max-width: 620px) {
-  .voice-settings-fields { grid-template-columns: 1fr; }
+  .voice-grid { grid-template-columns: 1fr; }
   .voice-settings-actions { align-items: stretch; flex-direction: column; }
 }
 
@@ -2342,7 +2405,7 @@ select:focus-visible,
 .agent-settings-fields label { display: grid; gap: 7px; color: #62655e; font-size: 9px; font-weight: 750; text-transform: uppercase; letter-spacing: .08em; }
 .agent-settings-fields label span { display: flex; align-items: center; gap: 5px; }
 .agent-settings-fields input,
-.agent-settings-fields textarea { width: 100%; padding: 10px 12px; color: #242721; background: #f6f4ef; border: 1px solid #d8d5ce; border-radius: 9px; font: inherit; text-transform: none; letter-spacing: normal; resize: vertical; }
+.agent-settings-fields textarea { width: 100%; padding: 10px 12px; color: #242721; background: #f6f4ef; border: 1px solid #d8d5ce; border-radius: 9px; font-family: inherit; font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: normal; resize: vertical; }
 .agent-settings-fields input:disabled,
 .agent-settings-fields textarea:disabled { opacity: .65; cursor: not-allowed; }
 

@@ -19,7 +19,7 @@ const ERROR_MESSAGES = {
   invalid_call_goals: 'Agrega al menos un motivo de llamada.',
   invalid_scheduling_provider: 'Selecciona cómo administra actualmente su agenda.',
   invalid_voice_provider: 'La voz seleccionada no pertenece a ese proveedor.',
-  invalid_mexican_voice: 'Selecciona una voz disponible para español de México.',
+  invalid_voice_selection: 'Esa voz ya no está en el catálogo de Retell. Elige otra.',
   voice_catalog_failed: 'No pudimos cargar las voces de Retell en este momento.',
   workspace_voice_update_failed: 'Retell no pudo guardar la nueva voz. Intenta nuevamente.',
   invalid_payment_amount: 'Escribe un monto válido.',

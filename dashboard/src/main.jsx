@@ -22,6 +22,7 @@ import {
   LayoutDashboard,
   MessageSquareText,
   MoreHorizontal,
+  Pause,
   PhoneCall,
   PhoneOutgoing,
   Play,
@@ -1384,7 +1385,23 @@ function OpportunitiesModule({ tasks, onSelectTask }) {
   );
 }
 
-const VOICE_PROVIDER_NAMES = { platform: 'Retell', cartesia: 'Cartesia', elevenlabs: 'ElevenLabs', minimax: 'MiniMax', fish_audio: 'Fish Audio', openai: 'OpenAI', deepgram: 'Deepgram' };
+const VOICE_PROVIDER_NAMES = { platform: 'Retell', cartesia: 'Cartesia', elevenlabs: 'ElevenLabs', minimax: 'MiniMax', fish_audio: 'Fish Audio', openai: 'OpenAI', deepgram: 'Deepgram', inworld: 'Inworld' };
+const VOICE_AGE_NAMES = { young: 'Joven', 'middle aged': 'Adulta', old: 'Mayor' };
+
+const voiceGenderLabel = (voice) => (voice.gender === 'female' ? 'Femenina' : 'Masculina');
+const voiceAgeLabel = (voice) => VOICE_AGE_NAMES[String(voice.age || '').toLowerCase()] || '';
+
+// Retell only splits Spanish voices into "Mexican" and a catch-all "Spanish",
+// so the badge marks the exception: a Mexican accent is the norm for this
+// product and stays unlabelled. Some names carry the region themselves
+// ("Santiago (es-ES)", "Hailey - Spanish, Latin America"); the rest we cannot
+// place any more precisely than "not Mexican", and we say exactly that.
+function voiceAccentLabel(voice) {
+  if (String(voice.accent || '').toLowerCase() === 'mexican') return '';
+  if (/es-es|españa|spain/i.test(voice.name)) return 'España';
+  if (/latin/i.test(voice.name)) return 'Latinoamérica';
+  return 'Otro acento';
+}
 
 // Small add/remove list editor shared by the services and off-days fields —
 // the "menú más sofisticado" replacement for the free-text version.
@@ -1754,12 +1771,17 @@ function cleanPhone(value) {
 
 function ReceptionistModule({ clinicName, hasActivity, canConfigure, profile, getToken, isAdmin, onAction, onTestAgent }) {
   const [voices, setVoices] = useState([]);
-  const [provider, setProvider] = useState(profile?.voiceProvider || 'cartesia');
   const [voiceId, setVoiceId] = useState(profile?.voiceId || 'cartesia-Sofia');
+  const [providerFilter, setProviderFilter] = useState('all');
   const [voiceStatus, setVoiceStatus] = useState('loading');
   const [voiceError, setVoiceError] = useState('');
+  const [playingVoiceId, setPlayingVoiceId] = useState('');
+  const previewAudio = useRef(null);
   const providers = useMemo(() => [...new Set(voices.map((voice) => voice.provider))], [voices]);
-  const providerVoices = useMemo(() => voices.filter((voice) => voice.provider === provider), [voices, provider]);
+  const visibleVoices = useMemo(
+    () => (providerFilter === 'all' ? voices : voices.filter((voice) => voice.provider === providerFilter)),
+    [voices, providerFilter],
+  );
 
   const [agentDraft, setAgentDraft] = useState(() => agentDraftFromProfile(profile, clinicName));
   // Mirror of what the server last confirmed, so the save footer can tell
@@ -1787,17 +1809,30 @@ function ReceptionistModule({ clinicName, hasActivity, canConfigure, profile, ge
       if (!active) return;
       setVoices(result.voices || []);
       const current = (result.voices || []).find((voice) => voice.id === (profile?.voiceId || 'cartesia-Sofia'));
-      if (current) { setProvider(current.provider); setVoiceId(current.id); }
+      if (current) setVoiceId(current.id);
       setVoiceStatus('ready');
     }).catch((error) => { if (active) { setVoiceError(error.message); setVoiceStatus('error'); } });
     return () => { active = false; };
   }, [getToken, profile?.voiceId]);
 
-  const changeProvider = (nextProvider) => {
-    setProvider(nextProvider);
-    setVoiceId(voices.find((voice) => voice.provider === nextProvider)?.id || '');
+  const selectVoice = (nextVoiceId) => {
+    setVoiceId(nextVoiceId);
     setVoiceStatus('ready');
     setVoiceError('');
+  };
+  // One shared Audio element, so picking a second sample stops the first and
+  // two voices can never talk over each other.
+  useEffect(() => () => { previewAudio.current?.pause(); previewAudio.current = null; }, []);
+  const togglePreview = (voice) => {
+    previewAudio.current?.pause();
+    previewAudio.current = null;
+    if (playingVoiceId === voice.id || !voice.previewUrl) { setPlayingVoiceId(''); return; }
+    const audio = new Audio(voice.previewUrl);
+    audio.addEventListener('ended', () => setPlayingVoiceId(''));
+    audio.addEventListener('error', () => setPlayingVoiceId(''));
+    previewAudio.current = audio;
+    setPlayingVoiceId(voice.id);
+    audio.play().catch(() => setPlayingVoiceId(''));
   };
   const saveVoice = async () => {
     setVoiceStatus('saving'); setVoiceError('');
@@ -1912,14 +1947,58 @@ function ReceptionistModule({ clinicName, hasActivity, canConfigure, profile, ge
 
         {activeTab === 'voz' && (
           <article className="agent-panel surface-panel" role="tabpanel" id="agent-panel-voz" aria-labelledby="agent-tab-voz">
-            <div className="agent-panel-heading"><span className="setting-icon"><Headphones size={18} /></span><span><strong>Voz de tu recepcionista</strong><small>Voces disponibles con acento mexicano en Retell.</small></span></div>
-            {voiceStatus === 'loading' ? <p>Cargando catálogo de voces…</p> : <>
-              <div className="voice-settings-fields">
-                <label><span>Proveedor</span><select disabled={!isAdmin || voiceStatus === 'saving'} value={provider} onChange={(event) => changeProvider(event.target.value)}>{providers.map((item) => <option value={item} key={item}>{VOICE_PROVIDER_NAMES[item] || item}</option>)}</select></label>
-                <label><span>Voz</span><select disabled={!isAdmin || voiceStatus === 'saving'} value={voiceId} onChange={(event) => { setVoiceId(event.target.value); setVoiceStatus('ready'); }}>{providerVoices.map((voice) => <option value={voice.id} key={voice.id}>{voice.name} · {voice.gender === 'female' ? 'Femenina' : 'Masculina'}{voice.recommended ? ' · Recomendada' : ''}</option>)}</select></label>
+            <div className="agent-panel-heading"><span className="setting-icon"><Headphones size={18} /></span><span><strong>Voz de tu recepcionista</strong><small>Todas las voces en español del catálogo de Retell. Escucha la muestra antes de elegir; las que no suenan mexicanas vienen marcadas.</small></span></div>
+            {voiceStatus === 'loading' && <p className="voice-loading">Cargando catálogo de voces…</p>}
+            {voiceStatus !== 'loading' && voices.length === 0 && <p className="voice-empty">No hay voces disponibles. Recarga la página para volver a consultar el catálogo de Retell.</p>}
+            {voices.length > 0 && <>
+              {providers.length > 1 && (
+                <div className="voice-filters" role="group" aria-label="Filtrar por proveedor">
+                  <button type="button" className={`voice-filter${providerFilter === 'all' ? ' is-active' : ''}`} aria-pressed={providerFilter === 'all'} onClick={() => setProviderFilter('all')}>Todas <span>{voices.length}</span></button>
+                  {providers.map((item) => (
+                    <button type="button" key={item} className={`voice-filter${providerFilter === item ? ' is-active' : ''}`} aria-pressed={providerFilter === item} onClick={() => setProviderFilter(item)}>
+                      {VOICE_PROVIDER_NAMES[item] || item} <span>{voices.filter((voice) => voice.provider === item).length}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="voice-grid" role="radiogroup" aria-label="Voces disponibles">
+                {visibleVoices.map((voice) => {
+                  const isSelected = voice.id === voiceId;
+                  const isPlaying = voice.id === playingVoiceId;
+                  const accent = voiceAccentLabel(voice);
+                  return (
+                    <div key={voice.id} className={`voice-card${isSelected ? ' is-selected' : ''}${isPlaying ? ' is-playing' : ''}`}>
+                      <button type="button" role="radio" aria-checked={isSelected} className="voice-card-pick" disabled={!isAdmin || voiceStatus === 'saving'} onClick={() => selectVoice(voice.id)}>
+                        <span className="voice-card-avatar" aria-hidden="true">
+                          {voice.avatarUrl ? <img src={voice.avatarUrl} alt="" loading="lazy" /> : <b>{voice.name.slice(0, 1)}</b>}
+                        </span>
+                        <span className="voice-card-copy">
+                          <span className="voice-card-name">{voice.name}</span>
+                          <span className="voice-card-meta">{[voiceGenderLabel(voice), voiceAgeLabel(voice), VOICE_PROVIDER_NAMES[voice.provider] || voice.provider].filter(Boolean).join(' · ')}</span>
+                        </span>
+                        {accent && <span className="voice-card-accent">{accent}</span>}
+                        <span className="voice-card-check" aria-hidden="true"><Check size={12} /></span>
+                      </button>
+                      {voice.previewUrl && (
+                        <button
+                          type="button"
+                          className="voice-card-play"
+                          onClick={() => togglePreview(voice)}
+                          aria-label={isPlaying ? `Detener la muestra de ${voice.name}` : `Escuchar la muestra de ${voice.name}`}
+                        >
+                          {isPlaying ? <Pause size={13} /> : <Play size={13} />}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <div className="voice-settings-actions">
-                {selectedVoice?.previewUrl && <audio controls preload="none" src={selectedVoice.previewUrl}>Tu navegador no puede reproducir esta muestra.</audio>}
+                <p className="voice-selected-note">
+                  {selectedVoice
+                    ? <>Elegiste <strong>{selectedVoice.name}</strong>{voiceAccentLabel(selectedVoice) ? ` · ${voiceAccentLabel(selectedVoice)}` : ''}. Guarda para que la use en la siguiente llamada.</>
+                    : 'Elige una voz de la lista.'}
+                </p>
                 {isAdmin ? <button type="button" className="primary-action" disabled={!voiceId || voiceStatus === 'saving'} onClick={saveVoice}>{voiceStatus === 'saving' ? 'Guardando…' : 'Guardar voz'}</button> : <small>Solo un administrador puede cambiar la voz.</small>}
               </div>
             </>}

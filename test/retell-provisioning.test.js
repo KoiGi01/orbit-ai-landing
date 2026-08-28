@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   buildRetellBusinessPrompt,
   createRetellAgentDraft,
-  listRetellMexicanVoices,
+  listRetellSpanishVoices,
   notifyProvisioningStarted,
   RETELL_PROMPT_TEMPLATE_VERSION,
   syncRetellAgentWebhook,
@@ -278,12 +278,14 @@ test('keeps the template voice model only for an ElevenLabs selection', async ()
   assert.equal(requests[2].body.voice_emotion, undefined);
 });
 
-test('lists every Mexican voice and updates an agent with a validated selection', async () => {
+test('lists every Spanish-speaking voice and updates an agent with a validated selection', async () => {
   const requests = [];
   const catalog = [
-    { voice_id: 'cartesia-Sofia', voice_name: 'Sofia', provider: 'cartesia', accent: 'Mexican', gender: 'Female', age: 'Middle Aged', preview_audio_url: 'https://example.test/sofia.mp3' },
+    { voice_id: 'cartesia-Sofia', voice_name: 'Sofia', provider: 'cartesia', accent: 'Mexican', gender: 'Female', age: 'Middle Aged', preview_audio_url: 'https://example.test/sofia.mp3', avatar_url: 'https://example.test/sofia.png' },
     { voice_id: '11labs-Gaby', voice_name: 'Gaby', provider: 'elevenlabs', accent: 'Mexican', gender: 'female', age: 'Young' },
     { voice_id: 'cartesia-Isabel', voice_name: 'Isabel', provider: 'cartesia', accent: 'Spanish', gender: 'female', age: 'Middle Aged' },
+    { voice_id: 'inworld-Lupita', voice_name: 'Lupita', provider: 'inworld', accent: 'Spanish', gender: 'female', age: 'Young' },
+    { voice_id: '11labs-Adrian', voice_name: 'Adrian', provider: 'elevenlabs', accent: 'American', gender: 'male', age: 'Young' },
   ];
   const fetchImpl = async (url, options = {}) => {
     requests.push({ url, method: options.method || 'GET', body: options.body ? JSON.parse(options.body) : null });
@@ -293,19 +295,22 @@ test('lists every Mexican voice and updates an agent with a validated selection'
   };
   const dependencies = { env: { RETELL_API_KEY: 'test-key' }, fetchImpl };
 
-  const voices = await listRetellMexicanVoices(dependencies);
-  assert.deepEqual(voices.map((voice) => voice.id).sort(), ['11labs-Gaby', 'cartesia-Sofia']);
-  const result = await updateRetellAgentVoice('agent_new_123', 'cartesia-Sofia', dependencies);
+  const voices = await listRetellSpanishVoices(dependencies);
+  // Voices with a plain "Spanish" accent are offered too -- Isabel and Lupita used to be
+  // dropped -- but Mexican ones stay first because the product sells into Mexico.
+  assert.deepEqual(voices.map((voice) => voice.id), ['cartesia-Sofia', '11labs-Gaby', 'cartesia-Isabel', 'inworld-Lupita']);
+  assert.equal(voices.find((voice) => voice.id === 'cartesia-Sofia').avatarUrl, 'https://example.test/sofia.png');
+  const result = await updateRetellAgentVoice('agent_new_123', 'inworld-Lupita', dependencies);
 
-  assert.equal(result.voice.name, 'Sofia');
-  assert.deepEqual(requests.at(-1).body, { voice_id: 'cartesia-Sofia', voice_model: null, voice_emotion: 'calm' });
+  assert.equal(result.voice.name, 'Lupita');
+  assert.deepEqual(requests.at(-1).body, { voice_id: 'inworld-Lupita', voice_model: null, voice_emotion: null });
 });
 
-test('rejects a voice that is not in the live Mexican catalog', async () => {
-  const fetchImpl = async () => jsonResponse([{ voice_id: 'cartesia-Isabel', voice_name: 'Isabel', provider: 'cartesia', accent: 'Spanish' }]);
+test('rejects a voice that is not in the live Spanish catalog', async () => {
+  const fetchImpl = async () => jsonResponse([{ voice_id: '11labs-Adrian', voice_name: 'Adrian', provider: 'elevenlabs', accent: 'American' }]);
   await assert.rejects(
-    updateRetellAgentVoice('agent_new_123', 'cartesia-Isabel', { env: { RETELL_API_KEY: 'test-key' }, fetchImpl }),
-    /invalid_mexican_voice/,
+    updateRetellAgentVoice('agent_new_123', '11labs-Adrian', { env: { RETELL_API_KEY: 'test-key' }, fetchImpl }),
+    /invalid_voice_selection/,
   );
 });
 

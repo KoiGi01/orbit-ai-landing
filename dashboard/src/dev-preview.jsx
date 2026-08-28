@@ -13,13 +13,14 @@ import { PortalBrand, ProspectOnboarding, ProspectPreview } from './workspace';
 import { NewClientModal } from './internal-admin';
 
 // ---------------------------------------------------------------------------
-// Sample calendar for the design preview.
+// Sample reads for the design preview.
 //
 // The preview account has no Clerk session, so /api/workspace answers
-// `invalid_session` and Agenda can only ever render its error state -- which
-// makes the whole screen impossible to review. This answers just the calendar
-// read with sample events so the month grid, the day detail and the queue can
-// be clicked through without a login or any environment variable.
+// `invalid_session` and Agenda and the voice picker can only ever render their
+// error states -- which makes those screens impossible to review. This answers
+// the calendar and voice-catalog reads with samples so the month grid, the day
+// detail, the queue and the voice cards can be clicked through without a login
+// or any environment variable.
 //
 // Scoped hard on purpose: it only installs when you explicitly opened
 // `?preview=dashboard`, and the whole module is behind import.meta.env.DEV, so
@@ -65,10 +66,35 @@ function buildSampleEvents() {
   });
 }
 
-function installSampleCalendar() {
+// A slice of the real Retell catalog: both accents it uses for Spanish, the
+// providers that actually ship those voices, and the two names that carry
+// their own region ("es-ES", "Latin America").
+const SAMPLE_VOICES = [
+  { id: 'cartesia-Sofia', name: 'Sofia', provider: 'cartesia', accent: 'Mexican', gender: 'female', age: 'Middle Aged', avatarUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/customvoice-icon.png', previewUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/cartesia-Sofia.mp3', recommended: false },
+  { id: 'cartesia-Gaby', name: 'Gaby', provider: 'cartesia', accent: 'Mexican', gender: 'female', age: 'Young', avatarUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/Gaby.png', previewUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/cartesia-Gaby.mp3', recommended: false },
+  { id: 'cartesia-Alejandro', name: 'Alejandro', provider: 'cartesia', accent: 'Mexican', gender: 'male', age: 'Young', avatarUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/Alejandro.png', previewUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/cartesia-Alejandro.mp3', recommended: false },
+  { id: '11labs-Claudia', name: 'Claudia', provider: 'elevenlabs', accent: 'Mexican', gender: 'female', age: 'Middle Aged', avatarUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/Claudia.png', previewUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/11labs-Claudia.mp3', recommended: false },
+  { id: '11labs-Santiago', name: 'Santiago (es-ES)', provider: 'elevenlabs', accent: 'Spanish', gender: 'male', age: 'Middle Aged', avatarUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/Santiago.png', previewUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/11labs-Santiago.mp3', recommended: false },
+  { id: 'inworld-Itzel', name: 'Itzel', provider: 'inworld', accent: 'Mexican', gender: 'female', age: 'Young', avatarUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/Itzel.png', previewUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/inworld-Itzel.mp3', recommended: false },
+  { id: 'inworld-Cuauhtemoc', name: 'Cuauhtemoc', provider: 'inworld', accent: 'Mexican', gender: 'male', age: 'Young', avatarUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/Cuauhtemoc.png', previewUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/inworld-Cuauhtemoc.mp3', recommended: false },
+  { id: 'inworld-Lupita', name: 'Lupita', provider: 'inworld', accent: 'Spanish', gender: 'female', age: 'Young', avatarUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/Lupita.png', previewUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/inworld-Lupita.mp3', recommended: false },
+  { id: 'minimax-Andrea', name: 'Andrea', provider: 'minimax', accent: 'Mexican', gender: 'female', age: 'Middle Aged', avatarUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/Andrea.png', previewUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/minimax-Andrea.mp3', recommended: false },
+  { id: 'openai-Santiago', name: 'Santiago', provider: 'openai', accent: 'Spanish', gender: 'male', age: 'Middle Aged', avatarUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/Santiago.png', previewUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/openai-Santiago.mp3', recommended: false },
+  { id: 'cartesia-Elena', name: 'Elena', provider: 'cartesia', accent: 'Spanish', gender: 'female', age: 'Middle Aged', avatarUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/customvoice-icon.png', previewUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/cartesia-Elena.mp3', recommended: false },
+  { id: 'cartesia-Hailey-Spanish-latin-america', name: 'Hailey - Spanish, Latin America', provider: 'cartesia', accent: 'Spanish', gender: 'female', age: 'Young', avatarUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/Hailey.png', previewUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/cartesia-Hailey-Spanish-latin-america.mp3', recommended: false },
+];
+
+function jsonResponse(payload) {
+  return new Response(JSON.stringify(payload), { status: 200, headers: { 'content-type': 'application/json' } });
+}
+
+function installSampleReads() {
   const realFetch = window.fetch.bind(window);
   window.fetch = async (input, init) => {
     const url = typeof input === 'string' ? input : input?.url || '';
+    if (url.includes('/api/workspace') && url.includes('resource=voices')) {
+      return jsonResponse({ voices: SAMPLE_VOICES });
+    }
     if (!url.includes('/api/workspace') || !url.includes('resource=calendar')) {
       return realFetch(input, init);
     }
@@ -81,17 +107,14 @@ function installSampleCalendar() {
       const at = Date.parse(event.startsAt);
       return at >= from && at <= to;
     });
-    return new Response(
-      JSON.stringify({ connected: true, calendarId: 'muestra@group.calendar.google.com', events }),
-      { status: 200, headers: { 'content-type': 'application/json' } },
-    );
+    return jsonResponse({ connected: true, calendarId: 'muestra@group.calendar.google.com', events });
   };
 }
 
 if (import.meta.env.DEV
   && typeof window !== 'undefined'
   && new URLSearchParams(window.location.search).get('preview') === 'dashboard') {
-  installSampleCalendar();
+  installSampleReads();
 }
 
 const previewUser = {
