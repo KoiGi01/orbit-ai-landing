@@ -21,6 +21,7 @@ import {
   overrideClinicStage,
   saveProvisioning,
   saveClinicAgentConfiguration,
+  saveClinicAgentRuntime,
   saveClinicCalendar,
   saveProspectProfile,
   saveWorkspaceAgentConfiguration,
@@ -425,6 +426,8 @@ async function handleInternalClinics(req, res) {
       clinic = await overrideClinicStage(req.headers.authorization, body.organizationId, body.stage);
     } else if (body.action === 'update_agent_configuration') {
       clinic = await saveClinicAgentConfiguration(req.headers.authorization, body.organizationId, body.agent);
+    } else if (body.action === 'update_agent_advanced') {
+      clinic = await saveClinicAgentRuntime(req.headers.authorization, body.organizationId, body.advanced);
     } else {
       clinic = await transitionClinic(
         req.headers.authorization,

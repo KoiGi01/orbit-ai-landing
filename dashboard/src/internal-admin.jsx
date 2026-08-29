@@ -24,6 +24,7 @@ import {
   MoveRight,
   Plus,
   Search,
+  SlidersHorizontal,
   Settings2,
   ShieldCheck,
   Trash2,
@@ -509,7 +510,155 @@ function LocationManagement({ clinic, clinics, busy, onEdit, onMember, onCalenda
   </section>;
 }
 
-function ClinicDetail({ clinic, clinics, busy, error, onClose, onConfirmPayment, onSaveProvisioning, onAction, onEdit, onMember, onCalendar, onAgentConfig, onStage, onBypass, onDelete }) {
+const VOICE_EMOTIONS = [
+  ['', 'Sin emoción marcada'],
+  ['calm', 'Calmada'],
+  ['sympathetic', 'Empática'],
+  ['happy', 'Alegre'],
+  ['sad', 'Triste'],
+  ['angry', 'Molesta'],
+  ['fearful', 'Nerviosa'],
+  ['surprised', 'Sorprendida'],
+];
+
+const STT_MODES = [
+  ['fast', 'Rápida — contesta antes, se equivoca más con nombres'],
+  ['accurate', 'Precisa — entiende mejor, tarda un poco más'],
+  ['custom', 'Personalizada'],
+];
+
+// Every range here is the one Retell actually enforces; a value outside it is
+// clamped again on the server before it reaches the API.
+const RUNTIME_SLIDERS = [
+  ['voiceSpeed', 'Velocidad al hablar', 0.5, 2, 0.01, 'Abajo de 1 habla más despacio. 0.96 es el default.'],
+  ['voiceTemperature', 'Expresividad', 0, 2, 0.05, 'Qué tanto varía la entonación entre frases.'],
+  ['responsiveness', 'Qué tan rápido contesta', 0, 1, 0.01, 'Alto responde casi encima; bajo deja aire antes de hablar.'],
+  ['interruptionSensitivity', 'Qué tan fácil se deja interrumpir', 0, 1, 0.01, 'Alto se calla en cuanto oye a la persona.'],
+  ['beginMessageDelayMs', 'Espera antes de saludar', 0, 2000, 50, 'Milisegundos entre que contesta y que empieza a hablar.'],
+  ['modelTemperature', 'Creatividad de las respuestas', 0, 1, 0.05, 'Bajo repite las mismas frases llamada tras llamada.'],
+];
+
+function AdvancedAgentSettings({ clinic, busy, onSave }) {
+  const draft = clinic.provisioningDraft || {};
+  const [open, setOpen] = useState(false);
+  const [showPrompt, setShowPrompt] = useState(false);
+  const [settings, setSettings] = useState(clinic.agentRuntime || {});
+  const [extraInstructions, setExtraInstructions] = useState(clinic.profile?.extraInstructions || '');
+
+  useEffect(() => {
+    setSettings(clinic.agentRuntime || {});
+    setExtraInstructions(clinic.profile?.extraInstructions || '');
+  }, [clinic.id, clinic.profile?.updatedAt]);
+
+  // Nothing to tune until the Location actually has an agent on Retell.
+  if (!draft.retellAgentId || !draft.retellLlmId) return null;
+
+  const update = (key, value) => setSettings((current) => ({ ...current, [key]: value }));
+  const backchannelOn = settings.enableBackchannel !== false;
+
+  return (
+    <section className="ops-record-section ops-advanced">
+      <header>
+        <SlidersHorizontal size={17} />
+        <h3>Ajustes avanzados del agente</h3>
+        <button type="button" className="ops-advanced-toggle" onClick={() => setOpen(!open)} aria-expanded={open}>
+          {open ? 'Ocultar' : 'Abrir'} <ChevronRight size={14} className={open ? 'rotated' : ''} />
+        </button>
+      </header>
+
+      {!open
+        ? <p className="ops-advanced-hint">Voz, ritmo, transcripción e instrucciones extra para el prompt. Sólo tú ves esto; el cliente no.</p>
+        : (
+          <div className="ops-advanced-body">
+            <div className="ops-advanced-grid">
+              {RUNTIME_SLIDERS.map(([key, label, min, max, step, hint]) => (
+                <label key={key} className="ops-slider-row">
+                  <span className="ops-slider-head">{label}<b>{key === 'beginMessageDelayMs' ? `${Math.round(Number(settings[key] ?? 0))} ms` : Number(settings[key] ?? 0).toFixed(2)}</b></span>
+                  <input
+                    type="range"
+                    min={min}
+                    max={max}
+                    step={step}
+                    value={Number(settings[key] ?? 0)}
+                    disabled={busy}
+                    onChange={(event) => update(key, Number(event.target.value))}
+                  />
+                  <small>{hint}</small>
+                </label>
+              ))}
+            </div>
+
+            <div className="ops-advanced-grid">
+              <label className="ops-advanced-field">
+                <span>Emoción de la voz</span>
+                <select value={settings.voiceEmotion || ''} disabled={busy} onChange={(event) => update('voiceEmotion', event.target.value)}>
+                  {VOICE_EMOTIONS.map(([value, label]) => <option key={value || 'none'} value={value}>{label}</option>)}
+                </select>
+                <small>Sólo la aplican algunos proveedores de voz, como Cartesia y MiniMax.</small>
+              </label>
+
+              <label className="ops-advanced-field">
+                <span>Transcripción</span>
+                <select value={settings.sttMode || 'fast'} disabled={busy} onChange={(event) => update('sttMode', event.target.value)}>
+                  {STT_MODES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+                <small>Cámbiala a Precisa si le batalla con apellidos o números.</small>
+              </label>
+            </div>
+
+            <div className="ops-advanced-backchannel">
+              <label className="ops-advanced-check">
+                <input type="checkbox" checked={backchannelOn} disabled={busy} onChange={(event) => update('enableBackchannel', event.target.checked)} />
+                <span>Hace sonidos mientras escucha <small>Los "mhm", "ajá" y "sí" que hace una persona al teléfono. Apagado, escucha en silencio total.</small></span>
+              </label>
+              <label className="ops-slider-row">
+                <span className="ops-slider-head">Qué tan seguido<b>{Number(settings.backchannelFrequency ?? 0).toFixed(2)}</b></span>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={Number(settings.backchannelFrequency ?? 0)}
+                  disabled={busy || !backchannelOn}
+                  onChange={(event) => update('backchannelFrequency', Number(event.target.value))}
+                />
+              </label>
+            </div>
+
+            <label className="ops-advanced-field ops-advanced-wide">
+              <span>Instrucciones adicionales</span>
+              <textarea
+                rows={5}
+                value={extraInstructions}
+                disabled={busy}
+                placeholder={'Ej. Si preguntan por el Dr. Ruiz, atiende martes y jueves.\nNo agendar menores sin un adulto presente.'}
+                onChange={(event) => setExtraInstructions(event.target.value)}
+              />
+              <small>Se agregan al prompt generado, arriba de las reglas de seguridad. No las reemplazan: los servicios y el horario se siguen actualizando solos.</small>
+            </label>
+
+            <div className="ops-advanced-prompt">
+              <button type="button" className="ops-advanced-toggle" onClick={() => setShowPrompt(!showPrompt)} aria-expanded={showPrompt}>
+                {showPrompt ? 'Ocultar' : 'Ver'} el prompt que se le manda <ChevronRight size={14} className={showPrompt ? 'rotated' : ''} />
+              </button>
+              {showPrompt && <pre>{clinic.agentPromptPreview || 'Todavía no hay perfil de negocio guardado.'}</pre>}
+            </div>
+
+            <div className="ops-advanced-actions">
+              <button type="button" className="ops-button secondary" disabled={busy} onClick={() => setSettings(clinic.agentRuntimeDefaults || {})}>
+                Restablecer valores
+              </button>
+              <button type="button" className="ops-button primary" disabled={busy} onClick={() => onSave({ settings, extraInstructions })}>
+                {busy ? <LoaderCircle className="spin" size={17} /> : <SlidersHorizontal size={17} />} Guardar ajustes
+              </button>
+            </div>
+          </div>
+        )}
+    </section>
+  );
+}
+
+function ClinicDetail({ clinic, clinics, busy, error, onClose, onConfirmPayment, onSaveProvisioning, onAction, onEdit, onMember, onCalendar, onAgentConfig, onAgentAdvanced, onStage, onBypass, onDelete }) {
   const profile = clinic.profile;
   const accountEnabled = ['verified', 'not_required'].includes(clinic.state.billingStatus);
   return (
@@ -534,6 +683,8 @@ function ClinicDetail({ clinic, clinics, busy, error, onClose, onConfirmPayment,
         {clinic.payment && <section className="ops-record-section"><header><Banknote size={17} /><h3>Pago verificado</h3></header><dl><div><dt>Monto</dt><dd>{moneyFromCents(clinic.payment.amountCents)}</dd></div><div><dt>Referencia</dt><dd>{clinic.payment.reference}</dd></div><div><dt>Fecha del pago</dt><dd>{dateTime(clinic.payment.paidAt)}</dd></div><div><dt>Verificado</dt><dd>{dateTime(clinic.payment.verifiedAt)}</dd></div></dl></section>}
 
         {profile && <section className="ops-record-section"><header><Building2 size={17} /><h3>Configuración del negocio</h3></header><dl><div><dt>Industria</dt><dd>{profile.industry || 'Por confirmar'}</dd></div><div><dt>Contacto</dt><dd>{profile.ownerPhone || clinic.owner.email || '—'}</dd></div><div><dt>Servicios</dt><dd>{profile.services?.join(', ') || '—'}</dd></div><div><dt>Motivos de llamada</dt><dd>{profile.callGoals?.join(', ') || '—'}</dd></div><div><dt>Horario</dt><dd>{profile.businessHours || profile.customSchedule || profile.schedule || '—'}</dd></div><div><dt>Agenda</dt><dd>{SCHEDULING_PROVIDERS.find(([key]) => key === profile.schedulingProvider)?.[1] || profile.appointmentOutcome || 'Por definir'}</dd></div>{profile.description && <div className="ops-record-wide"><dt>Descripción</dt><dd>{profile.description}</dd></div>}{profile.internalNotes && <div className="ops-record-wide"><dt>Notas internas</dt><dd>{profile.internalNotes}</dd></div>}</dl></section>}
+
+        <AdvancedAgentSettings clinic={clinic} busy={busy} onSave={onAgentAdvanced} />
 
         <section className="ops-record-section audit-section"><header><Clock3 size={17} /><h3>Auditoría reciente</h3></header>{clinic.auditTrail.length ? <ol>{clinic.auditTrail.map((entry) => <li key={entry.id}><i /><div><strong>{String(entry.action).replaceAll('_', ' ')}</strong><span>{dateTime(entry.at)} · {entry.actorUserId}</span></div></li>)}</ol> : <p>Este expediente todavía no tiene eventos.</p>}</section>
       </div>
@@ -711,7 +862,7 @@ export default function InternalAdmin() {
         {section === 'Actividad' && <section className="ops-queue ops-simple-view"><header><div><h2>Audit trail</h2><span>Eventos recientes</span></div></header><div className="ops-activity-feed">{clinics.flatMap((clinic) => clinic.auditTrail.map((entry) => ({ ...entry, clinic: clinic.name }))).sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 40).map((entry) => <div key={`${entry.clinic}-${entry.id}`}><i /><span><strong>{entry.clinic}</strong><small>{String(entry.action).replaceAll('_', ' ')} · {dateTime(entry.at)}</small></span></div>)}</div></section>}
       </div>
       {creating && <NewClientModal busy={busy} error={actionError} onClose={() => setCreating(false)} onCreate={createClinic} />}
-      {selected && <ClinicDetail clinic={selected} clinics={clinics} busy={busy} error={actionError} onClose={() => setSelectedId(null)} onConfirmPayment={(payment) => mutateClinic({ action: 'confirm_payment', payment })} onSaveProvisioning={(provisioning) => mutateClinic({ action: 'save_provisioning', provisioning })} onAction={(action, confirmation) => mutateClinic({ action, confirmation })} onEdit={(location) => mutateClinic({ action: 'update_location', location })} onMember={(member) => mutateClinic({ action: 'manage_member', member })} onCalendar={(calendar) => mutateClinic({ action: 'save_calendar', calendar })} onAgentConfig={(agent) => mutateClinic({ action: 'update_agent_configuration', agent })} onStage={(stage) => mutateClinic({ action: 'override_stage', stage })} onBypass={(confirmation) => mutateClinic({ action: 'bypass_live', confirmation })} onDelete={removeClinic} />}
+      {selected && <ClinicDetail clinic={selected} clinics={clinics} busy={busy} error={actionError} onClose={() => setSelectedId(null)} onConfirmPayment={(payment) => mutateClinic({ action: 'confirm_payment', payment })} onSaveProvisioning={(provisioning) => mutateClinic({ action: 'save_provisioning', provisioning })} onAction={(action, confirmation) => mutateClinic({ action, confirmation })} onEdit={(location) => mutateClinic({ action: 'update_location', location })} onMember={(member) => mutateClinic({ action: 'manage_member', member })} onCalendar={(calendar) => mutateClinic({ action: 'save_calendar', calendar })} onAgentConfig={(agent) => mutateClinic({ action: 'update_agent_configuration', agent })} onAgentAdvanced={(advanced) => mutateClinic({ action: 'update_agent_advanced', advanced })} onStage={(stage) => mutateClinic({ action: 'override_stage', stage })} onBypass={(confirmation) => mutateClinic({ action: 'bypass_live', confirmation })} onDelete={removeClinic} />}
     </main>
   );
 }
