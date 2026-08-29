@@ -31,9 +31,29 @@ test('builds a concise Mexican Spanish business prompt without private notes', (
   });
 
   assert.match(prompt, /Clínica Centro/);
-  assert.match(prompt, /español mexicano natural/);
+  assert.match(prompt, /Hablas de usted a todas las personas/);
   assert.match(prompt, /Limpieza; Ortodoncia/);
   assert.doesNotMatch(prompt, /texto secreto/);
+});
+
+test('keeps the receptionist behaviour that stops the agent reading as a generic AI assistant', () => {
+  const prompt = buildRetellBusinessPrompt({ clinicName: 'Clínica Centro' });
+
+  // Says the filler before going quiet, rather than leaving dead air that
+  // sounds like a dropped call.
+  assert.match(prompt, /Primero la frase, después el silencio/);
+  // The assistant tells, banned by name.
+  assert.match(prompt, /Estoy aquí para ayudarle/);
+  assert.match(prompt, /Repetir la pregunta antes de contestarla/);
+  // Real phone conditions, not a clean text chat.
+  assert.match(prompt, /El teléfono es un lugar ruidoso/);
+  assert.match(prompt, /Nunca adivines un nombre ni un número/);
+  // Spoken numbers.
+  assert.match(prompt, /a las nueve y media de la mañana/);
+  // Honesty survives the friendlier framing.
+  assert.match(prompt, /si eres una persona o una máquina, di la verdad/);
+  // No markup: this is read aloud.
+  assert.match(prompt, /esto se escucha, no se lee/);
 });
 
 test('renders service duration, price and details so the agent can answer without inventing, and stays backward-compatible with plain string services', () => {
@@ -55,23 +75,25 @@ test('renders service duration, price and details so the agent can answer withou
 
 test('includes schedule exceptions in the prompt only when off days are set', () => {
   const withoutOffDays = buildRetellBusinessPrompt({ clinicName: 'Clínica Centro' });
-  assert.doesNotMatch(withoutOffDays, /Excepciones de horario/);
+  assert.doesNotMatch(withoutOffDays, /Días que no hay servicio/);
 
   const withOffDays = buildRetellBusinessPrompt({
     clinicName: 'Clínica Centro',
     offDays: ['25 de diciembre', 'Domingos'],
   });
-  assert.match(withOffDays, /Excepciones de horario: 25 de diciembre; Domingos/);
+  assert.match(withOffDays, /Días que no hay servicio: 25 de diciembre; Domingos/);
 });
 
 test('tells the agent to actually book once a calendar is connected, instead of just taking a message', () => {
   const disconnected = buildRetellBusinessPrompt({ clinicName: 'Clínica Centro' });
-  assert.match(disconnected, /Todavía no tienes una agenda conectada/);
-  assert.doesNotMatch(disconnected, /herramienta de agenda conectada/);
+  assert.match(disconnected, /Todavía no tienes la agenda conectada/);
+  assert.match(disconnected, /No prometas un horario como si ya estuviera apartado/);
+  assert.doesNotMatch(disconnected, /Tienes la agenda conectada/);
 
   const connected = buildRetellBusinessPrompt({ clinicName: 'Clínica Centro', calendarId: 'clinica@group.calendar.google.com' });
-  assert.match(connected, /Tienes una herramienta de agenda conectada/);
-  assert.doesNotMatch(connected, /Todavía no tienes una agenda conectada/);
+  assert.match(connected, /Tienes la agenda conectada/);
+  assert.match(connected, /No digas que la cita quedó apartada hasta que la agenda confirme/);
+  assert.doesNotMatch(connected, /Todavía no tienes la agenda conectada/);
 });
 
 test('pushes a regenerated prompt and greeting to an existing agent LLM', async () => {
@@ -107,7 +129,11 @@ test('falls back to the default greeting template when no custom greeting is set
     profile: { clinicName: 'Clínica Nueva' },
   }, { env: { RETELL_API_KEY: 'test-key' }, fetchImpl });
 
-  assert.equal(requests[0].body.begin_message, 'Hola, gracias por llamar a Clínica Nueva. Soy Lucía, la asistente virtual. ¿En qué puedo ayudarle?');
+  // The greeting must not announce her as a virtual assistant: that framed
+  // every call as a bot demo from the first three seconds. She still answers
+  // honestly when asked outright, which the prompt covers.
+  assert.equal(requests[0].body.begin_message, 'Gracias por llamar a Clínica Nueva, le atiende Lucía. ¿En qué le puedo ayudar?');
+  assert.doesNotMatch(requests[0].body.begin_message, /asistente virtual/);
 });
 
 test('rejects updateRetellAgentPrompt without an llmId', async () => {
