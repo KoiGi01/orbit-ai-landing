@@ -82,7 +82,7 @@ Google Calendar y Calendly requieren autorización del propietario. Desde Admin 
 - Entrega información correcta del negocio.
 - Designa un responsable operativo y un teléfono humano de respaldo.
 - Aprueba guiones, reglas y prueba final.
-- Más adelante conectará Google, Calendly o WhatsApp desde su dashboard.
+- **Comparte su Google Calendar con la cuenta de AutiveX** (Paso 4b). Sin esto el agente no puede agendar, y es el cliente quien tiene que hacerlo: nadie más puede darse ese permiso.
 
 ## Paso 0: reunir la información de onboarding
 
@@ -101,6 +101,7 @@ No empieces a configurar Retell durante la llamada de venta. Antes de la sesión
 - Número humano de fallback en formato E.164, por ejemplo `+525512345678`.
 - Correo o teléfono que recibirá alertas normales y urgentes.
 - Número que recibirá llamadas y estrategia de telefonía.
+- Dirección del Google Calendar donde se agendarán las citas: el correo del calendario (`negocio@gmail.com`) o el ID de un calendario secundario (`...@group.calendar.google.com`). Confirma cuál es el calendario que el negocio realmente usa; si tienen varios, pregunta explícitamente en cuál quieren las citas del agente.
 - Nombre de la persona que aprobará la prueba final.
 
 No recolectes contraseñas de Google, WhatsApp, Calendly ni del correo del cliente.
@@ -188,6 +189,56 @@ La página de onboarding actual muestra progreso y medios de contacto; todavía 
 9. Configura el fallback humano cuando la modalidad de telefonía lo permita.
 
 Para un número mexicano normalmente habrá que usar telefonía propia mediante Twilio, Telnyx u otro proveedor SIP e importarla a Retell. La compra directa de números administrados por Retell no debe asumirse como disponible en México.
+
+## Paso 4b: conectar el Google Calendar del cliente
+
+Sin este paso el agente **no puede agendar**. Es el error de alta más fácil de cometer porque el dashboard no lo detecta: se pinta en verde aunque falte.
+
+### Por qué existe este paso
+
+n8n no usa OAuth por cliente. Escribe en el calendario de **todos** los clientes con una sola cuenta de Google compartida, el "calendar bot":
+
+```text
+luismedlozn@gmail.com
+```
+
+AutiveX nunca guarda una credencial del calendario del cliente. Sólo guarda **a cuál calendario escribir** (`calendarId`). Para Google, esa cuenta es un tercero cualquiera, así que el dueño del calendario tiene que darle acceso a mano.
+
+### Lo que hace el cliente
+
+Pídeselo por escrito, con estas palabras:
+
+1. Abrir Google Calendar en computadora (desde el celular no se puede compartir).
+2. En la barra lateral, pasar el cursor sobre el calendario del negocio → los tres puntos → **Configuración y uso compartido**.
+3. Bajar a **Compartir con determinadas personas o grupos** → **Añadir personas**.
+4. Agregar `luismedlozn@gmail.com`.
+5. En el desplegable de permisos elegir **Hacer cambios en los eventos**.
+6. Guardar y avisar cuando esté hecho.
+
+El nivel de permiso importa. Con **Ver todos los detalles de los eventos** el agente puede consultar disponibilidad pero **no** puede agendar, y ese es justo el caso que se ve "casi bien" y falla en producción.
+
+### Lo que haces tú
+
+Una vez que el cliente confirme, captura la dirección del calendario en `/admin` → la Location → conexión de calendario. Eso adjunta la herramienta `manage_calendar` al agente en Retell y regenera el prompt para que sepa que ya tiene agenda.
+
+### Advertencia: conectado no significa funcionando
+
+El guardado **sólo valida el formato** de la dirección (que termine en `@gmail.com` o `@group.calendar.google.com`). No comprueba que el calendar bot tenga acceso. Es decir:
+
+- El dashboard dice **conectado** aunque nadie haya compartido nada.
+- Consultar disponibilidad (`list`) puede funcionar si el calendario es visible.
+- Crear, cancelar o editar falla con `404 Not Found` de Google.
+
+El resultado en vivo es el peor posible: el agente le dice a quien llama "listo, quedó agendada para el martes" y en el calendario no aparece nada. **Nunca des por buena la conexión sin la verificación de abajo.**
+
+### Verificación obligatoria
+
+1. Haz una llamada de prueba y agenda una cita real.
+2. Confirma que el evento aparece en el Google Calendar del cliente.
+3. Confirma que aparece en **Agenda** del dashboard **en color coral** (agendada por el agente), no en gris (evento preexistente). Si sale gris, el evento se creó pero el callback de n8n a `/api/appointments/sync` no llegó.
+4. Cancela esa cita de prueba desde una segunda llamada y confirma que desaparece de Google.
+
+Si el paso 2 falla, casi siempre es permiso: el calendario no se compartió, o se compartió como sólo lectura.
 
 ## Paso 5: crear el workspace en Supabase
 
@@ -340,6 +391,8 @@ Usa datos ficticios y el número telefónico real asignado al cliente.
 11. Reenvía el mismo `event_id` y verifica que no genere una segunda notificación.
 12. Confirma que la persona correcta recibió la alerta y entendió qué hacer.
 
+13. Confirma que la cita creada en la prueba existe en el Google Calendar del cliente y sale coral en **Agenda** (Paso 4b). Si el agente dijo que agendó y el evento no está, el calendario no se compartió con permiso de escritura.
+
 Registra en `/admin`:
 
 - Retell agent ID.
@@ -348,6 +401,7 @@ Registra en `/admin`:
 - Retell call ID aprobado.
 - Fallback probado.
 - Webhook post-llamada verificado.
+- Calendario compartido con el calendar bot y escritura verificada.
 
 ## Paso 9: publicar y activar
 
