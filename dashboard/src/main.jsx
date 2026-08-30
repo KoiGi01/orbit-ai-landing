@@ -1388,7 +1388,12 @@ function OpportunitiesModule({ tasks, onSelectTask }) {
 const VOICE_PROVIDER_NAMES = { platform: 'Retell', cartesia: 'Cartesia', elevenlabs: 'ElevenLabs', minimax: 'MiniMax', fish_audio: 'Fish Audio', openai: 'OpenAI', deepgram: 'Deepgram', inworld: 'Inworld' };
 const VOICE_AGE_NAMES = { young: 'Joven', 'middle aged': 'Adulta', old: 'Mayor' };
 
-const voiceGenderLabel = (voice) => (voice.gender === 'female' ? 'Femenina' : 'Masculina');
+// An imported voice carries no gender at all, and defaulting that to
+// "Masculina" mislabelled two female voices. No metadata means no label.
+const voiceGenderLabel = (voice) => {
+  if (voice.gender === 'female') return 'Femenina';
+  return voice.gender ? 'Masculina' : '';
+};
 const voiceAgeLabel = (voice) => VOICE_AGE_NAMES[String(voice.age || '').toLowerCase()] || '';
 
 // Retell only splits Spanish voices into "Mexican" and a catch-all "Spanish",
@@ -1967,8 +1972,9 @@ function ReceptionistModule({ clinicName, hasActivity, canConfigure, profile, ge
                   const isPlaying = voice.id === playingVoiceId;
                   const accent = voiceAccentLabel(voice);
                   return (
-                    <div key={voice.id} className={`voice-card${isSelected ? ' is-selected' : ''}${isPlaying ? ' is-playing' : ''}`}>
+                    <div key={voice.id} className={`voice-card${isSelected ? ' is-selected' : ''}${isPlaying ? ' is-playing' : ''}${voice.recommended ? ' is-recommended' : ''}`}>
                       <button type="button" role="radio" aria-checked={isSelected} className="voice-card-pick" disabled={!isAdmin || voiceStatus === 'saving'} onClick={() => selectVoice(voice.id)}>
+                        {voice.recommended && <span className="voice-card-badge"><Sparkles size={9} aria-hidden="true" /> Recomendada</span>}
                         <span className="voice-card-avatar" aria-hidden="true">
                           {voice.avatarUrl ? <img src={voice.avatarUrl} alt="" loading="lazy" /> : <b>{voice.name.slice(0, 1)}</b>}
                         </span>

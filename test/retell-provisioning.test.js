@@ -3,7 +3,9 @@ import { createHmac } from 'node:crypto';
 import test from 'node:test';
 import {
   buildRetellBusinessPrompt,
+  COMMUNITY_VOICE_IMPORTS,
   createRetellAgentDraft,
+  ensureRetellCommunityVoices,
   listRetellSpanishVoices,
   normalizeAgentRuntimeSettings,
   notifyProvisioningStarted,
@@ -340,6 +342,97 @@ test('rejects a voice that is not in the live Spanish catalog', async () => {
     updateRetellAgentVoice('agent_new_123', '11labs-Adrian', { env: { RETELL_API_KEY: 'test-key' }, fetchImpl }),
     /invalid_voice_selection/,
   );
+});
+
+test('offers an imported ElevenLabs voice even though it carries no accent', async () => {
+  const requests = [];
+  // Retell returns an imported community voice exactly like this: a minted
+  // custom_voice_<hash> id, voice_type "custom", and none of the accent, gender
+  // or age metadata the standard catalog has.
+  const catalog = [
+    { voice_id: 'cartesia-Sofia', voice_name: 'Sofia', provider: 'cartesia', accent: 'Mexican', gender: 'Female', age: 'Middle Aged' },
+    { voice_id: 'custom_voice_87d31bb0d05ab174a1109deaac', voice_type: 'custom', voice_name: 'Cristina Campos', provider: 'elevenlabs' },
+    { voice_id: '11labs-Adrian', voice_name: 'Adrian', provider: 'elevenlabs', accent: 'American' },
+  ];
+  const fetchImpl = async (url, options = {}) => {
+    requests.push({ url, body: options.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/list-voices')) return jsonResponse(catalog);
+    if (url.endsWith('/update-agent/agent_new_123')) return jsonResponse({ agent_id: 'agent_new_123', version: 5 });
+    throw new Error(`unexpected_request:${url}`);
+  };
+  const dependencies = { env: { RETELL_API_KEY: 'test-key' }, fetchImpl };
+
+  const voices = await listRetellSpanishVoices(dependencies);
+  // The custom voice is offered; the American standard voice still is not.
+  assert.deepEqual(voices.map((voice) => voice.id), ['cartesia-Sofia', 'custom_voice_87d31bb0d05ab174a1109deaac']);
+  assert.equal(voices.at(-1).accent, '');
+  assert.equal(voices.at(-1).gender, '');
+
+  const result = await updateRetellAgentVoice('agent_new_123', 'custom_voice_87d31bb0d05ab174a1109deaac', dependencies);
+  assert.equal(result.voice.name, 'Cristina Campos');
+  assert.deepEqual(requests.at(-1).body, { voice_id: 'custom_voice_87d31bb0d05ab174a1109deaac', voice_model: null, voice_emotion: null });
+});
+
+test('flags the endorsed voice and floats it above the Mexican catalog', async () => {
+  const endorsed = COMMUNITY_VOICE_IMPORTS.find((entry) => entry.recommended);
+  const catalog = [
+    { voice_id: 'cartesia-Sofia', voice_name: 'Sofia', provider: 'cartesia', accent: 'Mexican' },
+    { voice_id: 'custom_voice_endorsed', voice_type: 'custom', voice_name: endorsed.voiceName, provider: 'elevenlabs' },
+    { voice_id: 'custom_voice_other', voice_type: 'custom', voice_name: 'Maya', provider: 'elevenlabs' },
+  ];
+  const fetchImpl = async () => jsonResponse(catalog);
+  const voices = await listRetellSpanishVoices({ env: { RETELL_API_KEY: 'test-key' }, fetchImpl });
+
+  // It leads despite carrying no accent at all, which would otherwise sort it
+  // below every Mexican voice in the catalog.
+  assert.equal(voices[0].id, 'custom_voice_endorsed');
+  assert.equal(voices[0].recommended, true);
+  assert.deepEqual(voices.filter((voice) => voice.recommended).map((voice) => voice.id), ['custom_voice_endorsed']);
+});
+
+test('imports only the community voices that are missing from the workspace', async () => {
+  const requests = [];
+  const [maya, cristina] = COMMUNITY_VOICE_IMPORTS;
+  const catalog = [
+    { voice_id: 'cartesia-Sofia', voice_name: 'Sofia', provider: 'cartesia', accent: 'Mexican' },
+    { voice_id: 'custom_voice_existing', voice_type: 'custom', voice_name: cristina.voiceName, provider: 'elevenlabs' },
+  ];
+  const fetchImpl = async (url, options = {}) => {
+    requests.push({ url, method: options.method || 'GET', body: options.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/list-voices')) return jsonResponse(catalog);
+    if (url.endsWith('/search-community-voice')) {
+      return jsonResponse({ voices: [{ provider_voice_id: maya.providerVoiceId, name: 'Maya', public_user_id: 'owner_abc' }] });
+    }
+    if (url.endsWith('/add-community-voice')) return jsonResponse({ voice_id: 'custom_voice_maya', voice_name: maya.voiceName });
+    throw new Error(`unexpected_request:${url}`);
+  };
+
+  const results = await ensureRetellCommunityVoices({ env: { RETELL_API_KEY: 'test-key' }, fetchImpl });
+
+  assert.deepEqual(results, [
+    { ...maya, status: 'imported', voiceId: 'custom_voice_maya' },
+    { ...cristina, status: 'present' },
+  ]);
+  // The already-imported voice must not be added a second time: Retell would
+  // mint a second custom_voice_<hash> and the picker would show a duplicate.
+  const adds = requests.filter((request) => request.url.endsWith('/add-community-voice'));
+  assert.equal(adds.length, 1);
+  assert.deepEqual(adds[0].body, {
+    provider_voice_id: maya.providerVoiceId,
+    voice_name: maya.voiceName,
+    voice_provider: 'elevenlabs',
+    public_user_id: 'owner_abc',
+  });
+});
+
+test('reports a community voice that no longer exists instead of importing it', async () => {
+  const fetchImpl = async (url, options = {}) => {
+    if (url.endsWith('/list-voices')) return jsonResponse([]);
+    if (url.endsWith('/search-community-voice')) return jsonResponse({ voices: [] });
+    throw new Error(`unexpected_request:${url}:${options.method}`);
+  };
+  const results = await ensureRetellCommunityVoices({ env: { RETELL_API_KEY: 'test-key' }, fetchImpl });
+  assert.deepEqual(results.map((result) => result.status), COMMUNITY_VOICE_IMPORTS.map(() => 'not_found'));
 });
 
 test('clamps advanced settings into the ranges Retell enforces and rejects unknown enums', () => {

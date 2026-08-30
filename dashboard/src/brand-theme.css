@@ -331,6 +331,19 @@ h3,
   background: var(--yellow-soft);
 }
 
+/* The endorsement is the one chip that stays solid: the accent above annotates,
+   this one recommends, and it has to win the card at a glance. Note the dark
+   theme flips --cyan-deep to a pale mint, so the light-mode fill would put
+   near-white text on a near-white chip. */
+.voice-card.is-recommended {
+  --voice-endorsed: 71, 230, 222;
+}
+
+.voice-card-badge {
+  background: var(--cyan);
+  color: var(--paper);
+}
+
 .voice-error {
   color: var(--coral-deep);
 }

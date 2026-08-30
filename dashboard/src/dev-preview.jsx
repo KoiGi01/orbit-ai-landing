@@ -70,7 +70,7 @@ function buildSampleEvents() {
 // providers that actually ship those voices, and the two names that carry
 // their own region ("es-ES", "Latin America").
 const SAMPLE_VOICES = [
-  { id: 'cartesia-Sofia', name: 'Sofia', provider: 'cartesia', accent: 'Mexican', gender: 'female', age: 'Middle Aged', avatarUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/customvoice-icon.png', previewUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/cartesia-Sofia.mp3', recommended: false },
+  { id: 'cartesia-Sofia', name: 'Sofia', provider: 'cartesia', accent: 'Mexican', gender: 'female', age: 'Middle Aged', avatarUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/customvoice-icon.png', previewUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/cartesia-Sofia.mp3', recommended: true },
   { id: 'cartesia-Gaby', name: 'Gaby', provider: 'cartesia', accent: 'Mexican', gender: 'female', age: 'Young', avatarUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/Gaby.png', previewUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/cartesia-Gaby.mp3', recommended: false },
   { id: 'cartesia-Alejandro', name: 'Alejandro', provider: 'cartesia', accent: 'Mexican', gender: 'male', age: 'Young', avatarUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/Alejandro.png', previewUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/cartesia-Alejandro.mp3', recommended: false },
   { id: '11labs-Claudia', name: 'Claudia', provider: 'elevenlabs', accent: 'Mexican', gender: 'female', age: 'Middle Aged', avatarUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/Claudia.png', previewUrl: 'https://retell-utils-public.s3.us-west-2.amazonaws.com/11labs-Claudia.mp3', recommended: false },

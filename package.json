@@ -14,6 +14,7 @@
     "build:platform": "node scripts/build-platform.js",
     "db:migrate": "node scripts/db/migrate.js",
     "db:seed:mvp": "node scripts/db/seed-mvp.js",
+    "retell:sync-voices": "node scripts/retell/sync-voices.js",
     "test": "node --test",
     "preview": "vite preview --host 127.0.0.1",
     "start": "node server/index.js"
