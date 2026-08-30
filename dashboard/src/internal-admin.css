@@ -399,3 +399,11 @@
   .ops-advanced-backchannel { grid-template-columns: 1fr; }
   .ops-advanced-actions { flex-direction: column-reverse; }
 }
+
+/* The users list gained an action, so its cells lay the value and the button
+   side by side. Scoped with :has() so the other record grids, which are pure
+   read-outs, keep their plain block cells. */
+.ops-record-section dd:has(.ops-impersonate) { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ops-impersonate { flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; background: #1859ff; border: 0; border-radius: 999px; color: #fff; font-size: 10px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.ops-impersonate:hover:not(:disabled) { background: #0b3fd0; }
+.ops-impersonate:disabled { opacity: .55; cursor: not-allowed; }

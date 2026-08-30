@@ -22,6 +22,7 @@ import {
   saveProvisioning,
   saveClinicAgentConfiguration,
   saveClinicAgentRuntime,
+  startImpersonation,
   saveClinicCalendar,
   saveProspectProfile,
   saveWorkspaceAgentConfiguration,
@@ -380,6 +381,13 @@ async function handleInternalClinics(req, res) {
         await database.close();
       }
       sendJson(res, 201, { clinic });
+      return;
+    }
+
+    // Answers with a consume URL rather than a clinic, so it returns before
+    // the branch chain below that serializes one.
+    if (body.action === 'impersonate') {
+      sendJson(res, 200, await startImpersonation(req.headers.authorization, body));
       return;
     }
 

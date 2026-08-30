@@ -12,6 +12,7 @@ import {
   saveProvisioning,
   saveClinicCalendar,
   startClinicConfiguration,
+  startImpersonation,
   transitionClinic,
   updateClinicRecord,
 } from '../../lib/server/clerk-control.js';
@@ -62,6 +63,14 @@ export default async function handler(req, res) {
       sendJson(res, 200, result);
       return;
     }
+    // Answers with a consume URL rather than a clinic, so it returns before
+    // the branch chain below that serializes one.
+    if (action === 'impersonate') {
+      const impersonation = await startImpersonation(authorization, req.body);
+      sendJson(res, 200, impersonation);
+      return;
+    }
+
     let clinic;
     if (action === 'confirm_payment') {
       clinic = await withDatabase((database) => confirmManualPayment(

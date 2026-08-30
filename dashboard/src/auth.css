@@ -485,3 +485,53 @@
   .onboarding-cta,
   .onboarding-progress-track i { transition: none; }
 }
+
+/* Impersonation bar. Deliberately loud and theme-independent: an operator must
+   never mistake a client's session for their own, and this sits above both the
+   client dashboard and the console, which do not share a surface colour. */
+.impersonation-bar {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px 16px;
+  background: #ffd763;
+  color: #1a1400;
+  font-size: 12px;
+}
+
+.impersonation-bar-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.impersonation-bar strong { font-weight: 700; }
+
+.impersonation-bar-exit {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  background: #1a1400;
+  border: 0;
+  border-radius: 999px;
+  color: #ffd763;
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.impersonation-bar-exit:hover { background: #33290a; }
+
+@media (max-width: 520px) {
+  .impersonation-bar { font-size: 11px; }
+}

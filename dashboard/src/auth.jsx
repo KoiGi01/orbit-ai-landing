@@ -36,6 +36,7 @@ import {
   WorkspaceLoading,
   WorkspaceMessage,
 } from './workspace';
+import ImpersonationBanner from './impersonation-banner';
 import './auth.css';
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -421,7 +422,9 @@ function AccountGate({ DashboardComponent }) {
 
 function DashboardRoutes({ DashboardComponent }) {
   return (
-    <Routes>
+    <>
+      <ImpersonationBanner />
+      <Routes>
       <Route path="/" element={<HomeRoute />} />
       <Route path="/accept-invitation/*" element={<InvitationPage />} />
       <Route path="/sign-in/*" element={<PublicOnly><AuthPage mode="sign-in" /></PublicOnly>} />
@@ -430,8 +433,9 @@ function DashboardRoutes({ DashboardComponent }) {
       <Route path="/internal/*" element={<Navigate to="/admin" replace />} />
       <Route path="/onboarding/*" element={<RequireAuth><AccountGate DashboardComponent={DashboardComponent} /></RequireAuth>} />
       <Route path="/app/*" element={<RequireAuth><AccountGate DashboardComponent={DashboardComponent} /></RequireAuth>} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }
 

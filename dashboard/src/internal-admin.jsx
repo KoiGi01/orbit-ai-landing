@@ -18,6 +18,7 @@ import {
   ServerCog,
   TerminalSquare,
   LoaderCircle,
+  LogIn,
   LockKeyhole,
   Mail,
   MapPin,
@@ -434,7 +435,7 @@ function NextAction({ clinic, busy, error, onAction }) {
   );
 }
 
-function LocationManagement({ clinic, clinics, busy, onEdit, onMember, onCalendar, onAgentConfig, onStage, onBypass, onDelete }) {
+function LocationManagement({ clinic, clinics, busy, onEdit, onMember, onCalendar, onAgentConfig, onStage, onBypass, onDelete, onImpersonate }) {
   const [edit, setEdit] = useState({ name: clinic.name, city: clinic.profile?.city || '', industry: clinic.profile?.industry || '' });
   const [member, setMember] = useState({ email: '', role: 'org:member', operation: 'add', targetOrganizationId: '' });
   const [confirmation, setConfirmation] = useState('');
@@ -678,7 +679,7 @@ function ClinicDetail({ clinic, clinics, busy, error, onClose, onConfirmPayment,
           ? <ConfirmPayment clinic={clinic} busy={busy} error={error} onConfirm={onConfirmPayment} />
           : <NextAction clinic={clinic} busy={busy} error={error} onAction={onAction} />}
 
-        <section className="ops-record-section"><header><UserRound size={17} /><h3>Usuarios de la Location</h3></header><dl>{(clinic.accessAssignments || []).map((assignment) => <div key={assignment.email}><dt>{assignment.role === 'org:admin' ? 'Administrador' : 'Miembro'}</dt><dd>{assignment.email} · {assignment.status === 'active' ? 'Activo' : assignment.status === 'invited' ? 'Invitación enviada' : 'Requiere atención'}</dd></div>)}</dl></section>
+        <section className="ops-record-section"><header><UserRound size={17} /><h3>Usuarios de la Location</h3></header><dl>{(clinic.accessAssignments || []).map((assignment) => <div key={assignment.email}><dt>{assignment.role === 'org:admin' ? 'Administrador' : 'Miembro'}</dt><dd><span>{assignment.email} · {assignment.status === 'active' ? 'Activo' : assignment.status === 'invited' ? 'Invitación enviada' : 'Requiere atención'}</span>{assignment.userId && assignment.status === 'active' && <button type="button" className="ops-impersonate" disabled={busy} onClick={() => onImpersonate(assignment.userId)} title={`Abrir AutiveX como ${assignment.email}`}><LogIn size={13} /> Entrar como</button>}</dd></div>)}</dl></section>
 
         {clinic.payment && <section className="ops-record-section"><header><Banknote size={17} /><h3>Pago verificado</h3></header><dl><div><dt>Monto</dt><dd>{moneyFromCents(clinic.payment.amountCents)}</dd></div><div><dt>Referencia</dt><dd>{clinic.payment.reference}</dd></div><div><dt>Fecha del pago</dt><dd>{dateTime(clinic.payment.paidAt)}</dd></div><div><dt>Verificado</dt><dd>{dateTime(clinic.payment.verifiedAt)}</dd></div></dl></section>}
 
@@ -787,6 +788,21 @@ export default function InternalAdmin() {
     }
   };
 
+  // Not routed through mutateClinic: this answers with a consume URL instead
+  // of a clinic, and the redirect ends this session, so there is nothing left
+  // to put back into state.
+  const impersonateUser = async (userId) => {
+    setBusy(true);
+    setActionError('');
+    try {
+      const { url } = await updateInternalClinic(getToken, { organizationId: selectedId, action: 'impersonate', userId });
+      window.location.href = url;
+    } catch (error) {
+      setActionError(error.message);
+      setBusy(false);
+    }
+  };
+
   const mutateClinic = async (body) => {
     setBusy(true);
     setActionError('');
@@ -862,7 +878,7 @@ export default function InternalAdmin() {
         {section === 'Actividad' && <section className="ops-queue ops-simple-view"><header><div><h2>Audit trail</h2><span>Eventos recientes</span></div></header><div className="ops-activity-feed">{clinics.flatMap((clinic) => clinic.auditTrail.map((entry) => ({ ...entry, clinic: clinic.name }))).sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 40).map((entry) => <div key={`${entry.clinic}-${entry.id}`}><i /><span><strong>{entry.clinic}</strong><small>{String(entry.action).replaceAll('_', ' ')} · {dateTime(entry.at)}</small></span></div>)}</div></section>}
       </div>
       {creating && <NewClientModal busy={busy} error={actionError} onClose={() => setCreating(false)} onCreate={createClinic} />}
-      {selected && <ClinicDetail clinic={selected} clinics={clinics} busy={busy} error={actionError} onClose={() => setSelectedId(null)} onConfirmPayment={(payment) => mutateClinic({ action: 'confirm_payment', payment })} onSaveProvisioning={(provisioning) => mutateClinic({ action: 'save_provisioning', provisioning })} onAction={(action, confirmation) => mutateClinic({ action, confirmation })} onEdit={(location) => mutateClinic({ action: 'update_location', location })} onMember={(member) => mutateClinic({ action: 'manage_member', member })} onCalendar={(calendar) => mutateClinic({ action: 'save_calendar', calendar })} onAgentConfig={(agent) => mutateClinic({ action: 'update_agent_configuration', agent })} onAgentAdvanced={(advanced) => mutateClinic({ action: 'update_agent_advanced', advanced })} onStage={(stage) => mutateClinic({ action: 'override_stage', stage })} onBypass={(confirmation) => mutateClinic({ action: 'bypass_live', confirmation })} onDelete={removeClinic} />}
+      {selected && <ClinicDetail clinic={selected} clinics={clinics} busy={busy} error={actionError} onClose={() => setSelectedId(null)} onConfirmPayment={(payment) => mutateClinic({ action: 'confirm_payment', payment })} onSaveProvisioning={(provisioning) => mutateClinic({ action: 'save_provisioning', provisioning })} onAction={(action, confirmation) => mutateClinic({ action, confirmation })} onEdit={(location) => mutateClinic({ action: 'update_location', location })} onMember={(member) => mutateClinic({ action: 'manage_member', member })} onCalendar={(calendar) => mutateClinic({ action: 'save_calendar', calendar })} onAgentConfig={(agent) => mutateClinic({ action: 'update_agent_configuration', agent })} onAgentAdvanced={(advanced) => mutateClinic({ action: 'update_agent_advanced', advanced })} onImpersonate={impersonateUser} onStage={(stage) => mutateClinic({ action: 'override_stage', stage })} onBypass={(confirmation) => mutateClinic({ action: 'bypass_live', confirmation })} onDelete={removeClinic} />}
     </main>
   );
 }
