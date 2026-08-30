@@ -360,7 +360,13 @@ async function handleInternalClinics(req, res) {
   try {
     if (req.method === 'GET') {
       const query = new URL(req.url, `http://${req.headers.host}`).searchParams.get('query') || '';
-      const result = await listClinics(req.headers.authorization, query);
+      const listDatabase = createDatabase();
+      let result;
+      try {
+        result = await listClinics(req.headers.authorization, query, listDatabase);
+      } finally {
+        await listDatabase.close();
+      }
       sendJson(res, 200, result);
       return;
     }

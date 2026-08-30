@@ -407,3 +407,67 @@
 .ops-impersonate { flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; background: #1859ff; border: 0; border-radius: 999px; color: #fff; font-size: 10px; font-weight: 700; white-space: nowrap; cursor: pointer; }
 .ops-impersonate:hover:not(:disabled) { background: #0b3fd0; }
 .ops-impersonate:disabled { opacity: .55; cursor: not-allowed; }
+
+/* ---------------------------------------------------------------------------
+   The Location row became a container: a link carrying the whole record plus an
+   actions menu beside it. The old row was a <button>, so the menu could not
+   live inside it without nesting a button in a button -- and a link also lets
+   an operator open a Location in a new tab, which the old modal never allowed.
+   --------------------------------------------------------------------------- */
+.ops-clinic-row { display: flex; align-items: stretch; padding: 0; cursor: default; }
+.ops-clinic-open { flex: 1; min-width: 0; min-height: 77px; padding: 0 6px 0 20px; display: grid; grid-template-columns: 42px minmax(205px, 1.4fr) 160px 180px 105px 20px; align-items: center; gap: 14px; color: inherit; text-decoration: none; }
+.ops-clinic-open:focus-visible { outline: 2px solid #1859ff; outline-offset: -3px; }
+
+.ops-clinic-activity { display: grid; gap: 2px; min-width: 0; }
+.ops-clinic-activity b { font-size: 11px; font-weight: 700; }
+.ops-clinic-activity small { color: #607089; font-size: 10px; }
+.ops-spark { width: 100%; height: 20px; color: #1859ff; }
+.ops-spark.is-empty { display: block; height: 20px; border-bottom: 1px dashed #cbd5e6; }
+
+.ops-row-menu { position: relative; display: flex; align-items: center; padding-right: 12px; }
+.ops-row-menu-trigger { width: 30px; height: 30px; display: grid; place-items: center; background: transparent; border: 0; border-radius: 8px; color: #7c8aa0; cursor: pointer; }
+.ops-row-menu-trigger:hover { background: #eef2fa; color: #1c2c47; }
+.ops-row-menu-list { position: absolute; top: calc(100% - 6px); right: 8px; z-index: 20; min-width: 214px; display: grid; padding: 5px; background: #fff; border: 1px solid #dce4ef; border-radius: 12px; box-shadow: 0 18px 40px rgba(9, 24, 56, .16); }
+.ops-row-menu-list button { width: 100%; padding: 8px 10px; background: transparent; border: 0; border-radius: 8px; color: #1c2c47; font-size: 12px; text-align: left; cursor: pointer; }
+.ops-row-menu-list button:hover:not(:disabled) { background: #f1f5fd; }
+.ops-row-menu-list button.is-danger { color: #b3261e; }
+.ops-row-menu-list button.is-danger:hover:not(:disabled) { background: #fdecea; }
+.ops-row-menu-list button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* The detail is a page now, not an overlay dropped on top of the list. */
+.ops-location-page { display: grid; gap: 18px; }
+.ops-location-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.ops-location-identity { display: grid; gap: 7px; justify-items: start; }
+.ops-location-identity h1 { margin: 0; font-size: 26px; letter-spacing: -0.02em; }
+.ops-back { display: inline-flex; align-items: center; gap: 6px; color: #5b6b86; font-size: 11px; font-weight: 650; text-decoration: none; }
+.ops-back:hover { color: #1859ff; }
+.ops-location-tabs { display: flex; gap: 4px; padding: 4px; background: #eef2f9; border-radius: 12px; overflow-x: auto; }
+.ops-location-tabs button { min-height: 34px; padding: 0 15px; background: transparent; border: 0; border-radius: 9px; color: #5b6b86; font-size: 12px; font-weight: 650; white-space: nowrap; cursor: pointer; }
+.ops-location-tabs button.active { background: #fff; color: #0d1b33; box-shadow: 0 1px 3px rgba(11, 26, 56, .14); }
+
+/* Dark console surface: only the colours are restated. */
+.ops-shell .ops-clinic-activity small { color: var(--ops-muted); }
+.ops-shell .ops-spark { color: #5c8aff; }
+.ops-shell .ops-spark.is-empty { border-bottom-color: var(--ops-line); }
+.ops-shell .ops-row-menu-trigger { color: var(--ops-muted); }
+.ops-shell .ops-row-menu-trigger:hover { background: #16233a; color: var(--ops-text); }
+.ops-shell .ops-row-menu-list { background: var(--ops-panel-2); border-color: var(--ops-line); box-shadow: 0 20px 46px rgba(0, 0, 0, .5); }
+.ops-shell .ops-row-menu-list button { color: var(--ops-text); }
+.ops-shell .ops-row-menu-list button:hover:not(:disabled) { background: #16233a; }
+.ops-shell .ops-row-menu-list button.is-danger { color: #ff8f84; }
+.ops-shell .ops-row-menu-list button.is-danger:hover:not(:disabled) { background: #2a1418; }
+.ops-shell .ops-back { color: var(--ops-muted); }
+.ops-shell .ops-back:hover { color: #5c8aff; }
+.ops-shell .ops-location-tabs { background: var(--ops-panel); }
+.ops-shell .ops-location-tabs button { color: var(--ops-muted); }
+.ops-shell .ops-location-tabs button.active { background: var(--ops-panel-2); color: var(--ops-text); box-shadow: none; }
+
+@media (max-width: 950px) {
+  .ops-clinic-open { grid-template-columns: 42px minmax(180px, 1fr) 150px 20px; }
+  .ops-clinic-open .ops-clinic-activity, .ops-clinic-open time { display: none; }
+}
+
+@media (max-width: 620px) {
+  .ops-clinic-open { min-height: 85px; padding: 0 6px 0 14px; grid-template-columns: 42px 1fr 18px; gap: 11px; }
+  .ops-location-header { flex-direction: column; }
+}

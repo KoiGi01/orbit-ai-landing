@@ -42,7 +42,7 @@ export default async function handler(req, res) {
     const authorization = req.headers.authorization;
 
     if (req.method === 'GET') {
-      const result = await listClinics(authorization, req.query?.query);
+      const result = await withDatabase((database) => listClinics(authorization, req.query?.query, database));
       sendJson(res, 200, result);
       return;
     }

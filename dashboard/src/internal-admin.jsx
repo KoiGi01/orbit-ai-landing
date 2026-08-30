@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { UserButton, useAuth, useUser } from '@clerk/react';
 import {
   ArrowLeft,
@@ -19,6 +20,7 @@ import {
   TerminalSquare,
   LoaderCircle,
   LogIn,
+  MoreHorizontal,
   LockKeyhole,
   Mail,
   MapPin,
@@ -85,13 +87,60 @@ const VOICES_BY_PROVIDER = {
 
 const STAGE_TONES = {
   'Registro incompleto': 'neutral',
-  'Prospecto en demo': 'demo',
+  Evaluación: 'demo',
   Onboarding: 'paid',
   Configuración: 'progress',
   'En producción': 'live',
   'Cobro pendiente': 'warning',
   Suspendido: 'danger',
 };
+
+const SALES_BRIEF_LABELS = {
+  contactRole: {
+    owner: 'Dueño o fundador', executive: 'Dirección', operations: 'Operaciones', sales_marketing: 'Ventas o marketing',
+    customer_service: 'Atención al cliente', technology: 'Tecnología', other: 'Otro rol',
+  },
+  channels: {
+    whatsapp: 'WhatsApp', instagram_facebook: 'Instagram o Facebook', phone: 'Llamadas', website_chat: 'Sitio web o chat',
+    email: 'Correo', marketplaces: 'Marketplaces', referrals: 'Referidos o presencial',
+  },
+  volumes: {
+    under_25: 'Menos de 25 por semana', '25_100': '25–100 por semana', '101_300': '101–300 por semana',
+    '301_1000': '301–1,000 por semana', over_1000: 'Más de 1,000 por semana', unknown: 'Por estimar',
+  },
+  bottlenecks: {
+    slow_response: 'Respuesta lenta', qualification: 'Calificación de prospectos', scheduling: 'Agenda y coordinación',
+    follow_up: 'Seguimiento', repetitive_support: 'Consultas repetitivas', manual_data: 'Captura manual',
+    after_hours: 'Atención fuera de horario', visibility: 'Visibilidad operativa',
+  },
+  diagnostics: {
+    missed_lost: 'Las llamadas se pierden', voicemail_callback: 'Devuelven llamadas desde buzón de voz', after_hours: 'Problema fuera de horario', human_answering: 'Siempre responde una persona',
+    under_5m: 'Responden en menos de 5 min', under_1h: 'Responden en menos de 1 h', same_day: 'Responden el mismo día', next_day_or_more: 'Tardan un día o más', inconsistent: 'Depende de quién esté disponible',
+    assigned_manual: 'Asignación manual', shared_inbox: 'Bandeja compartida', crm_workflow: 'Flujo existente en CRM', no_clear_owner: 'Sin responsable claro',
+    handled_manually: 'Seguimiento manual', messages_scattered: 'Información dispersa', tracked_sheet: 'Seguimiento en hojas de cálculo', tracked_crm: 'Seguimiento en CRM',
+  },
+  tools: {
+    whatsapp_business: 'WhatsApp Business', meta_business: 'Meta Business Suite', crm: 'CRM', calendar: 'Google o Microsoft Calendar',
+    telephony: 'Sistema telefónico', helpdesk: 'Helpdesk', spreadsheets: 'Hojas de cálculo', none: 'Ninguna todavía',
+  },
+  outcomes: {
+    capture_more: 'Capturar más oportunidades', respond_faster: 'Responder más rápido, 24/7', book_more: 'Conseguir más citas o ventas',
+    reduce_workload: 'Reducir trabajo operativo', improve_follow_up: 'Mejorar el seguimiento', scale_support: 'Escalar la atención al cliente',
+  },
+  timelines: { now_30_days: 'Próximos 30 días', '1_3_months': '1–3 meses', '3_6_months': '3–6 meses', exploring: 'Solo explorando' },
+  recommendations: {
+    voice_agent: 'Agente de voz', messaging_agent: 'Agente de mensajería', lead_qualification: 'Calificación y seguimiento',
+    scheduling_automation: 'Automatización de agenda', knowledge_support: 'Atención y conocimiento', workflow_automation: 'Integraciones y workflows',
+  },
+};
+
+function salesLabel(group, value) {
+  return SALES_BRIEF_LABELS[group]?.[value] || String(value || '').replaceAll('_', ' ');
+}
+
+function salesList(group, values) {
+  return Array.isArray(values) && values.length ? values.map((value) => salesLabel(group, value)).join(', ') : '—';
+}
 
 const ACTIONS = {
   needs_onboarding: ['start_configuration', 'Crear agente Retell', Settings2],
@@ -213,17 +262,98 @@ function PaymentFields({ value, onChange }) {
   );
 }
 
-function ClinicRow({ clinic, selected, onClick }) {
-  const accessCount = clinic.accessAssignments?.length || clinic.membersCount || 0;
+function callDuration(seconds) {
+  if (!seconds) return '';
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(Math.round(seconds % 60)).padStart(2, '0')} prom`;
+}
+
+// The daily series as a single path. No axes and no labels: at this size the
+// shape is the whole message, and the exact figures sit beside it in the row.
+function Sparkline({ series, label }) {
+  if (!series?.length) return <span className="ops-spark is-empty" aria-hidden="true" />;
+  const peak = Math.max(...series.map((point) => point.calls), 1);
+  const step = series.length > 1 ? 100 / (series.length - 1) : 0;
+  const points = series
+    .map((point, index) => `${(index * step).toFixed(2)},${(24 - (point.calls / peak) * 20).toFixed(2)}`)
+    .join(' ');
   return (
-    <button type="button" className={`ops-clinic-row${selected ? ' selected' : ''}`} onClick={onClick}>
-      <span className="ops-clinic-mark">{clinic.name.split(' ').slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span>
-      <span className="ops-clinic-main"><strong>{clinic.name}</strong><small>{clinic.owner.email || 'Sin correo asociado'}</small></span>
-      <span className={`ops-stage ${STAGE_TONES[clinic.stage] || 'neutral'}`}><i /> {clinic.stage}</span>
-      <span className="ops-method">{accessCount} {accessCount === 1 ? 'usuario' : 'usuarios'}</span>
-      <time>{relativeTime(clinic.createdAt)}</time>
-      <ChevronRight size={17} />
-    </button>
+    <svg className="ops-spark" viewBox="0 0 100 26" preserveAspectRatio="none" role="img" aria-label={label}>
+      <polyline points={points} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+// Secondary and destructive actions live behind this rather than on the surface,
+// so the row stays readable and nothing dangerous is one stray click away.
+function RowMenu({ items, label = 'Más acciones' }) {
+  const [open, setOpen] = useState(false);
+  const container = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const dismiss = (event) => { if (!container.current?.contains(event.target)) setOpen(false); };
+    const escape = (event) => { if (event.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', dismiss);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('mousedown', dismiss);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [open]);
+
+  const usable = (items || []).filter(Boolean);
+  if (!usable.length) return null;
+  return (
+    <span className="ops-row-menu" ref={container}>
+      <button
+        type="button"
+        className="ops-row-menu-trigger"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={label}
+        onClick={(event) => { event.preventDefault(); event.stopPropagation(); setOpen((value) => !value); }}
+      >
+        <MoreHorizontal size={16} />
+      </button>
+      {open && (
+        <span className="ops-row-menu-list" role="menu">
+          {usable.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              role="menuitem"
+              className={item.tone === 'danger' ? 'is-danger' : ''}
+              disabled={item.disabled}
+              onClick={(event) => { event.preventDefault(); event.stopPropagation(); setOpen(false); item.onSelect(); }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function ClinicRow({ clinic, menuItems }) {
+  const accessCount = clinic.accessAssignments?.length || clinic.membersCount || 0;
+  const activity = clinic.activity;
+  return (
+    <div className="ops-clinic-row">
+      <Link className="ops-clinic-open" to={`/admin/location/${clinic.id}`}>
+        <span className="ops-clinic-mark">{clinic.name.split(' ').slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span>
+        <span className="ops-clinic-main"><strong>{clinic.name}</strong><small>{clinic.owner.email || 'Sin correo asociado'}</small></span>
+        <span className={`ops-stage ${STAGE_TONES[clinic.stage] || 'neutral'}`}><i /> {clinic.stage}</span>
+        <span className="ops-clinic-activity">
+          <Sparkline series={activity?.series} label={`Llamadas por día de ${clinic.name}`} />
+          <b>{activity?.recentCalls ? `${activity.recentCalls} llamadas · 7d` : 'Sin llamadas'}</b>
+          <small>{callDuration(activity?.averageDurationSeconds) || `${accessCount} ${accessCount === 1 ? 'usuario' : 'usuarios'}`}</small>
+        </span>
+        <time>{relativeTime(clinic.createdAt)}</time>
+        <ChevronRight size={17} />
+      </Link>
+      <RowMenu items={menuItems} label={`Acciones de ${clinic.name}`} />
+    </div>
   );
 }
 
@@ -435,7 +565,7 @@ function NextAction({ clinic, busy, error, onAction }) {
   );
 }
 
-function LocationManagement({ clinic, clinics, busy, onEdit, onMember, onCalendar, onAgentConfig, onStage, onBypass, onDelete, onImpersonate }) {
+function LocationManagement({ clinic, clinics, busy, onEdit, onMember, onCalendar, onAgentConfig, onStage, onBypass, onDelete }) {
   const [edit, setEdit] = useState({ name: clinic.name, city: clinic.profile?.city || '', industry: clinic.profile?.industry || '' });
   const [member, setMember] = useState({ email: '', role: 'org:member', operation: 'add', targetOrganizationId: '' });
   const [confirmation, setConfirmation] = useState('');
@@ -659,38 +789,88 @@ function AdvancedAgentSettings({ clinic, busy, onSave }) {
   );
 }
 
-function ClinicDetail({ clinic, clinics, busy, error, onClose, onConfirmPayment, onSaveProvisioning, onAction, onEdit, onMember, onCalendar, onAgentConfig, onAgentAdvanced, onStage, onBypass, onDelete }) {
+const LOCATION_TABS = [
+  ['resumen', 'Resumen'],
+  ['agente', 'Agente'],
+  ['administracion', 'Administración'],
+  ['usuarios', 'Usuarios'],
+];
+
+function LocationPage({ clinic, clinics, busy, error, onClose, onConfirmPayment, onSaveProvisioning, onAction, onEdit, onMember, onCalendar, onAgentConfig, onAgentAdvanced, onStage, onBypass, onDelete, onImpersonate }) {
+  const [tab, setTab] = useState('resumen');
   const profile = clinic.profile;
+  const isSalesBrief = profile?.schemaVersion === 2;
   const accountEnabled = ['verified', 'not_required'].includes(clinic.state.billingStatus);
+  // The dangerous controls keep their typed confirmations; the menu only carries
+  // you to them, so nothing destructive is ever a single click.
+  const headerActions = [
+    { label: 'Activar en producción', onSelect: () => setTab('administracion'), disabled: busy },
+    { label: 'Forzar etapa del ciclo', onSelect: () => setTab('administracion'), disabled: busy },
+    { label: 'Eliminar Location', tone: 'danger', onSelect: () => setTab('administracion'), disabled: busy },
+  ];
   return (
-    <ModalShell title={clinic.name} eyebrow={`Expediente · ${clinic.stage}`} onClose={onClose} wide>
-      <div className="ops-detail-body">
-        <div className="ops-detail-summary">
-          <article><span><UserRound size={18} /></span><div><small>Propietario</small><strong>{clinic.owner.name || 'Por confirmar'}</strong><p>{clinic.owner.email || 'Sin correo asociado'}</p></div></article>
-          <article><span><MapPin size={18} /></span><div><small>Ciudad</small><strong>{profile?.city || 'Por confirmar'}</strong><p>{profile ? 'Capturada en Preview' : 'Pendiente de onboarding'}</p></div></article>
-          <article><span><UserRound size={18} /></span><div><small>Acceso</small><strong>{clinic.accessAssignments?.length || clinic.membersCount || 0} usuarios</strong><p>Organización de Clerk</p></div></article>
+    <section className="ops-location-page">
+      <header className="ops-location-header">
+        <div className="ops-location-identity">
+          <Link className="ops-back" to="/admin"><ArrowLeft size={16} /> Locations</Link>
+          <h1>{clinic.name}</h1>
+          <span className={`ops-stage ${STAGE_TONES[clinic.stage] || 'neutral'}`}><i /> {clinic.stage}</span>
         </div>
+        <RowMenu items={headerActions} label={`Acciones de ${clinic.name}`} />
+      </header>
+      <nav className="ops-location-tabs" aria-label="Secciones de la Location">
+        {LOCATION_TABS.map(([key, label]) => (
+          <button type="button" key={key} role="tab" aria-selected={tab === key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{label}</button>
+        ))}
+      </nav>
+      <div className="ops-detail-body">
+        {tab === 'resumen' && <div className="ops-detail-summary">
+          <article><span><UserRound size={18} /></span><div><small>Propietario</small><strong>{clinic.owner.name || 'Por confirmar'}</strong><p>{clinic.owner.email || 'Sin correo asociado'}</p></div></article>
+          <article><span><MapPin size={18} /></span><div><small>{isSalesBrief ? 'Canal principal' : 'Ciudad'}</small><strong>{isSalesBrief ? salesLabel('channels', profile.primaryChannel) : profile?.city || 'Por confirmar'}</strong><p>{isSalesBrief ? salesLabel('volumes', profile.weeklyConversationVolume) : profile ? 'Capturada en onboarding' : 'Pendiente de onboarding'}</p></div></article>
+          <article><span><UserRound size={18} /></span><div><small>Acceso</small><strong>{clinic.accessAssignments?.length || clinic.membersCount || 0} usuarios</strong><p>Organización de Clerk</p></div></article>
+        </div>}
 
-        <LocationManagement clinic={clinic} clinics={clinics} busy={busy} onEdit={onEdit} onMember={onMember} onCalendar={onCalendar} onAgentConfig={onAgentConfig} onStage={onStage} onBypass={onBypass} onDelete={onDelete} />
+        {tab === 'administracion' && <LocationManagement clinic={clinic} clinics={clinics} busy={busy} onEdit={onEdit} onMember={onMember} onCalendar={onCalendar} onAgentConfig={onAgentConfig} onStage={onStage} onBypass={onBypass} onDelete={onDelete} />}
 
-        {accountEnabled && <ProvisioningForm clinic={clinic} busy={busy} error={error} onSave={onSaveProvisioning} />}
+        {tab === 'agente' && accountEnabled && <ProvisioningForm clinic={clinic} busy={busy} error={error} onSave={onSaveProvisioning} />}
 
-        {!accountEnabled
+        {tab === 'agente' && (!accountEnabled
           ? <ConfirmPayment clinic={clinic} busy={busy} error={error} onConfirm={onConfirmPayment} />
-          : <NextAction clinic={clinic} busy={busy} error={error} onAction={onAction} />}
+          : <NextAction clinic={clinic} busy={busy} error={error} onAction={onAction} />)}
 
-        <section className="ops-record-section"><header><UserRound size={17} /><h3>Usuarios de la Location</h3></header><dl>{(clinic.accessAssignments || []).map((assignment) => <div key={assignment.email}><dt>{assignment.role === 'org:admin' ? 'Administrador' : 'Miembro'}</dt><dd><span>{assignment.email} · {assignment.status === 'active' ? 'Activo' : assignment.status === 'invited' ? 'Invitación enviada' : 'Requiere atención'}</span>{assignment.userId && assignment.status === 'active' && <button type="button" className="ops-impersonate" disabled={busy} onClick={() => onImpersonate(assignment.userId)} title={`Abrir AutiveX como ${assignment.email}`}><LogIn size={13} /> Entrar como</button>}</dd></div>)}</dl></section>
+        {tab === 'usuarios' && <section className="ops-record-section"><header><UserRound size={17} /><h3>Usuarios de la Location</h3></header><dl>{(clinic.accessAssignments || []).map((assignment) => <div key={assignment.email}><dt>{assignment.role === 'org:admin' ? 'Administrador' : 'Miembro'}</dt><dd><span>{assignment.email} · {assignment.status === 'active' ? 'Activo' : assignment.status === 'invited' ? 'Invitación enviada' : 'Requiere atención'}</span>{assignment.userId && assignment.status === 'active' && <button type="button" className="ops-impersonate" disabled={busy} onClick={() => onImpersonate(assignment.userId)} title={`Abrir AutiveX como ${assignment.email}`}><LogIn size={13} /> Entrar como</button>}</dd></div>)}</dl></section>}
 
-        {clinic.payment && <section className="ops-record-section"><header><Banknote size={17} /><h3>Pago verificado</h3></header><dl><div><dt>Monto</dt><dd>{moneyFromCents(clinic.payment.amountCents)}</dd></div><div><dt>Referencia</dt><dd>{clinic.payment.reference}</dd></div><div><dt>Fecha del pago</dt><dd>{dateTime(clinic.payment.paidAt)}</dd></div><div><dt>Verificado</dt><dd>{dateTime(clinic.payment.verifiedAt)}</dd></div></dl></section>}
+        {tab === 'resumen' && clinic.payment && <section className="ops-record-section"><header><Banknote size={17} /><h3>Pago verificado</h3></header><dl><div><dt>Monto</dt><dd>{moneyFromCents(clinic.payment.amountCents)}</dd></div><div><dt>Referencia</dt><dd>{clinic.payment.reference}</dd></div><div><dt>Fecha del pago</dt><dd>{dateTime(clinic.payment.paidAt)}</dd></div><div><dt>Verificado</dt><dd>{dateTime(clinic.payment.verifiedAt)}</dd></div></dl></section>}
 
-        {profile && <section className="ops-record-section"><header><Building2 size={17} /><h3>Configuración del negocio</h3></header><dl><div><dt>Industria</dt><dd>{profile.industry || 'Por confirmar'}</dd></div><div><dt>Contacto</dt><dd>{profile.ownerPhone || clinic.owner.email || '—'}</dd></div><div><dt>Servicios</dt><dd>{profile.services?.join(', ') || '—'}</dd></div><div><dt>Motivos de llamada</dt><dd>{profile.callGoals?.join(', ') || '—'}</dd></div><div><dt>Horario</dt><dd>{profile.businessHours || profile.customSchedule || profile.schedule || '—'}</dd></div><div><dt>Agenda</dt><dd>{SCHEDULING_PROVIDERS.find(([key]) => key === profile.schedulingProvider)?.[1] || profile.appointmentOutcome || 'Por definir'}</dd></div>{profile.description && <div className="ops-record-wide"><dt>Descripción</dt><dd>{profile.description}</dd></div>}{profile.internalNotes && <div className="ops-record-wide"><dt>Notas internas</dt><dd>{profile.internalNotes}</dd></div>}</dl></section>}
+        {tab === 'resumen' && isSalesBrief && <section className="ops-record-section"><header><Building2 size={17} /><h3>Brief para Sales</h3></header><dl><div><dt>Contacto y rol</dt><dd>{profile.contactName || clinic.owner.name || '—'} · {salesLabel('contactRole', profile.contactRole)}</dd></div><div><dt>Canal principal</dt><dd>{salesLabel('channels', profile.primaryChannel)}</dd></div><div><dt>Canales actuales</dt><dd>{salesList('channels', profile.customerChannels)}</dd></div><div><dt>Volumen</dt><dd>{salesLabel('volumes', profile.weeklyConversationVolume)}</dd></div><div><dt>Cuellos de botella</dt><dd>{salesList('bottlenecks', profile.bottlenecks)}</dd></div><div><dt>Señal del canal</dt><dd>{salesLabel('diagnostics', profile.channelDiagnostic)}</dd></div><div><dt>Stack actual</dt><dd>{salesList('tools', profile.currentTools)}</dd></div><div><dt>Prioridad</dt><dd>{salesLabel('outcomes', profile.desiredOutcome)}</dd></div><div><dt>Horizonte</dt><dd>{salesLabel('timelines', profile.implementationTimeline)}</dd></div><div><dt>Implementaciones sugeridas</dt><dd>{salesList('recommendations', profile.recommendedSolutions)}</dd></div><div className="ops-record-wide"><dt>Qué hace el negocio y a quién atiende</dt><dd>{profile.businessDescription || '—'}</dd></div></dl></section>}
 
-        <AdvancedAgentSettings clinic={clinic} busy={busy} onSave={onAgentAdvanced} />
+        {tab === 'resumen' && profile && !isSalesBrief && <section className="ops-record-section"><header><Building2 size={17} /><h3>Configuración del negocio</h3></header><dl><div><dt>Industria</dt><dd>{profile.industry || 'Por confirmar'}</dd></div><div><dt>Contacto</dt><dd>{profile.ownerPhone || clinic.owner.email || '—'}</dd></div><div><dt>Servicios</dt><dd>{profile.services?.join(', ') || '—'}</dd></div><div><dt>Motivos de llamada</dt><dd>{profile.callGoals?.join(', ') || '—'}</dd></div><div><dt>Horario</dt><dd>{profile.businessHours || profile.customSchedule || profile.schedule || '—'}</dd></div><div><dt>Agenda</dt><dd>{SCHEDULING_PROVIDERS.find(([key]) => key === profile.schedulingProvider)?.[1] || profile.appointmentOutcome || 'Por definir'}</dd></div>{profile.description && <div className="ops-record-wide"><dt>Descripción</dt><dd>{profile.description}</dd></div>}{profile.internalNotes && <div className="ops-record-wide"><dt>Notas internas</dt><dd>{profile.internalNotes}</dd></div>}</dl></section>}
 
-        <section className="ops-record-section audit-section"><header><Clock3 size={17} /><h3>Auditoría reciente</h3></header>{clinic.auditTrail.length ? <ol>{clinic.auditTrail.map((entry) => <li key={entry.id}><i /><div><strong>{String(entry.action).replaceAll('_', ' ')}</strong><span>{dateTime(entry.at)} · {entry.actorUserId}</span></div></li>)}</ol> : <p>Este expediente todavía no tiene eventos.</p>}</section>
+        {tab === 'agente' && <AdvancedAgentSettings clinic={clinic} busy={busy} onSave={onAgentAdvanced} />}
+
+        {tab === 'resumen' && <section className="ops-record-section audit-section"><header><Clock3 size={17} /><h3>Auditoría reciente</h3></header>{clinic.auditTrail.length ? <ol>{clinic.auditTrail.map((entry) => <li key={entry.id}><i /><div><strong>{String(entry.action).replaceAll('_', ' ')}</strong><span>{dateTime(entry.at)} · {entry.actorUserId}</span></div></li>)}</ol> : <p>Esta Location todavía no tiene eventos.</p>}</section>}
       </div>
-    </ModalShell>
+    </section>
   );
+}
+
+// Resolves the :locationId in the URL against the loaded list, so the page
+// survives a refresh and can be shared with a teammate.
+function LocationRoute({ clinics, loading, onSelect, renderPage }) {
+  const { locationId } = useParams();
+  useEffect(() => { onSelect(locationId || null); }, [locationId, onSelect]);
+  if (loading) return <div className="ops-list-state"><LoaderCircle className="spin" size={22} /><span>Cargando Location…</span></div>;
+  const clinic = clinics.find((item) => item.id === locationId);
+  if (!clinic) {
+    return (
+      <div className="ops-list-state">
+        <Building2 size={22} />
+        <strong>Esta Location ya no existe.</strong>
+        <Link to="/admin">Volver a Locations</Link>
+      </div>
+    );
+  }
+  return renderPage(clinic);
 }
 
 function AccessDenied({ error }) {
@@ -700,21 +880,26 @@ function AccessDenied({ error }) {
 }
 
 function AdminOverview({ clinics, onOpenLocations }) {
-  const revenue = clinics.reduce((sum, clinic) => sum + Number(clinic.payment?.amountCents || 0), 0);
   const live = clinics.filter((clinic) => clinic.state.serviceStatus === 'live').length;
-  const leads = clinics.filter((clinic) => ['Registro incompleto', 'Prospecto en demo'].includes(clinic.stage)).length;
+  const recentCalls = clinics.reduce((sum, clinic) => sum + Number(clinic.activity?.recentCalls || 0), 0);
+  const talking = clinics.filter((clinic) => Number(clinic.activity?.recentCalls || 0) > 0).length;
+  const leads = clinics.filter((clinic) => ['Registro incompleto', 'Evaluación'].includes(clinic.stage)).length;
   const agents = clinics.filter((clinic) => clinic.provisioningDraft?.retellAgentId || clinic.provisioning?.retellAgentId).length;
-  const stages = ['Registro incompleto', 'Prospecto en demo', 'Onboarding', 'Configuración', 'En producción'];
+  const stages = ['Registro incompleto', 'Evaluación', 'Onboarding', 'Configuración', 'En producción'];
   return <>
     <section className="ops-business-kpis">
       <StatCard label="Locations" value={clinics.length} detail={`${live} activas en producción`} tone="live" icon={Building2} />
       <StatCard label="Leads registrados" value={leads} detail="Prospectos e intake incompleto" tone="paid" icon={UserRound} />
-      <StatCard label="Ingresos registrados" value={moneyFromCents(revenue)} detail="Pagos verificados en consola" tone="warning" icon={Banknote} />
+      <StatCard label="Llamadas · 7 días" value={recentCalls} detail={`${talking} Locations con actividad`} tone="warning" icon={BarChart3} />
       <StatCard label="Agentes creados" value={agents} detail={`${Math.max(agents - live, 0)} en staging o configuración`} tone="progress" icon={ServerCog} />
     </section>
     <section className="ops-overview-grid">
       <article className="ops-chart-card"><header><div><p>Pipeline operativo</p><h2>Locations por etapa</h2></div><BarChart3 size={20} /></header><div className="ops-stage-chart">{stages.map((stage) => { const count = clinics.filter((clinic) => clinic.stage === stage).length; return <div key={stage}><span>{stage}</span><i><b style={{ width: `${clinics.length ? Math.max((count / clinics.length) * 100, count ? 8 : 0) : 0}%` }} /></i><strong>{count}</strong></div>; })}</div></article>
       <article className="ops-chart-card spend-card"><header><div><p>Infraestructura</p><h2>Uso y gasto de agentes</h2></div><ServerCog size={20} /></header><div className="ops-data-status"><strong>Sin fuente de costos conectada</strong><p>Retell todavía no entrega consumo de tokens/minutos a esta consola. No mostramos estimaciones falsas.</p><span>{agents} agentes identificados · {live} activos</span></div></article>
+    </section>
+    <section className="ops-overview-grid">
+      <article className="ops-chart-card"><header><div><p>Ingresos</p><h2>Facturación recurrente</h2></div><Banknote size={20} /></header><div className="ops-data-status"><strong>Sin cobro automático conectado</strong><p>La mensualidad todavía no se cobra desde la plataforma. Cuando conectes Stripe, aquí verás lo facturado y la fecha del siguiente cargo de cada Location.</p><span>{clinics.length} Locations · {live} activas</span></div></article>
+      <article className="ops-chart-card"><header><div><p>Próximos cobros</p><h2>Calendario de pagos</h2></div><CalendarCheck2 size={20} /></header><div className="ops-data-status"><strong>Pendiente de facturación</strong><p>Las fechas de cobro saldrán del ciclo de suscripción de cada cliente en cuanto exista. No mostramos estimaciones que puedan leerse como cobros reales.</p></div></article>
     </section>
     <section className="ops-overview-action"><div><strong>Administración de Locations</strong><span>Edita tenants, miembros, etapas y accesos desde un solo lugar.</span></div><button type="button" onClick={onOpenLocations}>Abrir Locations <ArrowRight size={17} /></button></section>
   </>;
@@ -723,6 +908,7 @@ function AdminOverview({ clinics, onOpenLocations }) {
 export default function InternalAdmin() {
   const { getToken } = useAuth();
   const { user } = useUser();
+  const navigate = useNavigate();
   const [clinics, setClinics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [accessError, setAccessError] = useState('');
@@ -843,6 +1029,8 @@ export default function InternalAdmin() {
         <div className="ops-console-brand"><PortalBrand label="Admin Console" /><span className="ops-env"><i /> PROD</span></div>
         <nav><a href="/app"><ArrowLeft size={16} /> Ver producto</a><span>{user?.primaryEmailAddress?.emailAddress}</span><UserButton appearance={{ elements: { avatarBox: 'ops-user-avatar' } }} /></nav>
       </header>
+      <Routes>
+        <Route index element={<>
       <nav className="ops-primary-nav" aria-label="Navegación de Admin Console">
         {['Resumen', 'Locations', 'Agentes', 'Actividad'].map((item) => <button type="button" className={section === item ? 'active' : ''} key={item} onClick={() => setSection(item)}>{item}</button>)}
       </nav>
@@ -859,26 +1047,62 @@ export default function InternalAdmin() {
         {section === 'Resumen' && <AdminOverview clinics={clinics} onOpenLocations={() => setSection('Locations')} />}
 
         {section === 'Locations' && <><section className="ops-stats">
-          <StatCard label="Provisioning queue" value={agentsPending} detail="Locations sin agente Retell" tone="warning" icon={Settings2} />
+          <StatCard label="Sin agente" value={agentsPending} detail="Locations que esperan provisionamiento" tone="warning" icon={Settings2} />
           <StatCard label="Onboarding" value={onboarding} detail="Locations aún sin configurar" tone="paid" icon={CalendarCheck2} />
-          <StatCard label="Staging" value={configuring} detail="Agentes en validación" tone="progress" icon={Settings2} />
-          <StatCard label="Production" value={live} detail="Tenants activos" tone="live" icon={BadgeCheck} />
+          <StatCard label="En configuración" value={configuring} detail="Agentes en validación" tone="progress" icon={Settings2} />
+          <StatCard label="En producción" value={live} detail="Locations activas" tone="live" icon={BadgeCheck} />
         </section>
 
         <section className="ops-queue">
-          <header><div><h2>Tenant registry</h2><span>{clinics.length} records</span></div><div className="ops-tools"><label><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search tenant or owner…" /></label><select value={filter} onChange={(event) => setFilter(event.target.value)}><option>Todos</option><option>Onboarding</option><option>Configuración</option><option>Activos</option></select></div></header>
-          <div className="ops-table-head"><span>Location</span><span>Etapa</span><span>Usuarios</span><span>Antigüedad</span><span /></div>
+          <header><div><h2>Locations</h2><span>{clinics.length} en total</span></div><div className="ops-tools"><label><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Busca por Location o correo…" /></label><select value={filter} onChange={(event) => setFilter(event.target.value)}><option>Todos</option><option>Onboarding</option><option>Configuración</option><option>Activos</option></select></div></header>
+          <div className="ops-table-head"><span>Location</span><span>Etapa</span><span>Actividad · 14 días</span><span>Antigüedad</span><span /></div>
           <div className="ops-clinic-list">
             {loading && <div className="ops-list-state"><LoaderCircle className="spin" size={22} /><span>Cargando expedientes…</span></div>}
-            {!loading && visible.map((clinic) => <ClinicRow key={clinic.id} clinic={clinic} selected={clinic.id === selectedId} onClick={() => { setActionError(''); setSelectedId(clinic.id); }} />)}
+            {!loading && visible.map((clinic) => <ClinicRow key={clinic.id} clinic={clinic} menuItems={[
+              { label: 'Abrir Location', onSelect: () => navigate(`/admin/location/${clinic.id}`) },
+              { label: 'Activar en producción', disabled: clinic.state.serviceStatus === 'live', onSelect: () => navigate(`/admin/location/${clinic.id}`) },
+              { label: 'Forzar etapa del ciclo', onSelect: () => navigate(`/admin/location/${clinic.id}`) },
+              { label: 'Eliminar Location', tone: 'danger', onSelect: () => navigate(`/admin/location/${clinic.id}`) },
+            ]} />)}
             {!loading && visible.length === 0 && <div className="ops-list-state"><Building2 size={22} /><strong>No encontramos Locations.</strong><span>Ajusta la búsqueda o crea la primera Location.</span></div>}
           </div>
         </section></>}
-        {section === 'Agentes' && <section className="ops-queue ops-simple-view"><header><div><h2>Agent inventory</h2><span>{clinics.filter((clinic) => clinic.provisioningDraft?.retellAgentId).length} configured</span></div></header><div className="ops-agent-grid">{clinics.map((clinic) => <button type="button" key={clinic.id} onClick={() => setSelectedId(clinic.id)}><ServerCog size={20} /><span><strong>{clinic.name}</strong><small>{clinic.provisioningDraft?.retellAgentId || 'Sin agente'}</small></span><i>{clinic.state.serviceStatus === 'live' ? 'Activo' : clinic.stage}</i></button>)}</div></section>}
-        {section === 'Actividad' && <section className="ops-queue ops-simple-view"><header><div><h2>Audit trail</h2><span>Eventos recientes</span></div></header><div className="ops-activity-feed">{clinics.flatMap((clinic) => clinic.auditTrail.map((entry) => ({ ...entry, clinic: clinic.name }))).sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 40).map((entry) => <div key={`${entry.clinic}-${entry.id}`}><i /><span><strong>{entry.clinic}</strong><small>{String(entry.action).replaceAll('_', ' ')} · {dateTime(entry.at)}</small></span></div>)}</div></section>}
+        {section === 'Agentes' && <section className="ops-queue ops-simple-view"><header><div><h2>Agentes</h2><span>{clinics.filter((clinic) => clinic.provisioningDraft?.retellAgentId).length} configurados</span></div></header><div className="ops-agent-grid">{clinics.map((clinic) => <button type="button" key={clinic.id} onClick={() => navigate(`/admin/location/${clinic.id}`)}><ServerCog size={20} /><span><strong>{clinic.name}</strong><small>{clinic.provisioningDraft?.retellAgentId || 'Sin agente'}</small></span><i>{clinic.state.serviceStatus === 'live' ? 'Activo' : clinic.stage}</i></button>)}</div></section>}
+        {section === 'Actividad' && <section className="ops-queue ops-simple-view"><header><div><h2>Auditoría</h2><span>Eventos recientes</span></div></header><div className="ops-activity-feed">{clinics.flatMap((clinic) => clinic.auditTrail.map((entry) => ({ ...entry, clinic: clinic.name }))).sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 40).map((entry) => <div key={`${entry.clinic}-${entry.id}`}><i /><span><strong>{entry.clinic}</strong><small>{String(entry.action).replaceAll('_', ' ')} · {dateTime(entry.at)}</small></span></div>)}</div></section>}
       </div>
+        </>} />
+        <Route path="location/:locationId" element={
+          <div className="ops-layout">
+            <LocationRoute
+              clinics={clinics}
+              loading={loading}
+              onSelect={setSelectedId}
+              renderPage={(clinic) => (
+                <LocationPage
+                  clinic={clinic}
+                  clinics={clinics}
+                  busy={busy}
+                  error={actionError}
+                  onClose={() => navigate('/admin')}
+                  onConfirmPayment={(payment) => mutateClinic({ action: 'confirm_payment', payment })}
+                  onSaveProvisioning={(provisioning) => mutateClinic({ action: 'save_provisioning', provisioning })}
+                  onAction={(action, confirmation) => mutateClinic({ action, confirmation })}
+                  onEdit={(location) => mutateClinic({ action: 'update_location', location })}
+                  onMember={(member) => mutateClinic({ action: 'manage_member', member })}
+                  onCalendar={(calendar) => mutateClinic({ action: 'save_calendar', calendar })}
+                  onAgentConfig={(agent) => mutateClinic({ action: 'update_agent_configuration', agent })}
+                  onAgentAdvanced={(advanced) => mutateClinic({ action: 'update_agent_advanced', advanced })}
+                  onImpersonate={impersonateUser}
+                  onStage={(stage) => mutateClinic({ action: 'override_stage', stage })}
+                  onBypass={(confirmation) => mutateClinic({ action: 'bypass_live', confirmation })}
+                  onDelete={removeClinic}
+                />
+              )}
+            />
+          </div>
+        } />
+      </Routes>
       {creating && <NewClientModal busy={busy} error={actionError} onClose={() => setCreating(false)} onCreate={createClinic} />}
-      {selected && <ClinicDetail clinic={selected} clinics={clinics} busy={busy} error={actionError} onClose={() => setSelectedId(null)} onConfirmPayment={(payment) => mutateClinic({ action: 'confirm_payment', payment })} onSaveProvisioning={(provisioning) => mutateClinic({ action: 'save_provisioning', provisioning })} onAction={(action, confirmation) => mutateClinic({ action, confirmation })} onEdit={(location) => mutateClinic({ action: 'update_location', location })} onMember={(member) => mutateClinic({ action: 'manage_member', member })} onCalendar={(calendar) => mutateClinic({ action: 'save_calendar', calendar })} onAgentConfig={(agent) => mutateClinic({ action: 'update_agent_configuration', agent })} onAgentAdvanced={(advanced) => mutateClinic({ action: 'update_agent_advanced', advanced })} onImpersonate={impersonateUser} onStage={(stage) => mutateClinic({ action: 'override_stage', stage })} onBypass={(confirmation) => mutateClinic({ action: 'bypass_live', confirmation })} onDelete={removeClinic} />}
-    </main>
+      </main>
   );
 }
