@@ -231,8 +231,13 @@
 .ops-overview-action strong { font-size: 17px; }.ops-overview-action span { color: #9fb0ca; font-size: 12px; }
 .ops-overview-action button { min-height: 43px; padding: 0 15px; display: flex; align-items: center; gap: 8px; color: #071631; background: #47e6de; border: 0; border-radius: 10px; font-weight: 800; cursor: pointer; }
 .ops-simple-view { min-height: 420px; }.ops-agent-grid { padding: 18px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-.ops-agent-grid button { min-height: 88px; padding: 16px; display: grid; grid-template-columns: 38px 1fr auto; align-items: center; gap: 13px; color: #dfe8f6; background: #0e1727; border: 1px solid #202c40; border-radius: 13px; text-align: left; cursor: pointer; }
-.ops-agent-grid button > span { min-width: 0; display: grid; gap: 5px; }.ops-agent-grid small { overflow: hidden; color: #7f90aa; text-overflow: ellipsis; }.ops-agent-grid i { color: #47e6de; font-size: 11px; font-style: normal; }
+.ops-agent-card { overflow: hidden; background: #0e1727; border: 1px solid #202c40; border-radius: 13px; }
+.ops-agent-card.missing-agent { border-color: rgba(255, 202, 72, .3); }
+.ops-agent-open { width: 100%; min-height: 88px; padding: 16px; display: grid; grid-template-columns: 38px 1fr auto; align-items: center; gap: 13px; color: #dfe8f6; background: transparent; border: 0; text-align: left; cursor: pointer; }
+.ops-agent-open > span { min-width: 0; display: grid; gap: 5px; }.ops-agent-open small { overflow: hidden; color: #7f90aa; text-overflow: ellipsis; }.ops-agent-open i { color: #47e6de; font-size: 11px; font-style: normal; }
+.ops-agent-provision { width: 100%; min-height: 42px; padding: 0 16px; display: flex; align-items: center; justify-content: center; gap: 8px; color: #071631; background: #47e6de; border: 0; border-top: 1px solid rgba(71, 230, 222, .35); font-weight: 800; cursor: pointer; }
+.ops-agent-provision:disabled { color: #7f90aa; background: #121d30; cursor: not-allowed; }
+.ops-agent-error { margin: 14px 18px 0; padding: 11px 13px; display: flex; align-items: center; gap: 8px; color: #ffb4aa; background: rgba(167, 53, 41, .14); border: 1px solid rgba(199, 73, 60, .35); border-radius: 10px; font-size: 12px; }
 .ops-activity-feed { padding: 10px 24px 25px; }.ops-activity-feed > div { min-height: 64px; display: grid; grid-template-columns: 10px 1fr; align-items: center; gap: 14px; border-bottom: 1px solid #202c40; }.ops-activity-feed i { width: 8px; height: 8px; background: #47e6de; border-radius: 50%; }.ops-activity-feed span { display: grid; gap: 5px; }.ops-activity-feed small { color: #7f90aa; font-size: 11px; text-transform: capitalize; }
 .location-management > header span { margin-left: auto; color: #7587a2; font-size: 11px; }
 .ops-management-grid { display: grid; grid-template-columns: repeat(3, 1fr) auto; align-items: end; gap: 11px; }

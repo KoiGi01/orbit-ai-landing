@@ -538,11 +538,15 @@ function ProvisioningForm({ clinic, busy, error, onSave }) {
 }
 
 function NextAction({ clinic, busy, error, onAction }) {
-  const config = ACTIONS[clinic.state.onboardingStatus];
+  const activated = ['verified', 'not_required'].includes(clinic.state.billingStatus);
+  const missingAgent = !clinic.provisioningDraft?.retellAgentId;
+  const config = activated && missingAgent
+    ? ['start_configuration', 'Provisionar agente automáticamente', ServerCog]
+    : ACTIONS[clinic.state.onboardingStatus];
   const [confirmation, setConfirmation] = useState('');
 
-  if (!['verified', 'not_required'].includes(clinic.state.billingStatus)) return null;
-  if (clinic.state.serviceStatus === 'live') {
+  if (!activated) return null;
+  if (clinic.state.serviceStatus === 'live' && !missingAgent) {
     return <section className="ops-action-card live-card"><div className="ops-action-icon"><BadgeCheck size={21} /></div><div className="ops-action-copy"><p>Servicio activo</p><h3>La clínica está en producción.</h3><span>Agente, prueba, webhook y fallback quedaron verificados antes de la activación.</span></div></section>;
   }
   if (!config) return null;
@@ -563,6 +567,32 @@ function NextAction({ clinic, busy, error, onAction }) {
       {error && <p className="ops-form-error"><CircleAlert size={16} /> {error}</p>}
       <button type="button" className="ops-button primary" disabled={busy || readinessBlocked || (goLive && confirmation !== clinic.name)} onClick={() => onAction(action, confirmation)}>{busy ? <LoaderCircle className="spin" size={17} /> : <Icon size={17} />} {label}</button>
     </section>
+  );
+}
+
+function AgentInventoryCard({ clinic, disabled, busy, onOpen, onProvision }) {
+  const hasAgent = Boolean(clinic.provisioningDraft?.retellAgentId);
+  const canProvision = ['verified', 'not_required'].includes(clinic.state.billingStatus) && !hasAgent;
+
+  return (
+    <article className={`ops-agent-card${hasAgent ? '' : ' missing-agent'}`}>
+      <button type="button" className="ops-agent-open" onClick={onOpen}>
+        <ServerCog size={20} />
+        <span><strong>{clinic.name}</strong><small>{clinic.provisioningDraft?.retellAgentId || 'Sin agente'}</small></span>
+        <i>{clinic.state.serviceStatus === 'live' && hasAgent ? 'Activo' : clinic.stage}</i>
+      </button>
+      {!hasAgent && (
+        <button
+          type="button"
+          className="ops-agent-provision"
+          disabled={disabled || !canProvision}
+          onClick={onProvision}
+        >
+          {busy ? <LoaderCircle className="spin" size={16} /> : <ServerCog size={16} />}
+          {canProvision ? 'Provisionar automáticamente' : 'Activa la Location primero'}
+        </button>
+      )}
+    </article>
   );
 }
 
@@ -915,6 +945,7 @@ export default function InternalAdmin() {
   const [accessError, setAccessError] = useState('');
   const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [provisioningId, setProvisioningId] = useState('');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('Todos');
   const [selectedId, setSelectedId] = useState(null);
@@ -1007,6 +1038,24 @@ export default function InternalAdmin() {
     }
   };
 
+  const provisionClinic = async (organizationId) => {
+    setBusy(true);
+    setProvisioningId(organizationId);
+    setActionError('');
+    try {
+      const { clinic } = await updateInternalClinic(getToken, {
+        organizationId,
+        action: 'start_configuration',
+      });
+      replaceClinic(clinic);
+    } catch (error) {
+      setActionError(error.message);
+    } finally {
+      setProvisioningId('');
+      setBusy(false);
+    }
+  };
+
   const removeClinic = async (confirmation) => {
     setBusy(true); setActionError('');
     try {
@@ -1070,7 +1119,7 @@ export default function InternalAdmin() {
             {!loading && visible.length === 0 && <div className="ops-list-state"><Building2 size={22} /><strong>No encontramos Locations.</strong><span>Ajusta la búsqueda o crea la primera Location.</span></div>}
           </div>
         </section></>}
-        {section === 'Agentes' && <section className="ops-queue ops-simple-view"><header><div><h2>Agentes</h2><span>{clinics.filter((clinic) => clinic.provisioningDraft?.retellAgentId).length} configurados</span></div></header><div className="ops-agent-grid">{clinics.map((clinic) => <button type="button" key={clinic.id} onClick={() => navigate(`/admin/location/${clinic.id}`)}><ServerCog size={20} /><span><strong>{clinic.name}</strong><small>{clinic.provisioningDraft?.retellAgentId || 'Sin agente'}</small></span><i>{clinic.state.serviceStatus === 'live' ? 'Activo' : clinic.stage}</i></button>)}</div></section>}
+        {section === 'Agentes' && <section className="ops-queue ops-simple-view"><header><div><h2>Agentes</h2><span>{clinics.filter((clinic) => clinic.provisioningDraft?.retellAgentId).length} configurados</span></div></header>{actionError && <p className="ops-agent-error"><CircleAlert size={16} /> {actionError}</p>}<div className="ops-agent-grid">{clinics.map((clinic) => <AgentInventoryCard key={clinic.id} clinic={clinic} disabled={busy} busy={provisioningId === clinic.id} onOpen={() => navigate(`/admin/location/${clinic.id}`)} onProvision={() => provisionClinic(clinic.id)} />)}</div></section>}
         {section === 'Actividad' && <section className="ops-queue ops-simple-view"><header><div><h2>Auditoría</h2><span>Eventos recientes</span></div></header><div className="ops-activity-feed">{clinics.flatMap((clinic) => clinic.auditTrail.map((entry) => ({ ...entry, clinic: clinic.name }))).sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 40).map((entry) => <div key={`${entry.clinic}-${entry.id}`}><i /><span><strong>{entry.clinic}</strong><small>{String(entry.action).replaceAll('_', ' ')} · {dateTime(entry.at)}</small></span></div>)}</div></section>}
       </div>
         </>} />

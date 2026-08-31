@@ -442,8 +442,10 @@ export function CallExperience({ profile, scenario, onClose, onCompleted = () =>
         setPhase('error');
       });
       await client.startCall({ accessToken });
-    } catch {
-      setError('No pudimos abrir el micrófono o conectar la llamada. Revisa la configuración de Retell e intenta nuevamente.');
+    } catch (requestError) {
+      setError(requestError?.status
+        ? requestError.message
+        : 'No pudimos abrir el micrófono o conectar la llamada. Revisa la configuración de Retell e intenta nuevamente.');
       setPhase('error');
     }
   };
