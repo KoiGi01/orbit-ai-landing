@@ -471,3 +471,27 @@
   .ops-clinic-open { min-height: 85px; padding: 0 6px 0 14px; grid-template-columns: 42px 1fr 18px; gap: 11px; }
   .ops-location-header { flex-direction: column; }
 }
+
+/* Firma de correo */
+.ops-signature { display: grid; gap: 18px; padding: 22px; background: var(--ops-panel); border: 1px solid var(--ops-line); border-radius: 10px; }
+.ops-signature-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.ops-signature-head h2 { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--ops-text); font-size: 15px; }
+.ops-signature-head > div > span { display: block; margin-top: 5px; color: var(--ops-muted); font-family: var(--ops-code); font-size: 12px; }
+.ops-signature-locale { display: inline-flex; padding: 3px; gap: 3px; background: #070d18; border: 1px solid var(--ops-line); border-radius: 8px; }
+.ops-signature-locale button { padding: 6px 14px; color: var(--ops-muted); background: transparent; border: 0; border-radius: 6px; font: inherit; font-family: var(--ops-code); font-size: 12px; cursor: pointer; }
+.ops-signature-locale button:hover { color: #dce7f8; }
+.ops-signature-locale button.active { color: #04211f; background: #47e6de; font-weight: 700; }
+.ops-signature-body { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: 22px; align-items: start; }
+.ops-signature-form { grid-template-columns: 1fr; }
+.ops-signature-output { display: grid; gap: 12px; }
+.ops-signature-label { color: var(--ops-muted); font-family: var(--ops-code); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.ops-signature-frame { width: 100%; min-height: 190px; background: #fff; border: 1px solid var(--ops-line); border-radius: 8px; }
+.ops-signature-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.ops-signature-copy { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; color: #04211f; background: #47e6de; border: 0; border-radius: 7px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.ops-signature-copy:hover { background: #6bf0e9; }
+.ops-signature-actions p { margin: 0; color: var(--ops-muted); font-family: var(--ops-code); font-size: 11px; }
+.ops-signature-actions kbd { padding: 1px 5px; color: #dce7f8; background: #070d18; border: 1px solid var(--ops-line); border-radius: 4px; font-family: var(--ops-code); font-size: 10px; }
+.ops-signature-error { margin: 0; color: #ff9a8a; font-family: var(--ops-code); font-size: 12px; }
+.ops-signature-source summary { color: var(--ops-muted); font-family: var(--ops-code); font-size: 12px; cursor: pointer; }
+.ops-signature-source textarea { width: 100%; margin-top: 8px; padding: 10px; color: #9fb4cc; background: #070d18; border: 1px solid var(--ops-line); border-radius: 7px; font-family: var(--ops-code); font-size: 11px; line-height: 1.5; resize: vertical; }
+@media (max-width: 900px) { .ops-signature-body { grid-template-columns: 1fr; } }

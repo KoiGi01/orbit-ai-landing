@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { UserButton, useAuth, useUser } from '@clerk/react';
+import SignatureStudio from './signature-studio.jsx';
 import {
   ArrowLeft,
   ArrowRight,
@@ -1032,10 +1033,10 @@ export default function InternalAdmin() {
       <Routes>
         <Route index element={<>
       <nav className="ops-primary-nav" aria-label="Navegación de Admin Console">
-        {['Resumen', 'Locations', 'Agentes', 'Actividad'].map((item) => <button type="button" className={section === item ? 'active' : ''} key={item} onClick={() => setSection(item)}>{item}</button>)}
+        {['Resumen', 'Locations', 'Agentes', 'Actividad', 'Firma'].map((item) => <button type="button" className={section === item ? 'active' : ''} key={item} onClick={() => setSection(item)}>{item}</button>)}
       </nav>
       <div className="ops-layout">
-        <section className="ops-heading"><div><p><TerminalSquare size={14} /> Internal operations / {section.toLowerCase()}</p><h1>{section === 'Resumen' ? 'Admin Console' : section}</h1><span>{section === 'Resumen' ? 'Estado comercial y operativo de AutiveX.' : section === 'Locations' ? 'Clientes, miembros, acceso y ciclo de vida.' : section === 'Agentes' ? 'Inventario y estado de agentes Retell.' : 'Auditoría reciente de operaciones.'}</span></div><button type="button" onClick={() => { setActionError(''); setCreating(true); }}><Plus size={18} /> Nueva Location</button></section>
+        <section className="ops-heading"><div><p><TerminalSquare size={14} /> Internal operations / {section.toLowerCase()}</p><h1>{section === 'Resumen' ? 'Admin Console' : section}</h1><span>{section === 'Resumen' ? 'Estado comercial y operativo de AutiveX.' : section === 'Locations' ? 'Clientes, miembros, acceso y ciclo de vida.' : section === 'Agentes' ? 'Inventario y estado de agentes Retell.' : section === 'Firma' ? 'Genera tu firma de correo con la marca AutiveX.' : 'Auditoría reciente de operaciones.'}</span></div>{section !== 'Firma' && <button type="button" onClick={() => { setActionError(''); setCreating(true); }}><Plus size={18} /> Nueva Location</button>}</section>
 
         <section className="ops-system-strip" aria-label="Estado de infraestructura">
           <span><ShieldCheck size={15} /><b>Clerk</b><i>Identity active</i></span>
@@ -1045,6 +1046,8 @@ export default function InternalAdmin() {
         </section>
 
         {section === 'Resumen' && <AdminOverview clinics={clinics} onOpenLocations={() => setSection('Locations')} />}
+
+        {section === 'Firma' && <SignatureStudio />}
 
         {section === 'Locations' && <><section className="ops-stats">
           <StatCard label="Sin agente" value={agentsPending} detail="Locations que esperan provisionamiento" tone="warning" icon={Settings2} />
