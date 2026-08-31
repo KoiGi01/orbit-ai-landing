@@ -1,34 +1,35 @@
-// Email signature markup for AutiveX operators.
+// The clickable line that sits under the rendered signature image.
 //
-// This module is deliberately free of Vite-only globals (no `import.meta.env`)
-// so the node test suite can import it directly.
+// The image carries identity and brand; it cannot carry links, and many clients
+// block images outright. This line is the actionable half: real anchors that
+// survive image blocking and stay selectable.
 //
-// Email clients are not browsers: Outlook drops webfonts, ignores flexbox and
-// grid, and strips <style> blocks. So the signature is a table with inline
-// styles and a websafe stack. It will not render in Manrope like the site does.
+// Free of Vite-only globals (no `import.meta.env`) so the node suite can import
+// it directly. Inline styles only — mail clients strip <style> blocks.
 
-const SITE_URL = 'https://autivexai.com';
-const LOGO_URL = `${SITE_URL}/autivex-signature-logo.png`;
-const BOOKING_URL = 'https://calendly.com/autivex/consultoria';
+export const SITE_URL = 'https://autivexai.com';
+export const BOOKING_URL = 'https://calendly.com/autivex/consultoria';
 
 const FONT_STACK = "Arial, 'Helvetica Neue', Helvetica, sans-serif";
-const INK = '#0a1735';
 const MUTED = '#4d5b78';
-const ACCENT = '#0b6f68';
-const LINE = '#d8def0';
+const ACCENT_INK = '#0b6f68';
 
-const COPY = {
+// Shared by the rendered image and the clickable line so the two halves of the
+// signature never drift apart.
+export const SIGNATURE_COPY = {
   es: {
-    tagline: 'Recepción de voz con inteligencia artificial para negocios en México',
     cta: 'Agenda una demo',
     site: 'autivexai.com',
+    tagline: 'Recepción de voz con IA para negocios en México',
   },
   en: {
-    tagline: 'AI voice reception for businesses in Mexico',
     cta: 'Book a demo',
     site: 'autivexai.com',
+    tagline: 'AI voice reception for businesses in Mexico',
   },
 };
+
+const COPY = SIGNATURE_COPY;
 
 export function escapeHtml(value) {
   return String(value ?? '')
@@ -43,62 +44,24 @@ function telHref(phone) {
   return `tel:${String(phone).replace(/[^\d+]/g, '')}`;
 }
 
-export function buildSignatureHtml(fields = {}, locale = 'es') {
+export function buildSignatureLineHtml(fields = {}, locale = 'es') {
   const copy = COPY[locale] || COPY.es;
-  const name = escapeHtml(fields.name || '');
-  const role = escapeHtml(fields.role || '');
   const email = escapeHtml(fields.email || '');
   const phone = String(fields.phone || '').trim();
+  const link = `color:${ACCENT_INK};text-decoration:none;`;
 
-  const linkStyle = `color:${ACCENT};text-decoration:none;`;
-  const metaStyle = `font-family:${FONT_STACK};font-size:13px;line-height:20px;color:${MUTED};`;
+  const parts = [];
+  if (email) parts.push(`<a href="mailto:${email}" style="${link}">${email}</a>`);
+  if (phone) parts.push(`<a href="${escapeHtml(telHref(phone))}" style="${link}">${escapeHtml(phone)}</a>`);
+  parts.push(`<a href="${BOOKING_URL}" style="${link}font-weight:bold;">${copy.cta}</a>`);
+  parts.push(`<a href="${SITE_URL}" style="${link}">${copy.site}</a>`);
 
-  const contactRows = [];
-  if (email) {
-    contactRows.push(
-      `<a href="mailto:${email}" style="${linkStyle}">${email}</a>`
-    );
-  }
-  if (phone) {
-    contactRows.push(
-      `<a href="${escapeHtml(telHref(phone))}" style="${linkStyle}">${escapeHtml(phone)}</a>`
-    );
-  }
-
-  return [
-    `<table cellpadding="0" cellspacing="0" border="0" style="font-family:${FONT_STACK};border-collapse:collapse;">`,
-    '<tr>',
-    `<td style="vertical-align:top;padding-right:16px;">`,
-    `<img src="${LOGO_URL}" width="56" height="56" alt="AutiveX" style="display:block;width:56px;height:56px;border:0;outline:none;" />`,
-    '</td>',
-    `<td style="vertical-align:top;padding-left:16px;border-left:1px solid ${LINE};">`,
-    `<div style="font-family:${FONT_STACK};font-size:16px;line-height:22px;font-weight:bold;color:${INK};">${name}</div>`,
-    role ? `<div style="${metaStyle}">${role}</div>` : '',
-    `<div style="${metaStyle}padding-top:6px;">${contactRows.join(' &nbsp;·&nbsp; ')}</div>`,
-    `<div style="${metaStyle}padding-top:6px;">`,
-    `<a href="${SITE_URL}" style="${linkStyle}font-weight:bold;">${copy.site}</a>`,
-    ` &nbsp;·&nbsp; `,
-    `<a href="${BOOKING_URL}" style="${linkStyle}">${copy.cta}</a>`,
-    '</div>',
-    `<div style="font-family:${FONT_STACK};font-size:12px;line-height:18px;color:${MUTED};padding-top:8px;">${copy.tagline}</div>`,
-    '</td>',
-    '</tr>',
-    '</table>',
-  ].filter(Boolean).join('');
+  return `<div style="font-family:${FONT_STACK};font-size:13px;line-height:20px;color:${MUTED};">${parts.join(' &nbsp;·&nbsp; ')}</div>`;
 }
 
-// Plain-text twin of the signature. The clipboard carries both flavors so a
-// paste into a rich editor keeps the layout while a plain-text target still
-// gets readable contact details instead of raw markup.
-export function buildSignatureText(fields = {}, locale = 'es') {
+export function buildSignatureLineText(fields = {}, locale = 'es') {
   const copy = COPY[locale] || COPY.es;
-  const contact = [fields.email, fields.phone].filter(Boolean).join(' · ');
-
-  return [
-    fields.name || '',
-    fields.role || '',
-    contact,
-    `${copy.site} · ${copy.cta}: ${BOOKING_URL}`,
-    copy.tagline,
-  ].filter(Boolean).join('\n');
+  return [fields.email, fields.phone, `${copy.cta}: ${BOOKING_URL}`, copy.site]
+    .filter(Boolean)
+    .join(' · ');
 }

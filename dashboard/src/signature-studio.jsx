@@ -1,8 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useUser } from '@clerk/react';
-import { Check, Copy, Mail } from 'lucide-react';
+import { Check, Copy, Download, Mail } from 'lucide-react';
+import '@fontsource-variable/manrope';
 
-import { buildSignatureHtml, buildSignatureText } from './signature-template.js';
+import { CANVAS, drawSignature, FONT } from './signature-canvas.js';
+import { buildSignatureLineHtml, buildSignatureLineText, SIGNATURE_COPY } from './signature-template.js';
 
 const LOCALES = [
   { id: 'es', label: 'Español' },
@@ -14,30 +16,26 @@ const ROLE_PLACEHOLDER = {
   en: 'Implementation specialist',
 };
 
-// The preview lives in an iframe because the Admin Console is a dark,
-// monospaced surface. Rendering the signature inline would let console CSS
-// leak in and show something the recipient will never see.
-function SignaturePreview({ html }) {
-  const document = useMemo(
-    () => `<!doctype html><html><head><meta charset="utf-8" /></head><body style="margin:0;padding:22px;background:#ffffff;">${html}</body></html>`,
-    [html]
-  );
+const LOGO_SRC = '/autivex-signature-logo.png';
 
-  return (
-    <iframe
-      className="ops-signature-frame"
-      title="Vista previa de la firma"
-      srcDoc={document}
-      sandbox=""
-    />
-  );
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
+  });
 }
 
 export default function SignatureStudio() {
   const { user } = useUser();
+  const canvasRef = useRef(null);
   const [locale, setLocale] = useState('es');
-  const [copied, setCopied] = useState('');
-  const [copyError, setCopyError] = useState('');
+  const [photoImage, setPhotoImage] = useState(null);
+  const [logoImage, setLogoImage] = useState(null);
+  const [ready, setReady] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState('');
 
   const [fields, setFields] = useState(() => ({
     name: user?.fullName || '',
@@ -46,29 +44,100 @@ export default function SignatureStudio() {
     phone: '',
   }));
 
-  const html = useMemo(() => buildSignatureHtml(fields, locale), [fields, locale]);
-  const text = useMemo(() => buildSignatureText(fields, locale), [fields, locale]);
+  const lineHtml = useMemo(() => buildSignatureLineHtml(fields, locale), [fields, locale]);
+  const lineText = useMemo(() => buildSignatureLineText(fields, locale), [fields, locale]);
+
+  // The brand face has to be resident before the canvas draws, otherwise the
+  // first paint silently falls back to Arial.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await Promise.all([
+          document.fonts.load(`800 21px "${FONT}"`),
+          document.fonts.load(`700 14px "${FONT}"`),
+          document.fonts.load(`500 12px "${FONT}"`),
+        ]);
+      } catch {
+        // Fall through: the canvas still renders in the fallback stack.
+      }
+      const logo = await loadImage(LOGO_SRC).catch(() => null);
+      if (cancelled) return;
+      setLogoImage(logo);
+      setReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const context = canvas.getContext('2d');
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    drawSignature(context, { fields, locale, photoImage, logoImage, copy: SIGNATURE_COPY[locale] });
+  }, [ready, fields, locale, photoImage, logoImage]);
 
   const update = (key) => (event) => {
     setFields((current) => ({ ...current, [key]: event.target.value }));
-    setCopied('');
-    setCopyError('');
+    setCopied(false);
   };
 
-  const copySignature = async () => {
-    setCopyError('');
+  const onPhoto = useCallback((event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setError('');
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      setPhotoImage(image);
+      URL.revokeObjectURL(url);
+    };
+    image.onerror = () => {
+      setError('No pudimos leer esa imagen. Prueba con un PNG o JPG.');
+      URL.revokeObjectURL(url);
+    };
+    image.src = url;
+  }, []);
+
+  const downloadPng = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        setError('No se pudo generar el PNG.');
+        return;
+      }
+      const slug = (fields.name || 'autivex')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `firma-autivex-${slug || 'autivex'}.png`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    }, 'image/png');
+  };
+
+  const copyLine = async () => {
+    setError('');
     try {
-      // Both flavors: rich clients keep the layout, plain-text targets stay readable.
       await navigator.clipboard.write([
         new window.ClipboardItem({
-          'text/html': new Blob([html], { type: 'text/html' }),
-          'text/plain': new Blob([text], { type: 'text/plain' }),
+          'text/html': new Blob([lineHtml], { type: 'text/html' }),
+          'text/plain': new Blob([lineText], { type: 'text/plain' }),
         }),
       ]);
-      setCopied('html');
-      window.setTimeout(() => setCopied(''), 2600);
-    } catch (error) {
-      setCopyError('Tu navegador bloqueó el portapapeles. Copia el HTML desde el cuadro de abajo.');
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2600);
+    } catch {
+      setError('Tu navegador bloqueó el portapapeles. Copia la línea manualmente.');
     }
   };
 
@@ -77,7 +146,7 @@ export default function SignatureStudio() {
       <header className="ops-signature-head">
         <div>
           <h2><Mail size={17} /> Firma de correo</h2>
-          <span>Personaliza tu firma y pégala en Gmail u Outlook. No se guarda: se genera y se copia.</span>
+          <span>Descarga el PNG, súbelo a Gmail y pega debajo la línea con tus enlaces. No se guarda nada aquí.</span>
         </div>
         <div className="ops-signature-locale" role="group" aria-label="Idioma de la firma">
           {LOCALES.map((option) => (
@@ -85,7 +154,7 @@ export default function SignatureStudio() {
               type="button"
               key={option.id}
               className={locale === option.id ? 'active' : ''}
-              onClick={() => { setLocale(option.id); setCopied(''); }}
+              onClick={() => { setLocale(option.id); setCopied(false); }}
             >
               {option.label}
             </button>
@@ -111,25 +180,41 @@ export default function SignatureStudio() {
             Teléfono / WhatsApp
             <input value={fields.phone} onChange={update('phone')} placeholder="+52 55 1234 5678" />
           </label>
+          <label>
+            Foto de perfil
+            <input type="file" accept="image/*" onChange={onPhoto} />
+            <small>Se dibuja dentro del PNG. No se sube a ningún servidor ni se guarda.</small>
+          </label>
         </div>
 
         <div className="ops-signature-output">
-          <span className="ops-signature-label">Vista previa</span>
-          <SignaturePreview html={html} />
-
+          <span className="ops-signature-label">1 · Imagen de la firma</span>
+          <div className="ops-signature-canvas-wrap">
+            <canvas
+              ref={canvasRef}
+              width={CANVAS.width * CANVAS.scale}
+              height={CANVAS.height * CANVAS.scale}
+              style={{ width: `${CANVAS.width}px`, height: `${CANVAS.height}px` }}
+              aria-label="Vista previa de la firma"
+            />
+          </div>
           <div className="ops-signature-actions">
-            <button type="button" className="ops-signature-copy" onClick={copySignature}>
-              {copied ? <><Check size={16} /> Copiada</> : <><Copy size={16} /> Copiar firma</>}
+            <button type="button" className="ops-signature-copy" onClick={downloadPng}>
+              <Download size={16} /> Descargar PNG
             </button>
-            <p>Pega con <kbd>Ctrl</kbd>+<kbd>V</kbd> en la configuración de firma de tu cliente de correo.</p>
+            <p>En Gmail: Configuración → Firma → Insertar imagen.</p>
           </div>
 
-          {copyError && <p className="ops-signature-error">{copyError}</p>}
+          <span className="ops-signature-label">2 · Línea con tus enlaces</span>
+          <div className="ops-signature-line" dangerouslySetInnerHTML={{ __html: lineHtml }} />
+          <div className="ops-signature-actions">
+            <button type="button" className="ops-signature-copy ops-signature-copy-ghost" onClick={copyLine}>
+              {copied ? <><Check size={16} /> Copiada</> : <><Copy size={16} /> Copiar línea</>}
+            </button>
+            <p>Pégala justo debajo de la imagen. Aquí los enlaces sí funcionan.</p>
+          </div>
 
-          <details className="ops-signature-source">
-            <summary>Ver HTML</summary>
-            <textarea readOnly value={html} rows={7} onFocus={(event) => event.target.select()} />
-          </details>
+          {error && <p className="ops-signature-error">{error}</p>}
         </div>
       </div>
     </section>
