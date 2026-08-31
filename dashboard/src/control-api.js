@@ -1,6 +1,6 @@
 const ERROR_MESSAGES = {
   authentication_required: 'Tu sesión terminó. Vuelve a iniciar sesión.',
-  invalid_session: 'No pudimos validar tu sesión. Actualiza la página.',
+  invalid_session: 'No pudimos validar tu sesión. Actualiza la página. Si continúa, cierra sesión desde tu perfil y vuelve a entrar.',
   organization_required: 'Tu cuenta todavía no tiene una clínica activa.',
   organization_admin_required: 'Solo el administrador de la clínica puede hacer este cambio.',
   internal_access_denied: 'Esta cuenta no tiene acceso a Operaciones AutiveX.',

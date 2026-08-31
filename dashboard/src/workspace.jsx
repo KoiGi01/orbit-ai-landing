@@ -577,20 +577,24 @@ export function ProspectPreview({ workspace, user }) {
   );
 }
 
-export function WorkspaceMessage({ type, user }) {
+export function WorkspaceMessage({ type, user, detail }) {
   const content = {
     organization_required: ['Falta crear el espacio de tu clínica.', 'Activa la creación automática de la primera Organization en Clerk y vuelve a iniciar sesión.'],
     billing_recovery: ['Tu operación está en modo consulta.', 'Conservamos el histórico, pero necesitamos revisar el estado de pago antes de continuar.'],
     suspended: ['El servicio está pausado.', 'Habla con AutiveX para revisar la operación y el número de respaldo.'],
     error: ['No pudimos abrir tu espacio.', 'Revisa la conexión con el servidor o intenta de nuevo.'],
   }[type] || ['Estamos preparando tu espacio.', 'Actualiza la página en unos momentos.'];
+  const description = type === 'error' && detail ? detail : content[1];
+  const action = type === 'error'
+    ? { href: '/app', label: 'Intentar de nuevo' }
+    : { href: SALES_URL, label: 'Hablar con AutiveX' };
 
   return (
     <main className="portal-shell workspace-message-shell">
       <PortalTopbar label="Control" email={user?.primaryEmailAddress?.emailAddress} staticAccount={user?.preview === true} />
       <section className="workspace-message-card">
-        <span><CircleAlert size={25} /></span><p className="portal-kicker">Acceso protegido</p><h1>{content[0]}</h1><p>{content[1]}</p>
-        <a href={SALES_URL}>Hablar con AutiveX <ArrowRight size={17} /></a>
+        <span><CircleAlert size={25} /></span><p className="portal-kicker">Acceso protegido</p><h1>{content[0]}</h1><p>{description}</p>
+        <a href={action.href}>{action.label} <ArrowRight size={17} /></a>
       </section>
     </main>
   );
