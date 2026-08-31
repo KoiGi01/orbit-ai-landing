@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import '@fontsource-variable/instrument-sans';
+import '@fontsource-variable/manrope';
 import { RetellWebClient } from 'retell-client-js-sdk';
 import {
   Activity,
@@ -407,7 +407,7 @@ function Hero({ onDemo, onPilot }) {
       <div className="hero-orbit hero-orbit-two" />
       <div className="hero-grid">
         <div className="hero-copy">
-          <h1>Que una llamada sin respuesta no te cueste un cliente.</h1>
+          <h1>Que una llamada sin respuesta no te cueste <span className="headline-accent">un cliente</span>.</h1>
           <p>AutiveX atiende las llamadas de tu negocio cuando tu equipo está ocupado, identifica el motivo y deja cada caso listo para confirmar una cita, devolver la llamada o escalar.</p>
           <div className="hero-actions" data-reveal style={{ '--reveal-delay': '280ms' }}>
             <button type="button" className="button button-coral" onClick={onDemo}>
@@ -1119,6 +1119,44 @@ function Footer({ onPrivacy, onDemo }) {
   );
 }
 
+function FloatingVoiceCTA({ onDemo }) {
+  const [pastHero, setPastHero] = useState(false);
+  const [atContact, setAtContact] = useState(false);
+
+  useEffect(() => {
+    const observers = [];
+    const hero = document.getElementById('inicio');
+    const contact = document.getElementById('evaluacion');
+    if (hero) {
+      const heroObserver = new IntersectionObserver(([entry]) => setPastHero(!entry.isIntersecting), { rootMargin: '-40% 0px 0px 0px' });
+      heroObserver.observe(hero);
+      observers.push(heroObserver);
+    }
+    if (contact) {
+      const contactObserver = new IntersectionObserver(([entry]) => setAtContact(entry.isIntersecting), { threshold: 0.15 });
+      contactObserver.observe(contact);
+      observers.push(contactObserver);
+    }
+    return () => observers.forEach((observer) => observer.disconnect());
+  }, []);
+
+  const visible = pastHero && !atContact;
+
+  return (
+    <button
+      type="button"
+      className={`floating-voice-cta ${visible ? 'is-visible' : ''}`}
+      onClick={onDemo}
+      tabIndex={visible ? 0 : -1}
+      aria-hidden={!visible}
+    >
+      <span className="floating-voice-pulse" aria-hidden="true" />
+      <Volume2 size={20} />
+      <span className="floating-voice-label">Probar la voz</span>
+    </button>
+  );
+}
+
 function App() {
   const [demoOpen, setDemoOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
@@ -1153,6 +1191,7 @@ function App() {
         <ContactSection onDemo={() => openDemo('contact')} />
       </main>
       <Footer onPrivacy={() => setPrivacyOpen(true)} onDemo={() => openDemo('footer')} />
+      <FloatingVoiceCTA onDemo={() => openDemo('floating_cta')} />
       <DemoDialog open={demoOpen} onClose={() => setDemoOpen(false)} onPilot={() => goToForm('demo_end')} />
       <PrivacyDialog open={privacyOpen} onClose={() => setPrivacyOpen(false)} />
     </div>
