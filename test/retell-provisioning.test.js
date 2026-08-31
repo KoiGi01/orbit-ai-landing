@@ -60,6 +60,19 @@ test('keeps the receptionist behaviour that stops the agent reading as a generic
   assert.match(prompt, /esto se escucha, no se lee/);
 });
 
+test('keeps every turn short and moves an answered call toward its close', () => {
+  const prompt = buildRetellBusinessPrompt({ clinicName: 'Clínica Centro' });
+
+  assert.match(prompt, /Responde normalmente con una sola frase corta/);
+  assert.match(prompt, /no pases de quince palabras/);
+  assert.match(prompt, /máximo dos frases antes de volver a escuchar/);
+  assert.match(prompt, /una sola pregunta por turno/i);
+  assert.match(prompt, /No llenes silencios, no hagas plática/);
+  assert.match(prompt, /No la reabras preguntando si necesita algo más/);
+  assert.match(prompt, /Nunca le digas a quien llama que tienes prisa/);
+  assert.doesNotMatch(prompt, /¿Algo más en que le pueda ayudar\?/);
+});
+
 test('renders service duration, price and details so the agent can answer without inventing, and stays backward-compatible with plain string services', () => {
   const structured = buildRetellBusinessPrompt({
     clinicName: 'Clínica Centro',
@@ -136,7 +149,7 @@ test('falls back to the default greeting template when no custom greeting is set
   // The greeting must not announce her as a virtual assistant: that framed
   // every call as a bot demo from the first three seconds. She still answers
   // honestly when asked outright, which the prompt covers.
-  assert.equal(requests[0].body.begin_message, 'Gracias por llamar a Clínica Nueva, le atiende Lucía. ¿En qué le puedo ayudar?');
+  assert.equal(requests[0].body.begin_message, 'Clínica Nueva, le atiende Lucía. ¿En qué le ayudo?');
   assert.doesNotMatch(requests[0].body.begin_message, /asistente virtual/);
 });
 
