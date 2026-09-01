@@ -4371,3 +4371,212 @@ select:focus-visible,
 .status-dot:not(.demo) {
   animation: breathe 2400ms ease-in-out infinite;
 }
+
+/* Call-volume chart. Replaces the old "not enough history yet" placeholder:
+   the series comes from an aggregate that counts every call, so one call
+   already draws one bar. Cyan is the handled volume, coral the share that
+   still needs a person -- the same meaning those two accents carry
+   everywhere else in the product. */
+.trends-panel {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 26px;
+}
+
+.trends-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.trends-panel .pulse-kpi strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: clamp(38px, 4vw, 52px);
+  font-weight: 560;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.055em;
+  line-height: 0.95;
+}
+
+.trends-panel .pulse-kpi p {
+  margin-top: 7px;
+  font-size: 11.5px;
+}
+
+.trends-facts {
+  display: grid;
+  gap: 11px;
+  margin: 0;
+  text-align: right;
+}
+
+.trends-facts div { display: grid; gap: 3px; }
+
+.trends-facts dt {
+  color: var(--ink-soft);
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.trends-facts dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.trends-facts dd.alert { color: var(--coral); }
+
+.trends-chart {
+  flex: 1;
+  min-height: 200px;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  padding-top: 24px;
+}
+
+.trends-column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.trends-bar-track {
+  width: 100%;
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(255, 255, 255, 0.035);
+  border-radius: 7px;
+}
+
+.trends-bar {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, var(--cyan), rgba(71, 230, 222, 0.3));
+  border-radius: 7px;
+  transition: height 380ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.trends-bar-alert {
+  display: block;
+  width: 100%;
+  background: var(--coral);
+  border-radius: 7px 7px 0 0;
+}
+
+.trends-column small {
+  color: var(--ink-faint);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.trends-empty {
+  margin: auto;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+}
+
+.trends-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 18px;
+}
+
+.trends-legend {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-soft);
+  font-size: 10.5px;
+}
+
+.trends-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+}
+
+.trends-legend i.handled { background: var(--cyan); }
+.trends-legend i.alert { margin-left: 9px; background: var(--coral); }
+
+.trends-panel .pulse-placeholder-action {
+  margin: 0;
+  padding: 10px 16px;
+  font-size: 12px;
+}
+
+/* The decision queue is paged, not scrolled: the card has to keep one height
+   whether the backlog is two rows or two hundred, otherwise it stretches and
+   drags the rest of the page down with it. The list reserves room for a full
+   page so a short last page does not shrink the card either. */
+.task-list {
+  min-height: calc(5 * 88px);
+}
+
+.task-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 14px;
+}
+
+.task-footer .text-link {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.task-pager {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.task-pager button {
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  color: inherit;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.task-pager button:hover:not(:disabled) {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--line-strong);
+}
+
+.task-pager button:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+}
+
+@media (max-width: 900px) {
+  .trends-header { flex-direction: column; gap: 14px; }
+  .trends-facts { text-align: left; grid-auto-flow: column; gap: 22px; }
+  .task-list { min-height: calc(3 * 88px); }
+}

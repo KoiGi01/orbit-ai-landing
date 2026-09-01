@@ -128,6 +128,10 @@ export function getWorkspaceActivity(getToken) {
   return controlRequest(getToken, '/api/workspace?resource=activity');
 }
 
+export function getWorkspaceTrends(getToken, days) {
+  return controlRequest(getToken, `/api/workspace?resource=trends&days=${encodeURIComponent(days)}`);
+}
+
 export function getWorkspaceCalendar(getToken, { fromISO, toISO } = {}) {
   const params = new URLSearchParams();
   if (fromISO) params.set('from', fromISO);

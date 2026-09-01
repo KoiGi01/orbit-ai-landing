@@ -12,6 +12,7 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   CircleHelp,
   Clock3,
@@ -50,6 +51,7 @@ import {
   getWorkspaceActivity,
   getWorkspaceCalendar,
   getWorkspaceNotifications,
+  getWorkspaceTrends,
   getWorkspaceVoices,
   markAllWorkspaceNotificationsRead,
   markWorkspaceNotificationRead,
@@ -324,6 +326,7 @@ function App({ account, workspace }) {
   const [testCallOpen, setTestCallOpen] = useState(false);
   const [notifications, setNotifications] = useState({ notifications: [], unreadCount: 0 });
   const [notifOpen, setNotifOpen] = useState(false);
+  const [trends, setTrends] = useState(null);
   const testProfile = workspace?.profile || { clinicName: identity.clinicName };
   const testScenario = {
     key: 'workspace_browser_test',
@@ -331,9 +334,20 @@ function App({ account, workspace }) {
     description: `Prueba privada del agente configurado para ${identity.clinicName}.`,
   };
 
-  // Real KPIs, computed from the same activity fetch the rest of the page
-  // already uses -- no separate endpoint needed for numbers this simple.
+  // KPIs come from the aggregate, not from the activity list: that list stops
+  // at the 20 most recent calls, so counting it would freeze "Llamadas
+  // registradas" at 20 and disagree with the chart right beside it. The list is
+  // only the fallback for the moment before the aggregate lands.
   const kpis = useMemo(() => {
+    if (trends?.totals) {
+      const { calls: totalCalls, needsAttention, avgDurationSeconds } = trends.totals;
+      return {
+        totalCalls,
+        avgDurationSeconds: avgDurationSeconds || null,
+        needsAttention,
+        resolved: Math.max(0, totalCalls - needsAttention),
+      };
+    }
     const completed = periodCalls.filter((call) => call.status !== 'ongoing');
     const timed = completed.filter((call) => Number.isFinite(call.durationSeconds));
     const needsAttention = periodCalls.filter((call) => call.followUpRequired).length;
@@ -343,7 +357,17 @@ function App({ account, workspace }) {
       needsAttention,
       resolved: Math.max(0, completed.length - needsAttention),
     };
-  }, [periodCalls]);
+  }, [periodCalls, trends]);
+
+  // The chart follows the period selector, so it refetches when that changes.
+  useEffect(() => {
+    let cancelled = false;
+    setTrends(null);
+    getWorkspaceTrends(account.getToken, periodDays)
+      .then((data) => { if (!cancelled) setTrends(data); })
+      .catch(() => { if (!cancelled) setTrends({ granularity: periodDays === 1 ? 'hour' : 'day', points: [], totals: { calls: 0, needsAttention: 0, avgDurationSeconds: 0 } }); });
+    return () => { cancelled = true; };
+  }, [account.getToken, periodDays]);
 
   useEffect(() => {
     let cancelled = false;
@@ -524,6 +548,7 @@ function App({ account, workspace }) {
               tasks={tasks}
               calls={calls}
               kpis={kpis}
+              trends={trends}
               getToken={account.getToken}
               onTaskFilter={setTaskFilter}
               onSelectTask={selectTask}
@@ -771,7 +796,7 @@ function KpiStrip({ kpis, isDemoData }) {
   );
 }
 
-function Dashboard({ period, onPeriod, tasks, calls, kpis, getToken, taskFilter, onTaskFilter, onSelectTask, onNavigate, onAction, firstName, isAdmin, dataMode }) {
+function Dashboard({ period, onPeriod, tasks, calls, kpis, trends, getToken, taskFilter, onTaskFilter, onSelectTask, onNavigate, onAction, firstName, isAdmin, dataMode }) {
   const [analysisOpen, setAnalysisOpen] = useState(false);
   const firstTask = tasks[0];
   return (
@@ -793,7 +818,7 @@ function Dashboard({ period, onPeriod, tasks, calls, kpis, getToken, taskFilter,
 
       <section className="hero-grid">
         <AttentionPanel tasks={tasks} isDemoData={dataMode.isDemo} filter={taskFilter} onFilter={onTaskFilter} onSelect={onSelectTask} onNavigate={onNavigate} />
-        <PulsePlaceholder onNavigate={onNavigate} />
+        <TrendsPanel trends={trends} period={period} onNavigate={onNavigate} />
       </section>
 
       <section className="analysis-disclosure">
@@ -811,23 +836,76 @@ function Dashboard({ period, onPeriod, tasks, calls, kpis, getToken, taskFilter,
   );
 }
 
-// Call-volume trends (charts, conversion funnel, no-wait rate) need
-// aggregated historical data no endpoint computes yet. Rather than fabricate
-// numbers, this stays an honest placeholder; app.calls already has enough
-// rows to see individual conversations in Conversaciones.
-function PulsePlaceholder({ onNavigate }) {
+function trendBucketLabel(key, granularity) {
+  if (!key) return '';
+  if (granularity === 'hour') return `${key.slice(11, 13)}:00`;
+  const [, month, day] = key.split('-');
+  return `${Number(day)}/${Number(month)}`;
+}
+
+function trendBucketTitle(point, granularity) {
+  const when = granularity === 'hour'
+    ? `${point.key.slice(11, 13)}:00`
+    : `${Number(point.key.split('-')[2])}/${Number(point.key.split('-')[1])}`;
+  const calls = `${point.calls} ${point.calls === 1 ? 'llamada' : 'llamadas'}`;
+  return point.needsAttention
+    ? `${when} · ${calls} · ${point.needsAttention} necesitan atención`
+    : `${when} · ${calls}`;
+}
+
+// Volume per bucket, straight from the aggregate. There is no minimum history:
+// one call draws one bar. The bars are plain elements rather than a charting
+// library because a bar per bucket is all this panel ever needs, and the
+// palette then stays the app's own -- cyan for handled, coral for the share
+// that still needs a person.
+function TrendsPanel({ trends, period, onNavigate }) {
+  const points = trends?.points || [];
+  const granularity = trends?.granularity || 'day';
+  const totals = trends?.totals || { calls: 0, needsAttention: 0, avgDurationSeconds: 0 };
+  const busiest = points.reduce((top, point) => Math.max(top, point.calls), 0);
+  const periodCopy = period === 'Hoy' ? 'en las últimas 24 horas' : `en ${period.toLowerCase()}`;
+  // Labelling every bucket is unreadable at 30 days, so only a few are named.
+  const labelEvery = Math.max(1, Math.ceil(points.length / 6));
+
   return (
-    <article className="pulse-panel pulse-panel-empty">
-      <header className="pulse-header">
+    <article className="pulse-panel trends-panel">
+      <header className="trends-header">
         <div className="pulse-kpi">
           <span>Tendencias de llamadas</span>
-          <p>Vamos a mostrar aquí el volumen y la duración de llamadas en cuanto tengamos suficiente historial.</p>
+          <strong>{trends ? totals.calls.toLocaleString('es-MX') : '·'}</strong>
+          <p>{totals.calls === 1 ? 'llamada' : 'llamadas'} {periodCopy}</p>
         </div>
+        <dl className="trends-facts">
+          <div><dt>Duración promedio</dt><dd>{formatKpiDuration(totals.avgDurationSeconds)}</dd></div>
+          <div><dt>Necesitan atención</dt><dd className={totals.needsAttention ? 'alert' : ''}>{totals.needsAttention.toLocaleString('es-MX')}</dd></div>
+        </dl>
       </header>
-      <button type="button" className="pulse-placeholder-action" onClick={() => onNavigate('Conversaciones')}>Ver conversaciones recientes <ArrowUpRight size={15} /></button>
+
+      <div className="trends-chart" role="img" aria-label={`Volumen de llamadas ${periodCopy}: ${totals.calls} en total, ${totals.needsAttention} necesitan atención.`}>
+        {points.map((point, index) => (
+          <div className="trends-column" key={point.key} title={trendBucketTitle(point, granularity)}>
+            <div className="trends-bar-track">
+              <div className="trends-bar" style={{ height: busiest ? `${Math.max((point.calls / busiest) * 100, point.calls ? 4 : 0)}%` : '0%' }}>
+                {point.needsAttention > 0 && (
+                  <i className="trends-bar-alert" style={{ height: `${(point.needsAttention / point.calls) * 100}%` }} />
+                )}
+              </div>
+            </div>
+            <small>{index % labelEvery === 0 || index === points.length - 1 ? trendBucketLabel(point.key, granularity) : ''}</small>
+          </div>
+        ))}
+        {!points.length && <p className="trends-empty">{trends ? 'Todavía no hay llamadas registradas.' : 'Cargando actividad…'}</p>}
+      </div>
+
+      <footer className="trends-footer">
+        <span className="trends-legend"><i className="handled" />Resueltas<i className="alert" />Necesitan atención</span>
+        <button type="button" className="pulse-placeholder-action" onClick={() => onNavigate('Conversaciones')}>Ver conversaciones <ArrowUpRight size={15} /></button>
+      </footer>
     </article>
   );
 }
+
+const DECISIONS_PER_PAGE = 5;
 
 function AttentionPanel({ tasks, isDemoData, filter, onFilter, onSelect, onNavigate }) {
   const filtered = useMemo(() => {
@@ -835,6 +913,17 @@ function AttentionPanel({ tasks, isDemoData, filter, onFilter, onSelect, onNavig
     if (filter === 'Hoy') return tasks.filter((item) => item.priorityTone !== 'normal');
     return tasks;
   }, [filter, tasks]);
+
+  // The queue is paged rather than scrolled so the card keeps one height no
+  // matter how long the backlog gets -- an unbounded list pushed everything
+  // below it down the page.
+  const [page, setPage] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / DECISIONS_PER_PAGE));
+  const current = Math.min(page, pageCount - 1);
+  const visible = filtered.slice(current * DECISIONS_PER_PAGE, current * DECISIONS_PER_PAGE + DECISIONS_PER_PAGE);
+
+  // Changing the filter re-cuts the list, so the old page number is meaningless.
+  useEffect(() => { setPage(0); }, [filter, filtered.length]);
 
   return (
     <aside className="attention-panel">
@@ -847,7 +936,7 @@ function AttentionPanel({ tasks, isDemoData, filter, onFilter, onSelect, onNavig
         ))}
       </div>
       <div className="task-list">
-        {filtered.map((item) => (
+        {visible.map((item) => (
           <button className="task-row" type="button" key={item.id} onClick={() => onSelect(item)}>
             <span className={`task-priority ${item.priorityTone}`} />
             <span className="task-main"><strong title={item.name}>{item.name}</strong><small>{item.detail}</small><span title={item.note}>{item.note}</span></span>
@@ -856,7 +945,16 @@ function AttentionPanel({ tasks, isDemoData, filter, onFilter, onSelect, onNavig
         ))}
         {filtered.length === 0 && <div className="task-empty"><CheckCircle2 size={20} /><span>No hay pendientes en este filtro.</span></div>}
       </div>
-      <button type="button" className="text-link" onClick={() => onNavigate('Oportunidades')}>Ver toda la cola <ArrowRight size={15} /></button>
+      <footer className="task-footer">
+        {pageCount > 1 ? (
+          <div className="task-pager">
+            <button type="button" aria-label="Página anterior" disabled={current === 0} onClick={() => setPage(current - 1)}><ChevronLeft size={15} /></button>
+            <span aria-live="polite">{current + 1} de {pageCount}</span>
+            <button type="button" aria-label="Página siguiente" disabled={current >= pageCount - 1} onClick={() => setPage(current + 1)}><ChevronRight size={15} /></button>
+          </div>
+        ) : <span />}
+        <button type="button" className="text-link" onClick={() => onNavigate('Oportunidades')}>Ver toda la cola <ArrowRight size={15} /></button>
+      </footer>
     </aside>
   );
 }

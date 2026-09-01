@@ -14,6 +14,7 @@ import {
   getWorkspaceActivityForClient,
   getWorkspaceCalendar,
   getWorkspaceNotificationsForClient,
+  getWorkspaceTrendsForClient,
   getWorkspaceVoiceCatalog,
   listClinics,
   manageClinicMember,
@@ -294,6 +295,11 @@ async function handleWorkspace(req, res) {
     }
     if (resource === 'activity') {
       sendJson(res, 200, await getWorkspaceActivityForClient(req.headers.authorization, createDatabase()));
+      return;
+    }
+    if (resource === 'trends') {
+      const days = new URL(req.url, 'http://localhost').searchParams.get('days');
+      sendJson(res, 200, await getWorkspaceTrendsForClient(req.headers.authorization, createDatabase(), days));
       return;
     }
     if (resource === 'notifications') {
