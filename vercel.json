@@ -3,6 +3,8 @@
   "buildCommand": "npm run build:platform",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/privacy", "destination": "/privacy.html" },
+    { "source": "/terms", "destination": "/terms.html" },
     { "source": "/sign-in", "destination": "/dashboard.html" },
     { "source": "/sign-in/:path*", "destination": "/dashboard.html" },
     { "source": "/sign-up", "destination": "/dashboard.html" },

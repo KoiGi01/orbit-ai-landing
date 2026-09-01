@@ -4274,6 +4274,24 @@ select:focus-visible,
   flex-direction: column;
 }
 
+.connection-card .calendar-privacy-note {
+  margin-top: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(24, 89, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(24, 89, 255, 0.06);
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.connection-card .calendar-privacy-note a {
+  color: #1859ff;
+  font-weight: 750;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .calendar-oauth > small {
   color: var(--ink-soft);
   font-size: 11px;

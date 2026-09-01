@@ -2111,6 +2111,7 @@ function CalendarConnectionCard({ calendar, getToken, isAdmin, onAction, onConne
       <header><span className="connection-icon"><CalendarCheck2 size={21} /></span><i className={isConnected ? 'connected' : 'review'}>{isConnected ? 'Conectado' : options.oauthConnected ? 'Cuenta autorizada' : 'No conectado'}</i></header>
       <h3>Google Calendar</h3>
       <p>{isConnected ? `${calendar.displayName} · ${calendar.capabilities?.join(', ')}` : 'Inicia sesión con la cuenta de Google que usará el agente para consultar disponibilidad y reservar citas.'}</p>
+      <p className="calendar-privacy-note">AutiveX solicitará acceso a tu lista de calendarios y a los eventos del calendario que elijas, sólo para consultar disponibilidad y gestionar citas. No usamos estos datos para publicidad ni para entrenar modelos generales. <a href="/privacy#google-workspace" target="_blank" rel="noreferrer">Cómo protegemos tus datos</a>.</p>
       {isConnected && calendar.calendarIdMasked && <code>{calendar.calendarIdMasked}</code>}
       {isAdmin ? (
         <div className="connection-edit calendar-oauth">

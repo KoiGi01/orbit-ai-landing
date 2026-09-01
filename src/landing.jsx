@@ -1076,44 +1076,11 @@ function DemoDialog({ open, onClose, onPilot }) {
   );
 }
 
-function PrivacyDialog({ open, onClose }) {
-  const presence = usePresence(open);
-  const dialogRef = useRef(null);
-  const closeRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    window.setTimeout(() => closeRef.current?.focus(), 0);
-    const onKeyDown = (event) => { if (event.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open, onClose]);
-
-  if (!presence.mounted) return null;
-
-  return (
-    <div className={`dialog-backdrop ${presence.state}`} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section ref={dialogRef} className="privacy-dialog" role="dialog" aria-modal="true" aria-labelledby="privacy-title">
-        <button ref={closeRef} type="button" onClick={onClose} aria-label="Cerrar"><X size={24} /></button>
-        <h2 id="privacy-title">Prueba siempre con un caso ficticio.</h2>
-        <p>La demostración solicita acceso al micrófono y procesa la conversación mediante Retell. No compartas nombres, teléfonos ni información real de tus clientes.</p>
-        <p>Antes de una implementación productiva se definen consentimiento, acceso, retención y eliminación con cada negocio.</p>
-        <a href="mailto:contact@autivexai.com">contact@autivexai.com <ArrowUpRight size={19} /></a>
-      </section>
-    </div>
-  );
-}
-
-function Footer({ onPrivacy, onDemo }) {
+function Footer({ onDemo }) {
   return (
     <footer className="site-footer">
       <Brand dark />
-      <div className="footer-links"><button type="button" onClick={onDemo}>Probar la voz</button><button type="button" onClick={onPrivacy}>Privacidad</button><a href="mailto:contact@autivexai.com">Contacto</a></div>
+      <div className="footer-links"><button type="button" onClick={onDemo}>Probar la voz</button><a href="/privacy">Privacidad</a><a href="/terms">Condiciones</a><a href="mailto:contact@autivexai.com">Contacto</a></div>
       <span>AutiveX · México · {new Date().getFullYear()}</span>
     </footer>
   );
@@ -1159,7 +1126,6 @@ function FloatingVoiceCTA({ onDemo }) {
 
 function App() {
   const [demoOpen, setDemoOpen] = useState(false);
-  const [privacyOpen, setPrivacyOpen] = useState(false);
 
   const openDemo = (source) => {
     track('voice_demo_opened', { source });
@@ -1190,10 +1156,9 @@ function App() {
         <FaqSection />
         <ContactSection onDemo={() => openDemo('contact')} />
       </main>
-      <Footer onPrivacy={() => setPrivacyOpen(true)} onDemo={() => openDemo('footer')} />
+      <Footer onDemo={() => openDemo('footer')} />
       <FloatingVoiceCTA onDemo={() => openDemo('floating_cta')} />
       <DemoDialog open={demoOpen} onClose={() => setDemoOpen(false)} onPilot={() => goToForm('demo_end')} />
-      <PrivacyDialog open={privacyOpen} onClose={() => setPrivacyOpen(false)} />
     </div>
   );
 }
