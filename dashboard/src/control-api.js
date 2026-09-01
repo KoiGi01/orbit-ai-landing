@@ -59,6 +59,7 @@ const ERROR_MESSAGES = {
   multiple_prospect_organizations: 'Ese correo tiene más de una clínica prospecto. Revísalo manualmente.',
   existing_customer_requires_review: 'Ese correo ya pertenece a un cliente pagado. Revisa su cuenta antes de crear otra clínica.',
   workspace_not_provisioned: 'El workspace de Supabase todavía no está preparado para esta cuenta.',
+  workspace_has_real_activity: 'Esta Location ya tiene llamadas reales. Escribe su nombre exacto para confirmar que quieres mezclar datos de demostración.',
   retell_agent_already_assigned: 'Ese agente de Retell ya pertenece a otro cliente.',
   retell_provisioning_not_configured: 'Falta configurar la plantilla privada de Retell en el servidor.',
   retell_provisioning_failed: 'Retell no pudo crear el agente borrador. No se activó producción.',
@@ -77,7 +78,6 @@ export class ControlApiError extends Error {
     this.status = status;
   }
 }
-
 export async function controlRequest(getToken, path, options = {}) {
   const token = await getToken();
   if (!token) throw new ControlApiError('authentication_required', null, 401);

@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 import {
   bypassClinicLive,
+  clearClinicDemoData,
   confirmManualPayment,
   createWorkspaceTestCall,
   createLocation,
@@ -19,6 +20,7 @@ import {
   markAllWorkspaceNotificationsReadForClient,
   markWorkspaceNotificationReadForClient,
   overrideClinicStage,
+  populateClinicDemoData,
   saveProvisioning,
   saveClinicAgentConfiguration,
   saveClinicAgentRuntime,
@@ -438,6 +440,15 @@ async function handleInternalClinics(req, res) {
       clinic = await bypassClinicLive(req.headers.authorization, body.organizationId, body.confirmation);
     } else if (body.action === 'override_stage') {
       clinic = await overrideClinicStage(req.headers.authorization, body.organizationId, body.stage);
+    } else if (body.action === 'populate_demo_data' || body.action === 'clear_demo_data') {
+      const database = createDatabase();
+      try {
+        clinic = body.action === 'populate_demo_data'
+          ? await populateClinicDemoData(req.headers.authorization, body.organizationId, body.confirmation, database)
+          : await clearClinicDemoData(req.headers.authorization, body.organizationId, database);
+      } finally {
+        await database.close();
+      }
     } else if (body.action === 'update_agent_configuration') {
       clinic = await saveClinicAgentConfiguration(req.headers.authorization, body.organizationId, body.agent);
     } else if (body.action === 'update_agent_advanced') {

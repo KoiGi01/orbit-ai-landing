@@ -827,6 +827,51 @@ const LOCATION_TABS = [
   ['usuarios', 'Usuarios'],
 ];
 
+// Seeded activity so a prospect can see their own dashboard with volume instead
+// of the empty state. The rows are real -- the client can open a task and
+// resolve it during the demo -- which is exactly why the operator needs to be
+// able to take them back out afterwards.
+function DemoDataCard({ clinic, busy, onAction }) {
+  const [confirmation, setConfirmation] = useState('');
+  const demo = clinic.demoData;
+  const counts = demo?.counts || {};
+  return (
+    <section className="ops-record-section ops-demo-data">
+      <header>
+        <Database size={17} />
+        <h3>Datos de demostración</h3>
+        <span>{demo ? 'Sembrados' : 'Sin sembrar'}</span>
+      </header>
+      <p className="ops-demo-hint">
+        Llena el dashboard de esta Location con llamadas, tareas, citas y notificaciones creíbles, armadas con sus propios
+        servicios, para enseñarle al cliente cómo se verá su cuenta cuando tenga volumen. Son registros reales: el
+        cliente puede abrirlos y resolverlos durante la demo.
+      </p>
+      {demo && (
+        <dl className="ops-demo-counts">
+          <div><dt>Sembrado</dt><dd>{dateTime(demo.seededAt)}</dd></div>
+          <div><dt>Llamadas</dt><dd>{counts.calls ?? 0}</dd></div>
+          <div><dt>Tareas</dt><dd>{counts.tasks ?? 0}</dd></div>
+          <div><dt>Citas</dt><dd>{counts.appointments ?? 0}</dd></div>
+        </dl>
+      )}
+      <label className="ops-demo-confirm">
+        <span>Confirmación</span>
+        <input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder={clinic.name} />
+        <small>Sólo hace falta si esta Location ya tiene llamadas reales; sirve para no mezclarlas sin querer.</small>
+      </label>
+      <div className="ops-demo-actions">
+        <button type="button" className="ops-button primary" disabled={busy} onClick={() => onAction('populate_demo_data', confirmation)}>
+          <Database size={16} /> {demo ? 'Regenerar datos demo' : 'Poblar con datos demo'}
+        </button>
+        <button type="button" className="ops-button secondary" disabled={busy || !demo} onClick={() => onAction('clear_demo_data')}>
+          <Trash2 size={16} /> Quitar datos demo
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function LocationPage({ clinic, clinics, busy, error, onClose, onConfirmPayment, onSaveProvisioning, onAction, onEdit, onMember, onCalendar, onAgentConfig, onAgentAdvanced, onStage, onBypass, onDelete, onImpersonate }) {
   const [tab, setTab] = useState('resumen');
   const profile = clinic.profile;
@@ -862,6 +907,8 @@ function LocationPage({ clinic, clinics, busy, error, onClose, onConfirmPayment,
         </div>}
 
         {tab === 'administracion' && <LocationManagement clinic={clinic} clinics={clinics} busy={busy} onEdit={onEdit} onMember={onMember} onCalendar={onCalendar} onAgentConfig={onAgentConfig} onStage={onStage} onBypass={onBypass} onDelete={onDelete} />}
+
+        {tab === 'administracion' && <DemoDataCard clinic={clinic} busy={busy} onAction={onAction} />}
 
         {tab === 'agente' && accountEnabled && <ProvisioningForm clinic={clinic} busy={busy} error={error} onSave={onSaveProvisioning} />}
 

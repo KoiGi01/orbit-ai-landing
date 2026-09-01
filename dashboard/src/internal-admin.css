@@ -258,7 +258,18 @@
 /* Readability overrides */
 .ops-clinic-main strong { font-size: 15px; }.ops-clinic-main small, .ops-method, .ops-clinic-row time { font-size: 12px; }.ops-stage { font-size: 11px; }.ops-record-section h3 { font-size: 16px; }.ops-record-section dt { font-size: 11px; }.ops-record-section dd { font-size: 13px; }.ops-action-copy span { font-size: 12px; }.ops-form-grid label, .ops-confirm-name { font-size: 12px; }.ops-form-grid input, .ops-form-grid select, .ops-form-grid textarea { font-size: 13px; }
 
-@media (max-width: 950px) { .ops-business-kpis { grid-template-columns: 1fr 1fr; }.ops-overview-grid { grid-template-columns: 1fr; }.ops-management-grid, .member-grid, .ops-danger-zone, .ops-stage-manager, .ops-calendar-manager { grid-template-columns: 1fr 1fr; }.ops-agent-grid { grid-template-columns: 1fr; } }
+.ops-demo-data > header span { margin-left: auto; color: #7587a2; font-size: 11px; }
+.ops-demo-hint { margin: 12px 0 0; max-width: 74ch; color: #a7b5c9; font-size: 12.5px; line-height: 1.6; }
+.ops-demo-counts { margin: 16px 0 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.ops-demo-counts > div { padding: 11px 13px; display: grid; gap: 4px; background: rgba(71, 230, 222, .05); border: 1px solid rgba(71, 230, 222, .18); border-radius: 11px; }
+.ops-demo-counts dt { color: #7f90aa; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.ops-demo-counts dd { margin: 0; color: #e7edf7; font-size: 15px; font-weight: 750; }
+.ops-demo-confirm { margin-top: 16px; max-width: 430px; display: grid; gap: 6px; color: #7f90aa; font-size: 11px; font-weight: 700; }
+.ops-demo-confirm input { min-height: 43px; padding: 0 11px; color: #e7edf7; background: #0e1727; border: 1px solid #2a3952; border-radius: 9px; font: inherit; font-size: 13px; font-weight: 400; }
+.ops-demo-confirm small { color: #6f7f99; font-size: 10.5px; font-weight: 500; }
+.ops-demo-actions { margin-top: 15px; display: flex; flex-wrap: wrap; gap: 10px; }
+
+@media (max-width: 950px) { .ops-business-kpis { grid-template-columns: 1fr 1fr; }.ops-overview-grid { grid-template-columns: 1fr; }.ops-management-grid, .member-grid, .ops-danger-zone, .ops-stage-manager, .ops-calendar-manager { grid-template-columns: 1fr 1fr; }.ops-agent-grid { grid-template-columns: 1fr; }.ops-demo-counts { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 620px) { .ops-primary-nav { padding: 0 10px; overflow-x: auto; }.ops-primary-nav button { min-width: 94px; padding: 0 12px; }.ops-business-kpis { grid-template-columns: 1fr; }.ops-management-grid, .member-grid, .ops-danger-zone, .ops-stage-manager, .ops-calendar-manager { grid-template-columns: 1fr; }.ops-overview-action { align-items: stretch; flex-direction: column; }.ops-stage-chart > div { grid-template-columns: 110px 1fr 20px; } }
 
 /* Dark operations console */

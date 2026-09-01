@@ -1,5 +1,6 @@
 import {
   bypassClinicLive,
+  clearClinicDemoData,
   confirmManualPayment,
   createLocation,
   deleteClinicRecord,
@@ -7,6 +8,7 @@ import {
   listClinics,
   manageClinicMember,
   overrideClinicStage,
+  populateClinicDemoData,
   saveClinicAgentConfiguration,
   saveClinicAgentRuntime,
   saveProvisioning,
@@ -102,6 +104,15 @@ export default async function handler(req, res) {
       clinic = await overrideClinicStage(authorization, organizationId, req.body?.stage);
     } else if (action === 'save_calendar') {
       clinic = await withDatabase((database) => saveClinicCalendar(authorization, organizationId, req.body?.calendar, database));
+    } else if (action === 'populate_demo_data') {
+      clinic = await withDatabase((database) => populateClinicDemoData(
+        authorization,
+        organizationId,
+        req.body?.confirmation,
+        database,
+      ));
+    } else if (action === 'clear_demo_data') {
+      clinic = await withDatabase((database) => clearClinicDemoData(authorization, organizationId, database));
     } else if (action === 'update_agent_configuration') {
       clinic = await saveClinicAgentConfiguration(authorization, organizationId, req.body?.agent);
     } else if (action === 'update_agent_advanced') {
