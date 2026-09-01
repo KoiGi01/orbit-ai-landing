@@ -4372,52 +4372,55 @@ select:focus-visible,
   animation: breathe 2400ms ease-in-out infinite;
 }
 
-/* Call-volume chart. Replaces the old "not enough history yet" placeholder:
-   the series comes from an aggregate that counts every call, so one call
-   already draws one bar. Cyan is the handled volume, coral the share that
-   still needs a person -- the same meaning those two accents carry
-   everywhere else in the product. */
-.trends-panel {
+/* "Qué pasó con tus llamadas" -- the donut that replaced the volume-by-hour
+   bars. Those told a business owner when calls arrived, which decides nothing.
+   The four colours carry the same meaning they carry everywhere else in the
+   product, so the ring can be read without consulting the legend twice. */
+.outcome-panel-live {
+  --outcome-booked: var(--cyan, #47e6de);
+  --outcome-resolved: var(--success, #3ddb96);
+  --outcome-follow-up: var(--yellow, #ffd763);
+  --outcome-missed: var(--coral, #ff7058);
   display: flex;
   flex-direction: column;
-  padding-bottom: 26px;
+  padding-bottom: 30px;
 }
 
-.trends-header {
+.outcome-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
-  padding-bottom: 20px;
+  padding-bottom: 22px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.trends-panel .pulse-kpi strong {
+.outcome-panel-live .pulse-kpi strong {
   display: block;
   margin-top: 4px;
   color: var(--ink);
-  font-size: clamp(38px, 4vw, 52px);
+  font-size: clamp(36px, 3.6vw, 48px);
   font-weight: 560;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.055em;
   line-height: 0.95;
 }
 
-.trends-panel .pulse-kpi p {
+.outcome-panel-live .pulse-kpi p {
   margin-top: 7px;
   font-size: 11.5px;
 }
 
-.trends-facts {
+.outcome-facts {
   display: grid;
   gap: 11px;
   margin: 0;
   text-align: right;
 }
 
-.trends-facts div { display: grid; gap: 3px; }
+.outcome-facts div { display: grid; gap: 3px; }
 
-.trends-facts dt {
+.outcome-facts dt {
   color: var(--ink-soft);
   font-size: 9.5px;
   font-weight: 650;
@@ -4425,7 +4428,7 @@ select:focus-visible,
   text-transform: uppercase;
 }
 
-.trends-facts dd {
+.outcome-facts dd {
   margin: 0;
   color: var(--ink);
   font-size: 15px;
@@ -4433,91 +4436,128 @@ select:focus-visible,
   font-variant-numeric: tabular-nums;
 }
 
-.trends-facts dd.alert { color: var(--coral); }
+.outcome-facts dd.alert { color: var(--outcome-missed); }
 
-.trends-chart {
+.outcome-body {
   flex: 1;
-  min-height: 200px;
   display: flex;
-  align-items: stretch;
-  gap: 3px;
-  padding-top: 24px;
-}
-
-.trends-column {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: clamp(22px, 3vw, 46px);
+  padding: 26px 0 6px;
 }
 
-/* No filled track behind the bar: at 24 buckets a full-height tinted column
-   reads as a bar of its own, so an empty hour looked as loud as a busy one.
-   The baseline under the row is the only thing that marks the axis. */
-.trends-bar-track {
-  width: 100%;
-  max-width: 22px;
-  flex: 1;
-  display: flex;
-  align-items: flex-end;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+/* The ring lives in the pseudo-element so the mask that cuts the hole does not
+   also erase the total sitting in the middle. */
+.outcome-donut {
+  width: clamp(148px, 14vw, 190px);
+  flex: 0 0 auto;
+  aspect-ratio: 1;
+  position: relative;
+  display: grid;
+  place-items: center;
 }
 
-.trends-bar {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  background: linear-gradient(180deg, var(--cyan), rgba(71, 230, 222, 0.34));
-  border-radius: 4px 4px 0 0;
-  transition: height 380ms cubic-bezier(0.22, 1, 0.36, 1);
+.outcome-donut::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--ring);
+  border-radius: 50%;
+  -webkit-mask: radial-gradient(circle, transparent 0 57%, #000 58%);
+  mask: radial-gradient(circle, transparent 0 57%, #000 58%);
 }
 
-.trends-bar-alert {
-  display: block;
-  width: 100%;
-  background: var(--coral);
-  border-radius: 4px 4px 0 0;
+.outcome-donut.empty::before {
+  background: rgba(255, 255, 255, 0.06);
 }
 
-.trends-column small {
-  color: var(--ink-faint);
-  font-size: 9.5px;
+.outcome-donut-center {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+}
+
+.outcome-donut-center strong {
+  color: var(--ink);
+  font-size: 27px;
+  font-weight: 620;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  letter-spacing: -0.04em;
 }
 
-.trends-empty {
-  margin: auto;
-  color: var(--ink-soft);
-  font-size: 12.5px;
-}
-
-.trends-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding-top: 18px;
-}
-
-.trends-legend {
-  display: flex;
-  align-items: center;
-  gap: 7px;
+.outcome-donut-center span {
   color: var(--ink-soft);
   font-size: 10.5px;
 }
 
-.trends-legend i {
+.outcome-legend {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  margin: 0;
+}
+
+.outcome-legend > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.outcome-legend > div:last-child { border-bottom: 0; }
+.outcome-legend > div.muted { opacity: 0.45; }
+
+.outcome-legend dt {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 560;
+}
+
+.outcome-legend dt i {
   width: 9px;
   height: 9px;
+  flex: 0 0 auto;
   border-radius: 3px;
 }
 
-.trends-legend i.handled { background: var(--cyan); }
-.trends-legend i.alert { margin-left: 9px; background: var(--coral); }
+.outcome-legend dt i.booked { background: var(--outcome-booked); }
+.outcome-legend dt i.resolved { background: var(--outcome-resolved); }
+.outcome-legend dt i.follow-up { background: var(--outcome-follow-up); }
+.outcome-legend dt i.missed { background: var(--outcome-missed); }
+
+.outcome-legend dd {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.outcome-legend dd strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.outcome-legend dd span {
+  min-width: 34px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  text-align: right;
+}
+
+.outcome-empty {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+}
 
 /* The decision queue is paged, not scrolled: the card has to keep one height
    whether the backlog is two rows or two hundred, otherwise it stretches and
@@ -4572,8 +4612,13 @@ select:focus-visible,
   cursor: not-allowed;
 }
 
+@media (max-width: 1100px) {
+  .outcome-body { flex-direction: column; align-items: stretch; gap: 22px; }
+  .outcome-donut { margin: 0 auto; }
+}
+
 @media (max-width: 900px) {
-  .trends-header { flex-direction: column; gap: 14px; }
-  .trends-facts { text-align: left; grid-auto-flow: column; gap: 22px; }
+  .outcome-header { flex-direction: column; gap: 14px; }
+  .outcome-facts { text-align: left; grid-auto-flow: column; gap: 22px; }
   .task-list { min-height: calc(3 * 88px); }
 }

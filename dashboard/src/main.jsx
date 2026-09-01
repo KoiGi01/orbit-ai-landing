@@ -51,7 +51,7 @@ import {
   getWorkspaceActivity,
   getWorkspaceCalendar,
   getWorkspaceNotifications,
-  getWorkspaceTrends,
+  getWorkspaceOutcomes,
   getWorkspaceVoices,
   markAllWorkspaceNotificationsRead,
   markWorkspaceNotificationRead,
@@ -326,7 +326,7 @@ function App({ account, workspace }) {
   const [testCallOpen, setTestCallOpen] = useState(false);
   const [notifications, setNotifications] = useState({ notifications: [], unreadCount: 0 });
   const [notifOpen, setNotifOpen] = useState(false);
-  const [trends, setTrends] = useState(null);
+  const [outcomes, setOutcomes] = useState(null);
   const testProfile = workspace?.profile || { clinicName: identity.clinicName };
   const testScenario = {
     key: 'workspace_browser_test',
@@ -339,8 +339,8 @@ function App({ account, workspace }) {
   // registradas" at 20 and disagree with the chart right beside it. The list is
   // only the fallback for the moment before the aggregate lands.
   const kpis = useMemo(() => {
-    if (trends?.totals) {
-      const { calls: totalCalls, needsAttention, avgDurationSeconds } = trends.totals;
+    if (outcomes?.totals) {
+      const { calls: totalCalls, needsAttention, avgDurationSeconds } = outcomes.totals;
       return {
         totalCalls,
         avgDurationSeconds: avgDurationSeconds || null,
@@ -357,15 +357,22 @@ function App({ account, workspace }) {
       needsAttention,
       resolved: Math.max(0, completed.length - needsAttention),
     };
-  }, [periodCalls, trends]);
+  }, [periodCalls, outcomes]);
 
-  // The chart follows the period selector, so it refetches when that changes.
+  // The donut follows the period selector, so it refetches when that changes.
   useEffect(() => {
     let cancelled = false;
-    setTrends(null);
-    getWorkspaceTrends(account.getToken, periodDays)
-      .then((data) => { if (!cancelled) setTrends(data); })
-      .catch(() => { if (!cancelled) setTrends({ granularity: periodDays === 1 ? 'hour' : 'day', points: [], totals: { calls: 0, needsAttention: 0, avgDurationSeconds: 0 } }); });
+    setOutcomes(null);
+    getWorkspaceOutcomes(account.getToken, periodDays)
+      .then((data) => { if (!cancelled) setOutcomes(data); })
+      .catch(() => {
+        if (!cancelled) {
+          setOutcomes({
+            outcomes: { booked: 0, resolved: 0, needsFollowUp: 0, missed: 0 },
+            totals: { calls: 0, needsAttention: 0, avgDurationSeconds: 0 },
+          });
+        }
+      });
     return () => { cancelled = true; };
   }, [account.getToken, periodDays]);
 
@@ -548,7 +555,7 @@ function App({ account, workspace }) {
               tasks={tasks}
               calls={calls}
               kpis={kpis}
-              trends={trends}
+              outcomes={outcomes}
               getToken={account.getToken}
               onTaskFilter={setTaskFilter}
               onSelectTask={selectTask}
@@ -796,7 +803,7 @@ function KpiStrip({ kpis, isDemoData }) {
   );
 }
 
-function Dashboard({ period, onPeriod, tasks, calls, kpis, trends, getToken, taskFilter, onTaskFilter, onSelectTask, onNavigate, onAction, firstName, isAdmin, dataMode }) {
+function Dashboard({ period, onPeriod, tasks, calls, kpis, outcomes, getToken, taskFilter, onTaskFilter, onSelectTask, onNavigate, onAction, firstName, isAdmin, dataMode }) {
   const [analysisOpen, setAnalysisOpen] = useState(false);
   const firstTask = tasks[0];
   return (
@@ -818,7 +825,7 @@ function Dashboard({ period, onPeriod, tasks, calls, kpis, trends, getToken, tas
 
       <section className="hero-grid">
         <AttentionPanel tasks={tasks} isDemoData={dataMode.isDemo} filter={taskFilter} onFilter={onTaskFilter} onSelect={onSelectTask} onNavigate={onNavigate} />
-        <TrendsPanel trends={trends} period={period} onNavigate={onNavigate} />
+        <OutcomesPanel outcomes={outcomes} period={period} />
       </section>
 
       <section className="analysis-disclosure">
@@ -836,82 +843,88 @@ function Dashboard({ period, onPeriod, tasks, calls, kpis, trends, getToken, tas
   );
 }
 
-function trendBucketLabel(key, granularity) {
-  if (!key) return '';
-  if (granularity === 'hour') return `${key.slice(11, 13)}:00`;
-  const [, month, day] = key.split('-');
-  return `${Number(day)}/${Number(month)}`;
+// The four outcomes the pipeline can actually answer for. "Why did they call"
+// is deliberately absent: app.calls.intent is never filled for a real call and
+// the Retell agent has no post-call analysis fields configured, so a chart of
+// call reasons would look right on seeded data and be empty for every real
+// client. Order matters -- it is the order of the ring and of the legend.
+const CALL_OUTCOMES = [
+  { key: 'booked', label: 'Agendó cita', tone: 'booked' },
+  { key: 'resolved', label: 'Resuelta sola', tone: 'resolved' },
+  { key: 'needsFollowUp', label: 'Necesita seguimiento', tone: 'follow-up' },
+  { key: 'missed', label: 'Buzón o sin respuesta', tone: 'missed' },
+];
+
+// One conic-gradient over the whole ring rather than four rotated elements:
+// the segments meet exactly, and the mask cuts the hole. The Ava orb already
+// draws itself this way, so the technique is not new to this stylesheet.
+function donutGradient(segments, total) {
+  if (!total) return 'var(--line)';
+  let cursor = 0;
+  const stops = segments
+    .filter((segment) => segment.value > 0)
+    .map((segment) => {
+      const start = (cursor / total) * 360;
+      cursor += segment.value;
+      const end = (cursor / total) * 360;
+      return `${segment.color} ${start}deg ${end}deg`;
+    });
+  return `conic-gradient(from -90deg, ${stops.join(', ')})`;
 }
 
-function trendBucketTitle(point, granularity) {
-  const when = granularity === 'hour'
-    ? `${point.key.slice(11, 13)}:00`
-    : `${Number(point.key.split('-')[2])}/${Number(point.key.split('-')[1])}`;
-  const calls = `${point.calls} ${point.calls === 1 ? 'llamada' : 'llamadas'}`;
-  return point.needsAttention
-    ? `${when} · ${calls} · ${point.needsAttention} necesitan atención`
-    : `${when} · ${calls}`;
-}
-
-// Volume per bucket, straight from the aggregate. There is no minimum history:
-// one call draws one bar. The bars are plain elements rather than a charting
-// library because a bar per bucket is all this panel ever needs, and the
-// palette then stays the app's own -- cyan for handled, coral for the share
-// that still needs a person.
-function TrendsPanel({ trends, period, onNavigate }) {
-  const points = trends?.points || [];
-  const granularity = trends?.granularity || 'day';
-  const totals = trends?.totals || { calls: 0, needsAttention: 0, avgDurationSeconds: 0 };
-  const busiest = points.reduce((top, point) => Math.max(top, point.calls), 0);
-  // Scaling to the busiest bucket alone makes every bar full height when the
-  // day is one call per hour, which reads as a wall rather than a volume. The
-  // floor keeps a quiet period looking quiet.
-  const ceiling = Math.max(busiest, 4);
+function OutcomesPanel({ outcomes, period }) {
+  const counts = outcomes?.outcomes || { booked: 0, resolved: 0, needsFollowUp: 0, missed: 0 };
+  const totals = outcomes?.totals || { calls: 0, needsAttention: 0, avgDurationSeconds: 0 };
+  const total = totals.calls;
   const periodCopy = period === 'Hoy' ? 'en las últimas 24 horas' : `en ${period.toLowerCase()}`;
-  // Labelling every bucket is unreadable at 30 days, so only a few are named --
-  // and the last one is only named when it will not crowd the one before it.
-  const labelEvery = Math.max(1, Math.ceil(points.length / 6));
-  const lastLabelled = points.length - 1 - ((points.length - 1) % labelEvery);
-  const showLast = points.length - 1 - lastLabelled >= Math.ceil(labelEvery / 2);
+
+  const segments = CALL_OUTCOMES.map((outcome) => ({
+    ...outcome,
+    value: counts[outcome.key] || 0,
+    color: `var(--outcome-${outcome.tone})`,
+    share: total ? Math.round((counts[outcome.key] / total) * 100) : 0,
+  }));
 
   return (
-    <article className="pulse-panel trends-panel">
-      <header className="trends-header">
+    <article className="pulse-panel outcome-panel-live">
+      <header className="outcome-header">
         <div className="pulse-kpi">
-          <span>Tendencias de llamadas</span>
-          <strong>{trends ? totals.calls.toLocaleString('es-MX') : '·'}</strong>
-          <p>{totals.calls === 1 ? 'llamada' : 'llamadas'} {periodCopy}</p>
+          <span>Qué pasó con tus llamadas</span>
+          <strong>{outcomes ? total.toLocaleString('es-MX') : '·'}</strong>
+          <p>{total === 1 ? 'llamada' : 'llamadas'} {periodCopy}</p>
         </div>
-        <dl className="trends-facts">
+        <dl className="outcome-facts">
           <div><dt>Duración promedio</dt><dd>{formatKpiDuration(totals.avgDurationSeconds)}</dd></div>
           <div><dt>Necesitan atención</dt><dd className={totals.needsAttention ? 'alert' : ''}>{totals.needsAttention.toLocaleString('es-MX')}</dd></div>
         </dl>
       </header>
 
-      <div className="trends-chart" role="img" aria-label={`Volumen de llamadas ${periodCopy}: ${totals.calls} en total, ${totals.needsAttention} necesitan atención.`}>
-        {points.map((point, index) => (
-          <div className="trends-column" key={point.key} title={trendBucketTitle(point, granularity)}>
-            <div className="trends-bar-track">
-              {point.calls > 0 && (
-                <div className="trends-bar" style={{ height: `${Math.max((point.calls / ceiling) * 100, 6)}%` }}>
-                  {point.needsAttention > 0 && (
-                    <i className="trends-bar-alert" style={{ height: `${(point.needsAttention / point.calls) * 100}%` }} />
-                  )}
-                </div>
-              )}
-            </div>
-            <small>{index % labelEvery === 0 || (showLast && index === points.length - 1) ? trendBucketLabel(point.key, granularity) : ''}</small>
+      <div className="outcome-body">
+        <div
+          className={`outcome-donut${total ? '' : ' empty'}`}
+          style={{ '--ring': donutGradient(segments, total) }}
+          role="img"
+          aria-label={total
+            ? segments.filter((segment) => segment.value).map((segment) => `${segment.label}: ${segment.value}`).join(', ')
+            : 'Sin llamadas en este periodo'}
+        >
+          <div className="outcome-donut-center">
+            <strong>{total.toLocaleString('es-MX')}</strong>
+            <span>{total === 1 ? 'llamada' : 'llamadas'}</span>
           </div>
-        ))}
-        {!points.length && <p className="trends-empty">{trends ? 'Todavía no hay llamadas registradas.' : 'Cargando actividad…'}</p>}
+        </div>
+
+        <dl className="outcome-legend">
+          {segments.map((segment) => (
+            <div key={segment.key} className={segment.value ? '' : 'muted'}>
+              <dt><i className={segment.tone} />{segment.label}</dt>
+              <dd><strong>{segment.value.toLocaleString('es-MX')}</strong><span>{total ? `${segment.share}%` : '—'}</span></dd>
+            </div>
+          ))}
+        </dl>
       </div>
 
-      {/* No call to action down here: the floating Ava button is anchored to
-          this corner of the viewport and sat on top of it. Conversaciones is
-          one click away in the sidebar. */}
-      <footer className="trends-footer">
-        <span className="trends-legend"><i className="handled" />Resueltas<i className="alert" />Necesitan atención</span>
-      </footer>
+      {!total && <p className="outcome-empty">{outcomes ? 'Todavía no hay llamadas en este periodo.' : 'Cargando actividad…'}</p>}
     </article>
   );
 }

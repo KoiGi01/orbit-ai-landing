@@ -5,7 +5,7 @@ import {
   getWorkspaceActivityForClient,
   getWorkspaceCalendar,
   getWorkspaceNotificationsForClient,
-  getWorkspaceTrendsForClient,
+  getWorkspaceOutcomesForClient,
   getWorkspaceVoiceCatalog,
   markAllWorkspaceNotificationsReadForClient,
   markWorkspaceNotificationReadForClient,
@@ -42,10 +42,10 @@ export default async function handler(req, res) {
       }
       return;
     }
-    if (req.method === 'GET' && req.query?.resource === 'trends') {
+    if (req.method === 'GET' && req.query?.resource === 'outcomes') {
       const database = createDatabase();
       try {
-        sendJson(res, 200, await getWorkspaceTrendsForClient(authorization, database, req.query?.days));
+        sendJson(res, 200, await getWorkspaceOutcomesForClient(authorization, database, req.query?.days));
       } finally {
         await database.close();
       }

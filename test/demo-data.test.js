@@ -3,7 +3,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import test from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
-import { getWorkspaceActivity, listWorkspaceNotifications, provisionWorkspaceFoundation } from '../lib/server/crm-foundation.js';
+import { getWorkspaceActivity, getWorkspaceOutcomes, listWorkspaceNotifications, provisionWorkspaceFoundation } from '../lib/server/crm-foundation.js';
 import { clearDemoData, getDemoDataStatus, populateDemoData } from '../lib/server/demo-data.js';
 
 const MIGRATIONS_DIR = resolve('supabase/migrations');
@@ -200,4 +200,16 @@ test('populate refuses a workspace that was never provisioned', async () => {
     () => populateDemoData(database, { clerkOrganizationId: 'org_missing_workspace' }),
     /workspace_not_provisioned/,
   );
+});
+
+test('a seeded batch fills all four outcome slices', async () => {
+  const { database } = await seededWorkspace();
+  await populateDemoData(database, { clerkOrganizationId: ORGANIZATION_ID });
+
+  const { outcomes, totals } = await getWorkspaceOutcomes(database, ORGANIZATION_ID, 30);
+  for (const [slice, value] of Object.entries(outcomes)) {
+    assert.ok(value > 0, `the donut slice "${slice}" would be empty in a demo`);
+  }
+  const sum = outcomes.booked + outcomes.missed + outcomes.needsFollowUp + outcomes.resolved;
+  assert.equal(sum, totals.calls);
 });
