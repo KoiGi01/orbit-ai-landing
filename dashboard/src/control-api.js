@@ -50,6 +50,12 @@ const ERROR_MESSAGES = {
   invalid_stage_override: 'Selecciona una etapa válida.',
   invalid_google_calendar_id: 'Escribe el ID completo del calendario de Google.',
   calendar_agent_update_failed: 'No pudimos conectar el calendario al agente de Retell.',
+  google_oauth_not_configured: 'La conexión con Google Calendar todavía no está configurada en el servidor.',
+  google_calendar_authorization_required: 'Vuelve a conectar tu cuenta de Google para continuar.',
+  google_authorization_expired: 'Google retiró el acceso. Vuelve a conectar tu cuenta.',
+  google_calendar_not_writable: 'Selecciona un calendario en el que esta cuenta pueda crear citas.',
+  google_calendar_request_failed: 'Google Calendar no respondió correctamente. Intenta nuevamente.',
+  calendar_read_failed: 'No pudimos leer el calendario seleccionado. Revisa la conexión con Google.',
   multiple_prospect_organizations: 'Ese correo tiene más de una clínica prospecto. Revísalo manualmente.',
   existing_customer_requires_review: 'Ese correo ya pertenece a un cliente pagado. Revisa su cuenta antes de crear otra clínica.',
   workspace_not_provisioned: 'El workspace de Supabase todavía no está preparado para esta cuenta.',
@@ -148,10 +154,18 @@ export function markAllWorkspaceNotificationsRead(getToken) {
   });
 }
 
-export function saveWorkspaceCalendar(getToken, calendarId) {
+export function getGoogleCalendarOptions(getToken) {
+  return controlRequest(getToken, '/api/google/calendar/options');
+}
+
+export function beginGoogleCalendarOAuth(getToken) {
+  return controlRequest(getToken, '/api/google/calendar/start', { method: 'POST' });
+}
+
+export function saveWorkspaceCalendar(getToken, calendar) {
   return controlRequest(getToken, '/api/workspace', {
     method: 'PATCH',
-    body: JSON.stringify({ action: 'save_calendar', calendar: { calendarId } }),
+    body: JSON.stringify({ action: 'save_calendar', calendar }),
   });
 }
 

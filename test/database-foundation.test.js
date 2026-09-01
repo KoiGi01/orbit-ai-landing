@@ -79,6 +79,8 @@ test('applies every migration repeatedly', async () => {
         'calls',
         'contacts',
         'integration_connections',
+        'integration_credentials',
+        'integration_oauth_states',
         'integration_providers',
         'notifications',
         'tasks',
@@ -374,7 +376,7 @@ test('keeps integration credentials server-side and requires complete connected 
 
     const catalog = await listIntegrationCatalog(database);
     assert.deepEqual(catalog.map((provider) => provider.key), ['google_calendar']);
-    assert.equal(catalog[0].authStrategy, 'manual');
+    assert.equal(catalog[0].authStrategy, 'oauth2');
   } finally {
     await client.close();
   }

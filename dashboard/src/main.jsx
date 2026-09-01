@@ -45,6 +45,8 @@ import './brand-theme.css';
 import DashboardAuth from './auth';
 import { CallExperience } from './workspace';
 import {
+  beginGoogleCalendarOAuth,
+  getGoogleCalendarOptions,
   getWorkspaceActivity,
   getWorkspaceCalendar,
   getWorkspaceNotifications,
@@ -296,7 +298,9 @@ function App({ account, workspace }) {
   const [activity, setActivity] = useState(null);
   const hasRealActivity = Boolean(activity && (activity.calls.length > 0 || activity.tasks.length > 0));
   const dataMode = useMemo(() => getDashboardDataMode(workspace, hasRealActivity), [workspace, hasRealActivity]);
-  const [active, setActive] = useState('Hoy');
+  const [active, setActive] = useState(() => (
+    new URLSearchParams(window.location.search).get('section') === 'connections' ? 'Conexiones' : 'Hoy'
+  ));
   const [period, setPeriod] = useState('Hoy');
   const [tasks, setTasks] = useState([]);
   const periodDays = period === '7 días' ? 7 : period === '30 días' ? 30 : 1;
@@ -2043,39 +2047,97 @@ function ReceptionistModule({ clinicName, hasActivity, canConfigure, profile, ge
 function CalendarConnectionCard({ calendar, getToken, isAdmin, onAction, onConnected }) {
   const isConnected = calendar.status === 'connected';
   const [draft, setDraft] = useState('');
-  const [status, setStatus] = useState('idle');
+  const [options, setOptions] = useState({ oauthConnected: false, accountLabel: null, calendars: [] });
+  const [status, setStatus] = useState(isAdmin ? 'loading' : 'idle');
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    if (!isAdmin) return undefined;
+    let cancelled = false;
+    setStatus('loading');
+    getGoogleCalendarOptions(getToken)
+      .then((result) => {
+        if (cancelled) return;
+        setOptions(result);
+        const preferred = result.selectedCalendarId
+          || result.calendars.find((item) => item.primary)?.id
+          || result.calendars[0]?.id
+          || '';
+        setDraft(preferred);
+        setStatus('idle');
+        const params = new URLSearchParams(window.location.search);
+        const oauthResult = params.get('google_calendar');
+        if (oauthResult === 'authorized') onAction('Cuenta de Google conectada. Elige el calendario para las citas.');
+        if (oauthResult === 'denied') setError('Google no concedió acceso. Puedes intentarlo de nuevo.');
+        if (oauthResult === 'error') setError('No pudimos terminar la conexión con Google. Intenta nuevamente.');
+        if (oauthResult) {
+          params.delete('google_calendar');
+          params.delete('reason');
+          const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}`;
+          window.history.replaceState({}, '', next);
+        }
+      })
+      .catch((loadError) => { if (!cancelled) { setError(loadError.message); setStatus('error'); } });
+    return () => { cancelled = true; };
+  }, [getToken, isAdmin]);
+
+  const connect = async () => {
+    setStatus('connecting'); setError('');
+    try {
+      const result = await beginGoogleCalendarOAuth(getToken);
+      window.location.assign(result.authorizationUrl);
+    } catch (connectError) { setError(connectError.message); setStatus('error'); }
+  };
+
   const save = async () => {
-    const calendarId = draft.trim();
+    const calendarId = draft;
     if (!calendarId) return;
     setStatus('saving'); setError('');
     try {
-      const result = await saveWorkspaceCalendar(getToken, calendarId);
+      const selected = options.calendars.find((item) => item.id === calendarId);
+      const result = await saveWorkspaceCalendar(getToken, { calendarId, displayName: selected?.name });
       onConnected(result.connections?.googleCalendar || { status: 'connected' });
-      setDraft('');
+      setOptions((current) => ({ ...current, selectedCalendarId: calendarId }));
       setStatus('idle');
-      onAction('Calendario conectado');
+      onAction('Configuración guardada. El agente ya puede reservar en este calendario.');
     } catch (saveError) { setError(saveError.message); setStatus('error'); }
   };
 
+  const selectedCalendar = options.calendars.find((item) => item.id === draft);
+  const hasOptions = options.calendars.length > 0;
+
   return (
     <article className="connection-card surface-panel connection-card-editable">
-      <header><span className="connection-icon"><CalendarCheck2 size={21} /></span><i className={isConnected ? 'connected' : 'review'}>{isConnected ? 'Conectado' : 'No conectado'}</i></header>
+      <header><span className="connection-icon"><CalendarCheck2 size={21} /></span><i className={isConnected ? 'connected' : 'review'}>{isConnected ? 'Conectado' : options.oauthConnected ? 'Cuenta autorizada' : 'No conectado'}</i></header>
       <h3>Google Calendar</h3>
-      <p>{isConnected ? `${calendar.displayName} · ${calendar.capabilities?.join(', ')}` : 'Escribe el ID del calendario de Google para que Lucía pueda consultar disponibilidad y crear citas.'}</p>
+      <p>{isConnected ? `${calendar.displayName} · ${calendar.capabilities?.join(', ')}` : 'Inicia sesión con la cuenta de Google que usará el agente para consultar disponibilidad y reservar citas.'}</p>
       {isConnected && calendar.calendarIdMasked && <code>{calendar.calendarIdMasked}</code>}
       {isAdmin ? (
-        <div className="connection-edit">
-          <input
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); save(); } }}
-            placeholder="negocio@group.calendar.google.com"
-            aria-label="ID del calendario de Google"
-            disabled={status === 'saving'}
-          />
-          <button type="button" onClick={save} disabled={!draft.trim() || status === 'saving'}>{status === 'saving' ? 'Guardando…' : isConnected ? 'Cambiar' : 'Conectar'}</button>
+        <div className="connection-edit calendar-oauth">
+          {status === 'loading' ? <small>Cargando conexión…</small> : options.oauthConnected ? (
+            <>
+              <small>Cuenta: <strong>{options.accountLabel}</strong></small>
+              {hasOptions ? (
+                <label>
+                  <span>Calendario para reservaciones</span>
+                  <select value={draft} onChange={(event) => setDraft(event.target.value)} disabled={status === 'saving'}>
+                    {options.calendars.map((item) => (
+                      <option value={item.id} key={item.id}>{item.name}{item.primary ? ' (Principal)' : ''}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : <small>Esta cuenta no tiene calendarios con permiso para crear citas.</small>}
+              {selectedCalendar?.timeZone && <small>Zona horaria: {selectedCalendar.timeZone}</small>}
+              <div className="calendar-oauth-actions">
+                <button type="button" className="calendar-save" onClick={save} disabled={!draft || status === 'saving'}>{status === 'saving' ? 'Guardando…' : 'Guardar configuración'}</button>
+                <button type="button" className="calendar-reconnect" onClick={connect} disabled={status === 'saving' || status === 'connecting'}>Usar otra cuenta</button>
+              </div>
+            </>
+          ) : (
+            <button type="button" className="calendar-connect" onClick={connect} disabled={status === 'connecting'}>
+              {status === 'connecting' ? 'Abriendo Google…' : 'Conectar cuenta de Google'}
+            </button>
+          )}
         </div>
       ) : <small>Solo un administrador puede conectar el calendario.</small>}
       {error && <p className="voice-error">{error}</p>}

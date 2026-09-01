@@ -4269,6 +4269,72 @@ select:focus-visible,
   white-space: nowrap;
 }
 
+.calendar-oauth {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.calendar-oauth > small {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.calendar-oauth > small strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.calendar-oauth label {
+  display: grid;
+  gap: 6px;
+}
+
+.calendar-oauth label span {
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.calendar-oauth select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 34px 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.calendar-oauth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.connection-edit .calendar-connect,
+.connection-edit .calendar-save {
+  min-height: 38px;
+  border-color: #1859ff;
+  background: #1859ff;
+  color: #fff;
+}
+
+.connection-edit .calendar-reconnect {
+  min-height: 38px;
+  border-color: var(--line);
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.connection-edit button:disabled {
+  cursor: wait;
+  opacity: .58;
+}
+
 /* Live-status motion: a slow breathing pulse on the receptionist orb and
    the topbar's "operando con normalidad" dot -- signals "listening", not
    just "on". Reduced-motion users get the static dot/orb via the global

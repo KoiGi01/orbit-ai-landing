@@ -547,6 +547,23 @@ test('adds a Location-scoped Google Calendar tool without removing other tools',
   assert.deepEqual(tools.map((tool) => tool.name), ['lookup_patient', 'manage_calendar', 'end_call']);
   assert.equal(tools[1].parameters.properties.calendarId.const, 'clinic@group.calendar.google.com');
   assert.equal(tools[1].url, 'https://n8n.example.test/calendar');
+
+  await updateRetellCalendarIntegration({
+    llmId: 'llm_new_123',
+    calendarId: 'clinic@group.calendar.google.com',
+    workspaceId: '11111111-1111-4111-8111-111111111111',
+  }, {
+    env: {
+      RETELL_API_KEY: 'test-key',
+      AUTIVEX_APP_URL: 'https://autivex.example.test',
+      RETELL_CALENDAR_WEBHOOK_URL: 'https://n8n.example.test/calendar',
+    },
+    fetchImpl,
+  });
+  const directTool = requests.at(-1).body.general_tools.find((tool) => tool.name === 'manage_calendar');
+  assert.equal(directTool.url, 'https://autivex.example.test/api/google/calendar/tool?workspaceId=11111111-1111-4111-8111-111111111111');
+  assert.equal(directTool.parameters.properties.workspaceId.const, '11111111-1111-4111-8111-111111111111');
+  assert.ok(directTool.parameters.required.includes('workspaceId'));
 });
 
 test('signs the shared n8n provisioning event and keeps its id deterministic', async () => {
