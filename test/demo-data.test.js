@@ -155,6 +155,29 @@ test('status separates demo activity from real activity', async () => {
   assert.ok(seeded.demoCalls > 0);
 });
 
+test('reads the name out of a stored service object', async () => {
+  const { database } = await seededWorkspace();
+  await populateDemoData(database, {
+    clerkOrganizationId: ORGANIZATION_ID,
+    profile: {
+      clinicName: 'Clínica QA',
+      services: [
+        { name: 'Endodoncia', duration: '60 min', price: '$3,500', details: '', color: 'cobalto' },
+        { name: 'Profilaxis', duration: '30 min', price: '$800', details: '', color: '' },
+      ],
+    },
+  });
+
+  const rows = await database.query(`
+    select summary as text from app.calls where demo_batch_id is not null
+    union all select description from app.tasks where demo_batch_id is not null
+    union all select summary from app.appointments where demo_batch_id is not null
+  `);
+  const text = rows.rows.map((row) => row.text).join(' ');
+  assert.ok(!text.includes('[object Object]'), 'a service object must never be stringified into the copy');
+  assert.ok(text.includes('Endodoncia') || text.includes('Profilaxis'));
+});
+
 test('demo content follows the Location business profile', async () => {
   const { database } = await seededWorkspace();
   await populateDemoData(database, {

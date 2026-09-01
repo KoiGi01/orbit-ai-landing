@@ -4440,7 +4440,7 @@ select:focus-visible,
   min-height: 200px;
   display: flex;
   align-items: stretch;
-  gap: 4px;
+  gap: 3px;
   padding-top: 24px;
 }
 
@@ -4453,21 +4453,24 @@ select:focus-visible,
   gap: 8px;
 }
 
+/* No filled track behind the bar: at 24 buckets a full-height tinted column
+   reads as a bar of its own, so an empty hour looked as loud as a busy one.
+   The baseline under the row is the only thing that marks the axis. */
 .trends-bar-track {
   width: 100%;
+  max-width: 22px;
   flex: 1;
   display: flex;
   align-items: flex-end;
-  background: rgba(255, 255, 255, 0.035);
-  border-radius: 7px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
 }
 
 .trends-bar {
   width: 100%;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, var(--cyan), rgba(71, 230, 222, 0.3));
-  border-radius: 7px;
+  background: linear-gradient(180deg, var(--cyan), rgba(71, 230, 222, 0.34));
+  border-radius: 4px 4px 0 0;
   transition: height 380ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -4475,7 +4478,7 @@ select:focus-visible,
   display: block;
   width: 100%;
   background: var(--coral);
-  border-radius: 7px 7px 0 0;
+  border-radius: 4px 4px 0 0;
 }
 
 .trends-column small {
@@ -4515,12 +4518,6 @@ select:focus-visible,
 
 .trends-legend i.handled { background: var(--cyan); }
 .trends-legend i.alert { margin-left: 9px; background: var(--coral); }
-
-.trends-panel .pulse-placeholder-action {
-  margin: 0;
-  padding: 10px 16px;
-  font-size: 12px;
-}
 
 /* The decision queue is paged, not scrolled: the card has to keep one height
    whether the backlog is two rows or two hundred, otherwise it stretches and

@@ -805,7 +805,7 @@ function Dashboard({ period, onPeriod, tasks, calls, kpis, trends, getToken, tas
         <div>
           <p className="eyebrow">{dataMode.isDemo ? 'Centro de operaciones' : 'Actividad reciente'}</p>
           <h1>{dataMode.isDemo ? `Todo listo para empezar, ${firstName}.` : (tasks.length ? `Hay ${tasks.length} ${tasks.length === 1 ? 'decisión' : 'decisiones'} para hoy, ${firstName}.` : `La cola está resuelta, ${firstName}.`)}</h1>
-          <p className="heading-copy">{dataMode.isDemo ? <>La actividad aparecerá aquí cuando tu agente comience a recibir conversaciones.</> : <>Lucía registró {calls.length.toLocaleString('es-MX')} {calls.length === 1 ? 'llamada reciente' : 'llamadas recientes'}. {firstTask ? <strong>Empieza por {firstTask.name}.</strong> : <strong>No quedan acciones pendientes.</strong>}</>}</p>
+          <p className="heading-copy">{dataMode.isDemo ? <>La actividad aparecerá aquí cuando tu agente comience a recibir conversaciones.</> : <>Lucía registró {kpis.totalCalls.toLocaleString('es-MX')} {kpis.totalCalls === 1 ? 'llamada' : 'llamadas'} {period === 'Hoy' ? 'en las últimas 24 horas' : `en ${period.toLowerCase()}`}. {firstTask ? <strong>Empieza por {firstTask.name}.</strong> : <strong>No quedan acciones pendientes.</strong>}</>}</p>
         </div>
         <div className="period-control" aria-label="Periodo de actividad">
           {['Hoy', '7 días', '30 días'].map((item) => (
@@ -863,9 +863,16 @@ function TrendsPanel({ trends, period, onNavigate }) {
   const granularity = trends?.granularity || 'day';
   const totals = trends?.totals || { calls: 0, needsAttention: 0, avgDurationSeconds: 0 };
   const busiest = points.reduce((top, point) => Math.max(top, point.calls), 0);
+  // Scaling to the busiest bucket alone makes every bar full height when the
+  // day is one call per hour, which reads as a wall rather than a volume. The
+  // floor keeps a quiet period looking quiet.
+  const ceiling = Math.max(busiest, 4);
   const periodCopy = period === 'Hoy' ? 'en las últimas 24 horas' : `en ${period.toLowerCase()}`;
-  // Labelling every bucket is unreadable at 30 days, so only a few are named.
+  // Labelling every bucket is unreadable at 30 days, so only a few are named --
+  // and the last one is only named when it will not crowd the one before it.
   const labelEvery = Math.max(1, Math.ceil(points.length / 6));
+  const lastLabelled = points.length - 1 - ((points.length - 1) % labelEvery);
+  const showLast = points.length - 1 - lastLabelled >= Math.ceil(labelEvery / 2);
 
   return (
     <article className="pulse-panel trends-panel">
@@ -885,21 +892,25 @@ function TrendsPanel({ trends, period, onNavigate }) {
         {points.map((point, index) => (
           <div className="trends-column" key={point.key} title={trendBucketTitle(point, granularity)}>
             <div className="trends-bar-track">
-              <div className="trends-bar" style={{ height: busiest ? `${Math.max((point.calls / busiest) * 100, point.calls ? 4 : 0)}%` : '0%' }}>
-                {point.needsAttention > 0 && (
-                  <i className="trends-bar-alert" style={{ height: `${(point.needsAttention / point.calls) * 100}%` }} />
-                )}
-              </div>
+              {point.calls > 0 && (
+                <div className="trends-bar" style={{ height: `${Math.max((point.calls / ceiling) * 100, 6)}%` }}>
+                  {point.needsAttention > 0 && (
+                    <i className="trends-bar-alert" style={{ height: `${(point.needsAttention / point.calls) * 100}%` }} />
+                  )}
+                </div>
+              )}
             </div>
-            <small>{index % labelEvery === 0 || index === points.length - 1 ? trendBucketLabel(point.key, granularity) : ''}</small>
+            <small>{index % labelEvery === 0 || (showLast && index === points.length - 1) ? trendBucketLabel(point.key, granularity) : ''}</small>
           </div>
         ))}
         {!points.length && <p className="trends-empty">{trends ? 'Todavía no hay llamadas registradas.' : 'Cargando actividad…'}</p>}
       </div>
 
+      {/* No call to action down here: the floating Ava button is anchored to
+          this corner of the viewport and sat on top of it. Conversaciones is
+          one click away in the sidebar. */}
       <footer className="trends-footer">
         <span className="trends-legend"><i className="handled" />Resueltas<i className="alert" />Necesitan atención</span>
-        <button type="button" className="pulse-placeholder-action" onClick={() => onNavigate('Conversaciones')}>Ver conversaciones <ArrowUpRight size={15} /></button>
       </footer>
     </article>
   );
